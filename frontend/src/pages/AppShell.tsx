@@ -21,6 +21,7 @@ import ErrorBoundary from '../components/ErrorBoundary'
 import IncomingCall from '../components/IncomingCall'
 import { VoiceInviteBanner } from '../components/CallExtras'
 import MiniCall from '../components/MiniCall'
+import CallNotices from '../components/CallStatus'
 import UserPanel from '../components/UserPanel'
 import { NavColumn } from '../components/SplitLayout'
 import VerifyBanner from '../components/VerifyBanner'
@@ -148,6 +149,7 @@ export default function AppShell() {
       <IncomingCall />
       <VoiceInviteBanner />
       <MiniCall />
+      <CallNotices floating />
       </div>
     </div>
   )
@@ -290,8 +292,9 @@ function Shortcuts() {
     if (next) navigate(`/channels/${next}`)
   }
   const handlers = useMemo(() => ({
-    toggleMute: () => voice.setMute(!useStore.getState().selfMute),
-    toggleDeafen: () => voice.setDeaf(!useStore.getState().selfDeaf),
+    // A moderator's mute or deafen can't be undone from here: say so, where the key used to do nothing.
+    toggleMute: () => { const s = useStore.getState(); const v = s.user ? s.voiceStates[s.user.id] : undefined; if (s.myVoiceChannelId && v?.mute) { s.pushToast(t('A moderator muted you. Only a moderator can unmute you.')); return } voice.setMute(!s.selfMute) },
+    toggleDeafen: () => { const s = useStore.getState(); const v = s.user ? s.voiceStates[s.user.id] : undefined; if (s.myVoiceChannelId && v?.deaf) { s.pushToast(t('A moderator deafened you. Only a moderator can undo it.')); return } voice.setDeaf(!s.selfDeaf) },
     toggleMembers: () => setMembersOpen(!useStore.getState().membersOpen),
     focusComposer: () => document.querySelector<HTMLTextAreaElement>('textarea.composer-input')?.focus(),
     prevChannel: () => step(-1),
@@ -299,6 +302,7 @@ function Shortcuts() {
     openSettings: () => openModal({ kind: 'userSettings', tab: 'account' }),
     jumpToDate: () => document.querySelector<HTMLButtonElement>('[data-jump-date-btn]')?.click(),
     saveClip: () => { void saveClip() },
+    jumpToCall: () => { const s = useStore.getState(); const id = s.myVoiceChannelId; if (!id) return; const g = s.channels[id]?.guild_id; navigate(g ? `/channels/${g}/${id}` : `/channels/@me/${id}`) },
     toggleOverlay: () => toggleOverlay(),
     toggleStreamer: () => { const on = !getPrefs().streamer; setPrefs({ streamer: on }); useStore.getState().pushToast(on ? t('Streamer Mode on') : t('Streamer Mode off')) },
     quickSwitcher: () => { const s = useStore.getState(); if (s.modal?.kind === 'quickSwitcher') s.closeModal(); else openModal({ kind: 'quickSwitcher' }) },

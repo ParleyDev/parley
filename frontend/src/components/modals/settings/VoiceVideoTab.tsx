@@ -14,6 +14,7 @@ interface Devices { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; camer
 export default function VoiceVideoTab() {
   const t = useT()
   const st = useStore((s) => s.voiceSettings)
+  const sfu = useStore((s) => s.instance.voice_mode === 'sfu')
   const update = useStore((s) => s.updateVoiceSettings)
   const level = useStore((s) => s.inputLevel)
   const transmitting = useStore((s) => s.transmitting)
@@ -165,6 +166,14 @@ export default function VoiceVideoTab() {
 
       <Divider />
 
+      <section className="space-y-3" data-relay-setting={sfu ? 'server' : voice.hasRelay ? 'available' : 'none'}>
+        <h3 className="text-base font-bold">{t('Privacy in calls')}</h3>
+        <Toggle label={t('Hide my IP address in calls')} checked={st.relayOnly} onChange={set('relayOnly')} />
+        <p className="text-xs text-text-2">{sfu ? t('Calls on this Parley go through its media server, so the people in a call never see your IP address. This setting changes nothing here.') : voice.hasRelay ? t("Small calls connect you directly to the people in them, which shows them your IP address. With this on, your calls go through this Parley's relay instead: the others see the relay's address, and the call may be a little slower.") : t("Small calls connect you directly to the people in them, which shows them your IP address. This Parley has no relay server, so it can't hide it; ask whoever runs it to set one up.")}</p>
+      </section>
+
+      <Divider />
+
       <EntranceSound />
 
       <Divider />
@@ -181,7 +190,11 @@ export default function VoiceVideoTab() {
           <Dropdown id="stream-quality" className="input" value={st.streamQuality} onChange={(e) => update({ streamQuality: e.target.value })}>
             {Object.entries(STREAM_QUALITY).map(([k, q]) => <option key={k} value={k}>{t(q.label)}</option>)}
           </Dropdown>
-          <p className="mt-1 text-xs text-text-2">{t('Applies the next time you share your screen. Higher settings need a faster upload; viewers on slow connections may see it stutter.')}</p>
+          <p className="mt-1 text-xs text-text-2">{t('Applies at once, also to a share that is running; the arrow beside the share button in a call has the same choices. Higher settings need a faster upload; viewers on slow connections may see it stutter.')}</p>
+        </div>
+        <div data-minicall-setting>
+          <Toggle label={t('Float the call in a corner while I look elsewhere')} checked={st.miniCall !== false} onChange={set('miniCall')} />
+          <p className="text-xs text-text-2">{t('Shows the stream you are watching, a camera or your own screen share in a small window you can move and resize, with mute and hang up.')}</p>
         </div>
       </section>
     </div>
@@ -235,7 +248,7 @@ function Radio({ checked, onClick, title }: { checked: boolean; onClick: () => v
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button onClick={() => onChange(!checked)} className="w-full flex items-center justify-between py-1 text-left">
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className="w-full flex items-center justify-between py-1 text-left">
       <span className="text-[15px]">{label}</span>
       <span className={`relative h-6 w-10 rounded-full transition-colors ${checked ? 'bg-success' : 'bg-bg-4'}`}>
         <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${checked ? 'left-5' : 'left-1'}`} />

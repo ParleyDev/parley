@@ -12,7 +12,7 @@ import SoundboardPicker from './SoundboardPicker'
 import { ConnQuality, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
-import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, PhoneMore, SplitControl } from './CallControls'
+import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, PhoneMore, ScreenMenu, SplitControl } from './CallControls'
 import PhoneStage, { ExpandButton } from './PhoneStage'
 import { usePhone } from '../lib/swipe'
 import { useResizableHeight } from '../lib/resize'
@@ -22,6 +22,9 @@ import CallLock from './CallLock'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import { useT } from '../lib/i18n'
 import { nameOf } from '../lib/dm'
+import { ReconnectingPill } from './CallStatus'
+import { useKeybindMap } from '../lib/keybinds'
+import { useCallFullscreen, useClickOrDouble } from '../lib/callView'
 
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
 
@@ -38,6 +41,9 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const notes = useStore((s) => s.notes)
   const me = useStore((s) => s.user)
   const myChannel = useStore((s) => s.myVoiceChannelId)
+  const keybinds = useKeybindMap()
+  // In this call from another window or device: joining here moves you over.
+  const elsewhere = useStore((s) => !!s.user && s.voiceStates[s.user.id]?.channel_id === channel.id && s.myVoiceChannelId !== channel.id)
   const connecting = useStore((s) => s.voiceConnecting)
   const speaking = useStore((s) => s.speaking)
   const selfMute = useStore((s) => s.selfMute)
@@ -58,7 +64,11 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const t = useT()
   const videoFit = useVideoFit()
   const stage = useResizableHeight('dmCall', DEFAULT_HEIGHT, 160, 0.8)
+  const fs = useCallFullscreen<HTMLElement>()
+  const clicks = useClickOrDouble()
   const inThis = myChannel === channel.id
+  const exitFullscreen = fs.exit
+  useEffect(() => { if (!inThis) exitFullscreen() }, [inThis, exitFullscreen])
   const activities = useCallActivities(channel.id)
   const openActivity = useActivities((s) => s.open)
   const activity = inThis ? activities.find((a) => a.id === openActivity) : undefined
@@ -104,13 +114,14 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   if (participants.length === 0 && !inThis) return null
   const focusTile = focused ? tiles.find((tile) => tile.key === focused) : undefined
   const strip = focusTile ? tiles.filter((tile) => tile.key !== focused) : []
-  const toggleFullscreen = (el: HTMLElement) => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else el.requestFullscreen?.().catch(() => {}) }
+  // Fullscreen is the whole call with its controls; a single click waits a moment so a double click doesn't flip the focus twice.
+  const fullscreenTile = (key: string) => { if (!fs.on) setFocused(key); fs.toggle() }
 
   const renderTile = (tile: Tile, big: boolean, cell = false) => {
     const talking = tile.kind === 'camera' && !!speaking[tile.userId]
     const name = (tile.user ? nameOf(tile.user, notes) : '') || t('User')
     return (
-      <div key={tile.key} onClick={() => { if (phone) { if (!phoneStage) setPhoneStage(tile.key) } else setFocused(focused === tile.key ? null : tile.key) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) toggleFullscreen(e.currentTarget) }}
+      <div key={tile.key} onClick={() => { if (phone) { if (!phoneStage) setPhoneStage(tile.key) } else clicks.click(() => setFocused((f) => (f === tile.key ? null : tile.key))) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) clicks.double(() => fullscreenTile(tile.key)) }}
         onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
         className={`group relative min-h-0 min-w-0 overflow-hidden rounded-xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big || cell ? 'h-full w-full' : 'aspect-video'}`}
         data-call-tile={tile.key} data-tile-big={big ? '1' : '0'} title={big ? t('Click to return to the grid · double-click for fullscreen') : t('Click to focus · double-click for fullscreen')}
@@ -142,7 +153,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
           {tile.kind === 'camera' && !tile.isMe && inThis && <ConnQuality userId={tile.userId} />}
           {tile.stream && tile.kind === 'camera' && <FitToggle />}
           {tile.kind === 'screen' && !tile.isMe && watching[tile.userId] && <StopWatching onStop={() => voice.watch(tile.userId, false)} />}
-          <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.closest('[data-call-tile]') as HTMLElement) }} title={t('Fullscreen')} aria-label={t('Fullscreen')} className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); fullscreenTile(tile.key) }} title={fs.on ? t('Exit Fullscreen') : t('Fullscreen')} aria-label={fs.on ? t('Exit Fullscreen') : t('Fullscreen')} className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{fs.on ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
         </div>
       </div>
     )
@@ -153,9 +164,10 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const rows = Math.max(1, Math.ceil(tiles.length / cols))
   const rowHeight = Math.max(80, (stage.height - 80 - (rows - 1) * 12) / rows)
   return (
-    <section ref={(el) => stage.setContainer(el?.parentElement ?? null)} style={{ height: stage.height }} className="relative shrink-0 border-b border-line bg-bg-0 px-4 pt-3 pb-2 flex flex-col phone:h-auto phone:max-h-[55vh]" data-dm-call data-call-height={stage.height}>
+    <section ref={(el) => { stage.setContainer(el?.parentElement ?? null); fs.ref.current = el }} style={fs.on ? undefined : { height: stage.height }} className={fs.on ? `fixed inset-0 z-[35] bg-bg-0 px-4 pt-3 pb-2 flex flex-col ${fs.idle ? 'cursor-none' : ''}` : 'relative shrink-0 border-b border-line bg-bg-0 px-4 pt-3 pb-2 flex flex-col phone:h-auto phone:max-h-[55vh]'} data-dm-call data-call-height={stage.height} data-call-fullscreen={fs.on ? '1' : undefined}>
       {tileMenu.menu && <ContextMenu {...tileMenu.menu} onClose={tileMenu.close} label={t('Participant')} />}
-      <div className="flex-1 min-h-0 flex flex-col gap-2">
+      <div className="relative flex-1 min-h-0 flex flex-col gap-2">
+        <ReconnectingPill channelId={channel.id} />
         {inThis && <ActivityChips channelId={channel.id} inCall />}
         {activity ? (
           <>
@@ -186,13 +198,13 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
           ))}
         </div>
       )}
-      <div className="relative mt-2 shrink-0 flex justify-center pb-1">
+      <div className={`relative mt-2 shrink-0 flex justify-center pb-1 transition-opacity duration-200 ${fs.on && fs.idle ? 'pointer-events-none opacity-0' : ''}`} data-dm-controls data-controls-hidden={fs.on && fs.idle ? '1' : undefined}>
         <span className="absolute left-0 top-1/2 -translate-y-1/2 phone:hidden"><CallLock channelId={channel.id} /></span>
         {inThis ? (
           <ControlBar compact>
             <ControlGroup>
               <SplitControl chevronLabel={t('Microphone options')} menuKind="input" menu={(close) => <MicMenu close={close} />}>
-                <ControlButton label={selfMute ? t('Unmute') : t('Mute')} on={selfMute || selfDeaf} tone="danger" onClick={() => voice.setMute(!selfMute)}>{selfMute || selfDeaf ? <MicOff size={18} /> : <Mic size={18} />}</ControlButton>
+                <ControlButton label={selfMute ? t('Unmute') : t('Mute')} on={selfMute || selfDeaf} tone="danger" keys={phone ? null : keybinds.toggleMute} onClick={() => voice.setMute(!selfMute)}>{selfMute || selfDeaf ? <MicOff size={18} /> : <Mic size={18} />}</ControlButton>
               </SplitControl>
               <SplitControl chevronLabel={t('Camera options')} menuKind="camera" menu={(close) => <CameraMenu close={close} />}>
                 <ControlButton label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={18} /> : <VideoOff size={18} />}</ControlButton>
@@ -216,7 +228,11 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
               </span>
               <ActivitiesButton channelId={channel.id} />
               <ClipButton />
-              {(screenShareSupported() || localScreen) && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>}
+              {(screenShareSupported() || localScreen) && (
+                <SplitControl chevronLabel={t('Screen share options')} menuKind="screen" align="end" menu={(close) => <ScreenMenu close={close} />}>
+                  <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()} data-call-screen="">{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
+                </SplitControl>
+              )}
                 </>
               )
               return phone ? <PhoneMore>{extras}</PhoneMore> : <ControlGroup>{extras}</ControlGroup>
@@ -224,7 +240,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
             <HangUpButton label={t('Leave Call')} onClick={() => voice.leave()} data-call-leave="" />
           </ControlBar>
         ) : (
-          <button onClick={() => voice.join(channel.id)} disabled={connecting} title={t('Join Call')} className="h-10 px-6 rounded-xl bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50" data-join-call><Phone size={18} /> {myChannel ? t('Switch to this call') : t('Join Call')}</button>
+          <button onClick={() => voice.join(channel.id)} disabled={connecting} title={t('Join Call')} className="h-10 px-6 rounded-xl bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50" data-join-call data-call-elsewhere={elsewhere ? '1' : undefined}><Phone size={18} /> {elsewhere ? t('Join on this device') : myChannel ? t('Switch to this call') : t('Join Call')}</button>
         )}
       </div>
       {phone && phoneStage && (() => {

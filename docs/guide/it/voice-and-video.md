@@ -2,7 +2,7 @@
 title: Voce e video
 section: Conversare
 summary: Entra nei canali vocali, chiama gli amici, condividi lo schermo, gestisci gli stage e tieni private le chiamate.
-source: e2706effcd7d
+source: dab86ccace07
 ---
 
 ![Un canale vocale con le videocamere accese e i controlli della chiamata](shot:voice)
@@ -20,6 +20,8 @@ La scheda **Voce connessa** sopra il tuo pannello indica che sei dentro. Da lì 
 Puoi continuare a chattare nei canali di testo mentre sei in vocale. Se ti sposti altrove, una piccola finestra della chiamata ti segue; fai clic su **Torna alla chiamata** per rientrare.
 
 > Tip: La prima volta Parley chiede al browser l'accesso al microfono. Se nessuno ti sente, controlla **Impostazioni utente → Voce e video** e prova il **Test del microfono**.
+
+Puoi trascinare la piccola finestra della chiamata in qualsiasi angolo e ridimensionarla dalla maniglia sul suo angolo; Parley ricorda entrambe le cose. Passaci sopra con il puntatore per **Silenzia**, **Smetti di guardare** e **Disconnetti**. Compare anche mentre condividi lo schermo, con ciò che stai condividendo e quante persone stanno guardando. Per disattivarla, spegni **Mostra la chiamata in un angolo mentre guardo altrove** in **Impostazioni utente → Voce e video**. Anche il nome del canale sulla scheda **Voce connessa** ti riporta alla chiamata.
 
 ## I controlli della chiamata
 
@@ -39,11 +41,32 @@ Fai clic sul video di qualcuno per metterlo in primo piano e doppio clic per lo 
 
 **Silenzia audio** (le cuffie nel tuo pannello) silenzia tutto quello che senti, e con esso anche il microfono.
 
+L’immagine di ciascuno è dimensionata per stare nella finestra, quindi non c’è nulla da scorrere. Quando ci sono più persone di quante ce ne stiano, Parley mostra quelle che ci stanno e un riquadro **+N**; fai clic per **Mostra tutti**. Lo schermo intero mostra tutta la chiamata con i suoi controlli. Svaniscono quando smetti di muovere il mouse e tornano quando lo muovi; premi <kbd>Esc</kbd> per uscire.
+
+Un controllo che al momento non puoi usare resta al suo posto, attenuato. Passaci sopra con il puntatore per vedere perché: forse non hai il permesso in questo canale, un moderatore ti ha silenziato oppure la chiamata si sta ancora connettendo. Passa il puntatore su **Silenzia** per vedere la scorciatoia da tastiera.
+
+La freccia accanto a **Condividi lo schermo** imposta la **Qualità della condivisione dello schermo** e se vuoi **Condividi l’audio**. Mentre condividi, mostra che cosa viene inviato e ti permette di **Condividi qualcos’altro** senza interrompere.
+
 ## Chiamare qualcuno
 
 In un DM o in un DM di gruppo, fai clic su **Avvia chiamata vocale** o **Avvia videochiamata** nella barra in alto. L'altra persona vede una chiamata in arrivo con **Unisciti** e **Rifiuta**. Se se la perde, vedrà che l'hai chiamata.
 
 Puoi anche portare un amico in un canale vocale in cui ti trovi: **Invita in vocale** gli manda un messaggio con **Unisciti**.
+
+Puoi rispondere dalla tastiera: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> entra e <kbd>Esc</kbd> ignora. **Ignora** fa smettere di squillare per te senza avvisare chi chiama; **Rifiuta** glielo dice. Se sei già nella chiamata da un altro dispositivo, il DM mostra **Entra da questo dispositivo**.
+
+## Se una chiamata cade
+
+Se la connessione vacilla, la chiamata mostra **Riconnessione…** e Parley ti riporta dentro da solo. Se non ci riesce dopo alcuni tentativi, esci dalla chiamata e sopra il tuo pannello compare la scheda **Connessione alla chiamata non riuscita**. Fai clic su **Riprova** per rientrare, oppure su **Ignora**.
+
+Parley ti avvisa anche quando qualcosa cambia durante una chiamata:
+
+- **Nessun microfono**: il microfono è stato scollegato. Se ne hai un altro, Parley passa a quello e te lo dice. Altrimenti collegane uno e Parley lo userà.
+- **Nuovo dispositivo audio**: hai collegato delle cuffie o un microfono. Fai clic su **Cambia** per usarlo, oppure su **Non suggerire più questo dispositivo**.
+- **Eri in una chiamata**: Parley si è ricaricato o riavviato nel mezzo di una chiamata. Fai clic su **Rientra** per tornare. Parley non rientra mai da solo.
+- **Impossibile entrare nella chiamata**: Parley non è riuscito ad aprire il microfono e dice perché. Risolvi e fai clic su **Riprova**, oppure fai clic su **Entra senza microfono** per ascoltare.
+
+> Tip: **Impossibile connettersi** sull’immagine di qualcuno significa che Parley non riesce a raggiungerlo direttamente, di solito per via di un firewall. Chiedi a chi gestisce il tuo Parley di configurare un server relay.
 
 ## Stage
 
@@ -59,6 +82,8 @@ Gli stage servono per talk, sessioni di domande e risposte e spettacoli:
 Le chiamate nei DM possono essere **cifrate end-to-end**: solo chi è nella chiamata può sentirla o vederla, nemmeno il server. Attiva la cifratura con il pulsante del lucchetto nella barra in alto del DM.
 
 Per essere sicuro che nessuno stia ascoltando, confrontate a voce il **Codice di sicurezza** mostrato nella chiamata. Se tutti vedono lo stesso codice, la chiamata è privata. Nelle chiamate cifrate sottotitoli e clip sono disattivati.
+
+In una chiamata piccola Parley ti collega direttamente agli altri, che così possono vedere il tuo indirizzo IP. Per evitarlo, attiva **Nascondi il mio indirizzo IP nelle chiamate** in **Impostazioni utente → Voce e video**: le tue chiamate passeranno dal relay del tuo Parley, se ne ha uno.
 
 ## Farsi sentire al meglio
 

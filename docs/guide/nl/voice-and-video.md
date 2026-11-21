@@ -2,7 +2,7 @@
 title: Spraak en video
 section: Praten
 summary: Doe mee in spraakkanalen, bel vrienden, deel je scherm, houd stages en houd gesprekken privé.
-source: e2706effcd7d
+source: dab86ccace07
 ---
 
 ![Een spraakkanaal met camera's aan en de gespreksknoppen](shot:voice)
@@ -20,6 +20,8 @@ De kaart **Spraak verbonden** boven je paneel laat zien dat je verbonden bent. D
 Je kunt gewoon blijven chatten in tekstkanalen terwijl je in spraak zit. Loop je weg, dan volgt een klein gespreksvenster je; klik op **Terug naar het gesprek** om terug te gaan.
 
 > Tip: De eerste keer vraagt Parley je browser om toegang tot de microfoon. Hoort niemand je, kijk dan bij **Gebruikersinstellingen → Spraak & video** en probeer de **Microfoontest**.
+
+Je kunt het kleine gespreksvenster naar elke hoek slepen en het formaat aanpassen met de greep op de hoek; Parley onthoudt beide. Wijs het aan voor **Dempen**, **Stoppen met kijken** en **Verbinding verbreken**. Het verschijnt ook terwijl je je scherm deelt, met wat je deelt en hoeveel mensen kijken. Zet **Het gesprek in een hoek tonen terwijl ik ergens anders kijk** uit onder **Gebruikersinstellingen → Spraak & video** om het uit te schakelen. Ook de kanaalnaam op de kaart **Spraak verbonden** brengt je terug naar het gesprek.
 
 ## De gespreksknoppen
 
@@ -39,11 +41,32 @@ Klik op iemands video om erop te focussen, en dubbelklik voor volledig scherm. D
 
 **Geluid uit** (de koptelefoon in je paneel) dempt alles wat je hoort, en je microfoon meteen ook.
 
+Ieders beeld wordt zo groot gemaakt dat het in het venster past, dus er valt niets te scrollen. Zijn er meer mensen dan er passen, dan toont Parley wie er past en een **+N**-tegel; klik erop voor **Iedereen tonen**. Volledig scherm toont het hele gesprek met de bediening. Die vervaagt als je de muis stilhoudt en komt terug als je hem beweegt; druk op <kbd>Esc</kbd> om te stoppen.
+
+Een knop die je nu niet kunt gebruiken, blijft op zijn plek staan, gedimd. Wijs hem aan om te zien waarom: misschien heb je geen toestemming in dit kanaal, heeft een moderator je gedempt of is het gesprek nog aan het verbinden. Wijs **Dempen** aan om de sneltoets te zien.
+
+Het pijltje naast **Scherm delen** stelt de **Kwaliteit van schermdeling** in en of je **Geluid delen** wilt. Terwijl je deelt, laat het zien wat er wordt verzonden en kun je **Iets anders delen** zonder te stoppen.
+
 ## Iemand bellen
 
 Klik in een DM of groeps-DM op **Spraakoproep starten** of **Videogesprek starten** in de bovenste balk. De ander ziet een inkomend gesprek met **Deelnemen** en **Weigeren**. Mist diegene het, dan ziet hij of zij dat je gebeld hebt.
 
 Je kunt ook een vriend naar een spraakkanaal halen waarin je zit: **Uitnodigen voor spraak** stuurt een bericht met **Deelnemen**.
+
+Je kunt met het toetsenbord opnemen: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> neemt deel en <kbd>Esc</kbd> negeert. **Negeren** stopt het rinkelen bij jou zonder het de beller te laten weten; **Weigeren** laat het wel weten. Zit je al op een ander apparaat in het gesprek, dan toont het privébericht **Deelnemen op dit apparaat**.
+
+## Als een gesprek wegvalt
+
+Als je verbinding hapert, toont het gesprek **Opnieuw verbinden…** en brengt Parley je vanzelf terug. Lukt dat na een paar pogingen niet, dan verlaat je het gesprek en verschijnt boven je paneel de kaart **Gespreksverbinding mislukt**. Klik op **Opnieuw proberen** om opnieuw deel te nemen, of op **Sluiten**.
+
+Parley laat het je ook weten als er tijdens een gesprek iets verandert:
+
+- **Geen microfoon**: je microfoon is losgekoppeld. Heb je een andere, dan schakelt Parley daarnaar over en meldt dat. Zo niet, sluit er dan een aan en Parley pakt hem op.
+- **Nieuw audioapparaat**: je hebt een headset of microfoon aangesloten. Klik op **Wisselen** om die te gebruiken, of op **Dit apparaat niet meer voorstellen**.
+- **Je zat in een gesprek**: Parley is midden in een gesprek opnieuw geladen of opnieuw gestart. Klik op **Opnieuw deelnemen** om terug te gaan. Parley neemt nooit vanzelf opnieuw deel.
+- **Kon niet deelnemen aan het gesprek**: Parley kon je microfoon niet openen en zegt waarom. Los het op en klik op **Opnieuw proberen**, of klik op **Deelnemen zonder microfoon** om te luisteren.
+
+> Tip: **Kan niet verbinden** op iemands afbeelding betekent dat Parley die persoon niet rechtstreeks kan bereiken, meestal door een firewall. Vraag degene die jullie Parley beheert om een relayserver in te stellen.
 
 ## Stages
 
@@ -59,6 +82,8 @@ Stages zijn voor lezingen, vragenrondes en shows:
 Gesprekken in DM's kunnen **end-to-end versleuteld** zijn: alleen de mensen in het gesprek kunnen het horen of zien, zelfs de server niet. Zet het aan met de slotknop in de bovenste balk van de DM.
 
 Om zeker te weten dat niemand meeluistert, vergelijk je de **Veiligheidscode** in het gesprek hardop. Ziet iedereen dezelfde code, dan is het gesprek privé. Ondertiteling en clips staan uit in versleutelde gesprekken.
+
+In een klein gesprek verbindt Parley je rechtstreeks met de anderen, waardoor zij je IP-adres kunnen zien. Zet **Mijn IP-adres verbergen in gesprekken** aan onder **Gebruikersinstellingen → Spraak & video** om dat te voorkomen: je gesprekken lopen dan via de relay van je Parley, als die er is.
 
 ## Zo klink je op je best
 

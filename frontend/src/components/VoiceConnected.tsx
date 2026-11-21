@@ -1,5 +1,6 @@
 import { AudioWaveform, Bug, Copy, Lock, MonitorOff, MonitorUp, Music2, PhoneOff, Signal, Video, VideoOff } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { profileOf } from '../lib/audioProfile'
 import { dmName } from '../lib/dm'
@@ -29,8 +30,10 @@ async function samplePing(channelId: string) {
  */
 export default function VoiceConnected() {
   const t = useT()
+  const navigate = useNavigate()
   const myVoice = useStore((s) => s.myVoiceChannelId)
   const connecting = useStore((s) => s.voiceConnecting)
+  const phase = useStore((s) => s.callStatus.phase)
   const channel = useStore((s) => (s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined))
   const guild = useStore((s) => (channel?.guild_id ? s.guilds[channel.guild_id] : undefined))
   const dm = useStore((s) => { const d = s.myVoiceChannelId ? s.dms[s.myVoiceChannelId] : undefined; return d ? dmName(d, s.users) : undefined })
@@ -62,15 +65,18 @@ export default function VoiceConnected() {
       {details && <VoiceDetails onClose={() => setDetails(false)} e2ee={!!channel?.e2ee} />}
       <div className="flex items-center gap-1">
         <button type="button" onClick={() => setDetails((d) => !d)} title={t('Connection details')} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-bg-3 ${connecting ? 'text-warn' : quality}`} data-audio-stats-toggle data-voice-details-toggle><Signal size={18} /></button>
-        <button type="button" onClick={() => setDetails((d) => !d)} className="min-w-0 flex-1 text-left">
-          <div className={`flex items-center gap-1 text-[13px] font-bold ${connecting ? 'text-warn' : quality}`}>
-            <span className="truncate">{connecting ? t('Connecting…') : t('Voice Connected')}</span>
+        <div className="min-w-0 flex-1">
+        <button type="button" onClick={() => setDetails((d) => !d)} className="block w-full min-w-0 text-left" title={t('Connection details')}>
+          <div className={`flex items-center gap-1 text-[13px] font-bold ${connecting || phase === 'reconnecting' ? 'text-warn' : quality}`}>
+            <span className="truncate" data-call-status={phase}>{phase === 'reconnecting' ? t('Reconnecting…') : connecting ? t('Connecting…') : t('Voice Connected')}</span>
             {prof.mode === 'music' && <span title={t('High-fidelity audio, {bitrate} kbps stereo', { bitrate: prof.bitrate })} className="rounded bg-accent/20 px-1 text-[9px] font-bold text-accent" data-hifi-badge>HI-FI</span>}
             {prof.lowLatency && <span title={t('Ultra-low latency: 10 ms frames, minimal jitter buffer')} className="rounded bg-bg-3 px-1 text-[9px] font-bold text-text-1" data-lowlat-badge>LL</span>}
             {pttMode && <span title={t('Push to talk')} className={`rounded px-1 text-[9px] font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>PTT</span>}
           </div>
-          <div className="truncate text-[11px] text-text-2 hover:underline" data-voice-where>{where}</div>
         </button>
+        {/* Where the call is, and the way back to it from anywhere in the app. */}
+        <button type="button" onClick={() => navigate(channel?.guild_id ? `/channels/${channel.guild_id}/${myVoice}` : `/channels/@me/${myVoice}`)} className="block w-full truncate text-left text-[11px] text-text-2 hover:text-text-0 hover:underline" title={t('Go to the call')} data-voice-where>{where}</button>
+        </div>
         <button type="button" onClick={() => updateVoiceSettings({ noiseSuppression: !noise })} title={noise ? t('Noise suppression on') : t('Noise suppression off')} aria-pressed={noise}
           className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-bg-3 ${noise ? 'text-text-0' : 'text-text-2'}`} data-noise-toggle={noise ? 'on' : 'off'}>
           <AudioWaveform size={18} />{!noise && <span className="pointer-events-none absolute h-[2px] w-5 rotate-45 rounded bg-current" />}
@@ -106,13 +112,13 @@ function VoiceDetails({ onClose, e2ee }: { onClose: () => void; e2ee: boolean })
   const ref = useRef<HTMLDivElement>(null)
   const avg = pings.length ? Math.round(pings.reduce((a, p) => a + p.ms, 0) / pings.length) : null
   const last = pings[pings.length - 1]?.ms ?? null
-  const server = voice.debug.mode === 'sfu' ? (() => { try { return new URL(instance.livekit_url ?? '').host || t('Media server') } catch { return t('Media server') } })() : t('Direct, peer to peer')
+  const server = voice.debug.mode === 'sfu' ? (() => { try { return new URL(instance.livekit_url ?? '').host || t('Media server') } catch { return t('Media server') } })() : voice.route === 'relayed' ? t('Relayed (your IP address is hidden)') : t('Direct, peer to peer')
   const encrypted = e2ee || voice.debug.e2ee
   const code = callE2ee?.code ?? ''
   // 20 digits as four groups of five (the code arrives spaced in fours).
   const groups = code.replace(/\D/g, '').match(/.{1,5}/g) ?? []
   const copyLogs = async () => {
-    const logs = { at: new Date().toISOString(), ...voice.debug, server, pings, stats: await voice.audioStats().catch(() => []), userAgent: navigator.userAgent }
+    const logs = { at: new Date().toISOString(), ...voice.debug, server, events: voice.events, pings, stats: await voice.audioStats().catch(() => []), userAgent: navigator.userAgent }
     try { await navigator.clipboard.writeText(JSON.stringify(logs, null, 2)); pushToast(t('Call logs copied: paste them where you report the problem')) } catch { pushToast(t('Clipboard unavailable'), 'error') }
   }
   const badge = encrypted && <div className="mt-3 flex items-center gap-1.5 rounded-md bg-success/10 px-2 py-1 text-xs text-success" data-voice-e2ee><Lock size={12} />{t('End-to-end encrypted')}</div>
@@ -126,7 +132,7 @@ function VoiceDetails({ onClose, e2ee }: { onClose: () => void; e2ee: boolean })
         {tab === 'connection' ? (
           <div data-voice-connection>
             <PingGraph />
-            <div className="mt-2 font-bold" data-voice-server>{server}</div>
+            <div className="mt-2 font-bold" data-voice-server data-voice-route={voice.route}>{server}</div>
             <div className="text-xs"><b>{t('Average ping:')}</b> <span data-voice-avg>{avg == null ? '—' : `${avg} ms`}</span></div>
             <div className="text-xs"><b>{t('Last ping:')}</b> <span data-voice-last>{last == null ? '—' : `${last} ms`}</span></div>
             <p className="mt-2 text-xs text-text-2">{t('You may notice delayed audio at 250 ms or higher. If it stays that way, disconnect and join again.')}</p>

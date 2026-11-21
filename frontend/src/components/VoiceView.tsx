@@ -18,7 +18,7 @@ import ProjectSession from './ProjectSession'
 import StudioConsole from './StudioConsole'
 import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
-import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, PhoneMore, SettingsRow, SplitControl } from './CallControls'
+import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, PhoneMore, ScreenMenu, SettingsRow, SplitControl } from './CallControls'
 import PhoneStage, { ExpandButton } from './PhoneStage'
 import { useResizablePanel } from '../lib/resize'
 import { startTake, studio as studioRec } from '../lib/studio'
@@ -28,6 +28,10 @@ import { ConnQuality, InviteToVoice, ReactButton, StreamViewers, TileReactions, 
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
+import { ReconnectingPill } from './CallStatus'
+import { useKeybindMap } from '../lib/keybinds'
+import { byPriority, fitGrid } from '../lib/callGrid'
+import { useBoxSize, useCallFullscreen, useClickOrDouble } from '../lib/callView'
 import { t, useT } from '../lib/i18n'
 import { shownName } from '../lib/names'
 
@@ -127,6 +131,13 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   useEffect(() => { if (board && channel.guild_id && !sounds) loadSounds(channel.guild_id) }, [board, channel.guild_id, sounds, loadSounds])
   const playSound = async (id: string) => { try { await api.post(`/channels/${channel.id}/soundboard/${id}`) } catch (e) { pushToast((e as Error).message, 'error') } }
   const inThis = myChannel === channel.id
+  // Why a control can't be used right now, said on the control itself (tooltip, and a notice when pressed).
+  const keybinds = useKeybindMap()
+  const callUp = useStore((s) => s.callStatus.phase === 'connected')
+  const waiting = inThis && !callUp ? t('Waiting for the connection…') : null
+  const micWhy = suppressed ? (isStage ? t("You're in the audience. Raise your hand to ask to speak.") : t("You can't speak in this channel.")) : myVs?.mute ? t('A moderator muted you. Only a moderator can unmute you.') : null
+  const cameraWhy = !canStream ? t("You can't turn on your camera in this channel.") : waiting
+  const screenWhy = !canStream ? t("You can't share your screen in this channel.") : waiting
   const activities = useCallActivities(channel.id)
   const openActivity = useActivities((s) => s.open)
   const activity = inThis ? activities.find((a) => a.id === openActivity) : undefined
@@ -176,13 +187,22 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const videoFit = useVideoFit()
   // Right-click a tile: the person's menu, with their volume and local mute while you're in the call.
   const userMenu = useUserMenu(channel.guild_id)
-  const toggleFullscreen = (el: HTMLElement) => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else el.requestFullscreen?.().catch(() => {}) }
+  // Fullscreen is the whole call (stage and controls), with the chosen tile in front; a single click waits a moment so
+  // a double click doesn't also flip the focus twice.
+  const fs = useCallFullscreen<HTMLDivElement>()
+  const clicks = useClickOrDouble()
+  const fullscreenTile = (key: string) => { if (!fs.on) setFocused(key); fs.toggle() }
+  const exitFullscreen = fs.exit
+  useEffect(() => { if (!inThis) exitFullscreen() }, [inThis, exitFullscreen])
+  // The grid's tiles are sized to its space (lib/callGrid.ts); `allTiles` lifts the limit when "+N" is pressed.
+  const gridBox = useBoxSize<HTMLDivElement>()
+  const [allTiles, setAllTiles] = useState(false)
   const renderTile = (tile: Tile, big: boolean, fill = false) => {
     const talking = tile.kind === 'camera' && !!speaking[tile.userId]
     const status = tile.kind !== 'camera' ? null : tile.isMe ? (connecting ? 'connecting' : 'connected') : inThis ? peerStatus[tile.userId] ?? 'connecting' : null
     const name = shownName(tile.user ?? members?.[tile.userId], members?.[tile.userId], notes[tile.userId]?.nickname) || t('Unknown')
     return (
-      <div key={tile.key} onClick={() => { if (phone) { if (!stage) setStage(tile.key) } else setFocused(focused === tile.key ? null : tile.key) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) toggleFullscreen(e.currentTarget) }}
+      <div key={tile.key} onClick={() => { if (phone) { if (!stage) setStage(tile.key) } else clicks.click(() => setFocused((f) => (f === tile.key ? null : tile.key))) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) clicks.double(() => fullscreenTile(tile.key)) }}
         onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, [...(isStudio && tile.kind === 'camera' && roleEntries(tile.userId).length ? [{ node: <div className="px-2 pt-1 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Project role')}</div> }, ...roleEntries(tile.userId), 'sep' as const] : []), ...userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())]) }}
         className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big || fill ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={tile.userId} data-tile-big={big ? '1' : '0'} title={big ? t('Click to return to the grid · double-click for fullscreen') : t('Click to focus · double-click for fullscreen')}>
         {isStage && isMod && inThis && !tile.isMe && tile.kind === 'camera' && <button type="button" onClick={(e) => { e.stopPropagation(); toAudience(tile.userId) }} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-to-audience>{t('Move to audience')}</button>}
@@ -213,13 +233,13 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {tile.kind === 'screen' && <StreamViewers streamerId={tile.userId} channelId={channel.id} />}
         {tile.kind === 'camera' && <TileReactions userId={tile.userId} />}
         {status && status !== 'connected' && (
-          <span className={`absolute right-3 top-3 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${status === 'failed' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{status === 'failed' ? t('No route') : t('Connecting')}</span>
+          <span className={`absolute right-3 top-3 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${status === 'failed' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`} data-peer-status={status} title={status === 'failed' ? t("Parley can't reach {name} directly, often because of a firewall. It keeps trying; a relay (TURN) server on this instance fixes it for good.", { name }) : undefined}>{status === 'failed' ? t("Can't connect") : t('Connecting')}</span>
         )}
         <div className="absolute right-3 bottom-3 flex items-center gap-1">
           {tile.kind === 'camera' && !tile.isMe && inThis && <ConnQuality userId={tile.userId} />}
           {tile.stream && tile.kind === 'camera' && <FitToggle />}
           {tile.kind === 'screen' && !tile.isMe && watching[tile.userId] && <StopWatching onStop={() => voice.watch(tile.userId, false)} />}
-          <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.closest('[data-voice-tile]') as HTMLElement) }} title={t('Fullscreen')} aria-label={t('Fullscreen')} className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); fullscreenTile(tile.key) }} title={fs.on ? t('Exit Fullscreen') : t('Fullscreen')} aria-label={fs.on ? t('Exit Fullscreen') : t('Fullscreen')} className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{fs.on ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
         </div>
       </div>
     )
@@ -254,10 +274,11 @@ export default function VoiceView({ channel }: { channel: Channel }) {
       </header>
 
       <div className="flex-1 min-h-0 flex" ref={(el) => chatPanel.setContainer(el)}>
-        {/* Stage */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        {/* Stage. In fullscreen it covers the page, and its controls fade out when the pointer rests. */}
+        <div ref={fs.ref} className={fs.on ? `fixed inset-0 z-[35] flex flex-col bg-bg-0 ${fs.idle ? 'cursor-none' : ''}` : 'flex-1 min-w-0 flex flex-col'} data-call-fullscreen={fs.on ? '1' : undefined}>
           {preJoin && !(hasConsole && consoleOpen) ? <PreJoin channel={channel} participants={participants} users={users} canConnect={canConnect} connecting={connecting} switching={!!myChannel} recording={liveSession?.name} /> : (
-          <div className="flex-1 min-h-0 overflow-hidden p-4 phone:p-2 flex flex-col gap-3">
+          <div className="relative flex-1 min-h-0 overflow-hidden p-4 phone:p-2 flex flex-col gap-3">
+            <ReconnectingPill channelId={channel.id} />
             {!isStage && <ActivityChips channelId={channel.id} inCall={inThis} />}
             {hasConsole && consoleOpen ? (
               <>
@@ -294,11 +315,29 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 <div className="flex-1 min-h-0 grid gap-2" data-voice-grid data-voice-grid-fill style={{ gridTemplateColumns: `repeat(${fillCols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${Math.ceil(shown.length / fillCols)}, minmax(0, 1fr))` }}>
                   {shown.map((x) => renderTile(x, false, true))}
                 </div>
-              ) : <div className="flex-1 overflow-y-auto">
-                <div className="grid gap-4 phone:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (shown.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${shown.length <= 2 ? '480px' : '340px'}))` }}>
+              ) : phone ? <div className="flex-1 overflow-y-auto">
+                <div className="grid gap-4 phone:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: shown.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))' }}>
                   {shown.map((x) => renderTile(x, false))}
                 </div>
-              </div>
+              </div> : (() => {
+                // Wide screens: every tile as large as fits, nothing to scroll. Too many for a size worth looking at:
+                // those that fit (screens, cameras and people talking first) and "+N", which shows everyone, scrolling.
+                const GAP = 16
+                const fit = gridBox.size ? fitGrid(gridBox.size.w, gridBox.size.h, shown.length, GAP) : null
+                const over = !!fit && fit.more > 0
+                const list = over && !allTiles ? byPriority(shown.map((x) => ({ ...x, hasVideo: !!x.stream, talking: !!speaking[x.userId] }))).slice(0, fit!.shown) : shown
+                const cols = !fit ? `repeat(auto-fit, minmax(min(240px, 100%), ${shown.length <= 2 ? '480px' : '340px'}))` : over && allTiles ? 'repeat(auto-fill, minmax(220px, 1fr))' : `repeat(${fit.cols}, ${fit.tileW}px)`
+                return (
+                  <div ref={gridBox.setEl} className={`flex-1 min-h-0 ${over && allTiles ? 'overflow-y-auto' : 'overflow-hidden'}`} data-voice-grid-box>
+                    <div className={`grid justify-center ${over && allTiles ? 'content-start' : 'h-full content-center'}`} data-voice-grid data-grid-cols={fit?.cols} data-grid-more={over ? fit!.more : undefined} style={{ gridTemplateColumns: cols, gap: GAP }}>
+                      {list.map((x) => renderTile(x, false))}
+                      {over && !allTiles && fit!.cells > 1 && <button type="button" onClick={() => setAllTiles(true)} className="aspect-video rounded-2xl border-2 border-line bg-bg-2 text-text-1 hover:bg-bg-3 hover:text-text-0 flex flex-col items-center justify-center gap-1" data-grid-more-tile><span className="text-3xl font-bold">+{fit!.more}</span><span className="text-xs">{t('Show everyone')}</span></button>}
+                    </div>
+                    {over && !allTiles && fit!.cells === 1 && <button type="button" onClick={() => setAllTiles(true)} className="absolute right-6 top-6 z-10 rounded-full bg-bg-0/85 px-3 py-1 text-sm font-bold text-text-0 ring-1 ring-line" data-grid-more-tile>+{fit!.more}</button>}
+                    {over && allTiles && <div className="sticky bottom-0 flex justify-center py-2"><button type="button" onClick={() => setAllTiles(false)} className="rounded-full bg-bg-0/85 px-3 py-1 text-xs font-semibold text-text-1 ring-1 ring-line hover:text-text-0" data-grid-fit>{t('Fit to window')}</button></div>}
+                  </div>
+                )
+              })()
             )}
             <CaptionsOverlay guildId={channel.guild_id} />
             {isStage && audience.length > 0 && (
@@ -323,17 +362,15 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           </div>
 
           )}
-          {!preJoin && <div className="shrink-0 px-3 pt-3 pb-4 phone:px-2 phone:pb-3 border-t border-line" data-voice-controls>
+          {!preJoin && <div className={`shrink-0 px-3 pt-3 pb-4 phone:px-2 phone:pb-3 transition-opacity duration-200 ${fs.on ? (fs.idle ? 'pointer-events-none opacity-0' : '') : 'border-t border-line'}`} data-voice-controls data-controls-hidden={fs.on && fs.idle ? '1' : undefined}>
               <ControlBar>
                 <ControlGroup>
                   <SplitControl chevronLabel={t('Microphone options')} menuKind="input" menu={(close) => <MicMenu close={close} />}>
-                    <ControlButton label={selfMute ? t('Unmute') : t('Mute')} on={selfMute || selfDeaf} tone="danger" onClick={() => voice.setMute(!selfMute)}>{selfMute || selfDeaf ? <MicOff size={20} /> : <Mic size={20} />}</ControlButton>
+                    <ControlButton label={selfMute ? t('Unmute') : t('Mute')} on={selfMute || selfDeaf} tone="danger" why={micWhy} keys={phone ? null : keybinds.toggleMute} onClick={() => voice.setMute(!selfMute)} data-call-mic="">{selfMute || selfDeaf || micWhy ? <MicOff size={20} /> : <Mic size={20} />}</ControlButton>
                   </SplitControl>
-                  {canStream && (
-                    <SplitControl chevronLabel={t('Camera options')} menuKind="camera" menu={(close) => <CameraMenu close={close} />}>
-                      <ControlButton label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={20} /> : <VideoOff size={20} />}</ControlButton>
-                    </SplitControl>
-                  )}
+                  <SplitControl chevronLabel={t('Camera options')} menuKind="camera" menu={(close) => <CameraMenu close={close} />}>
+                    <ControlButton label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} why={localCamera ? null : cameraWhy} onClick={() => voice.toggleCamera()} data-call-camera="">{localCamera ? <Video size={20} /> : <VideoOff size={20} />}</ControlButton>
+                  </SplitControl>
                 </ControlGroup>
                 {(() => {
                   const extras = (
@@ -349,7 +386,11 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   {channel.guild_id && channel.kind === 'voice' && <InviteToVoice channelId={channel.id} guildId={channel.guild_id} />}
                   {!isStage && <ActivitiesButton channelId={channel.id} />}
                   <ClipButton />
-                  {canStream && (screenShareSupported() || localScreen) && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
+                  {(screenShareSupported() || localScreen) && (
+                    <SplitControl chevronLabel={t('Screen share options')} menuKind="screen" align="end" menu={(close) => <ScreenMenu close={close} />}>
+                      <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} why={localScreen ? null : screenWhy} onClick={() => voice.toggleScreen()} data-call-screen="">{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>
+                    </SplitControl>
+                  )}
                   {canSpeak && !suppressed && (
                     <span className="relative flex">
                       <ControlButton label={t('Soundboard')} on={board} onClick={() => setBoard((b) => !b)}><Music2 size={20} /></ControlButton>

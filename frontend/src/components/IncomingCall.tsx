@@ -26,7 +26,11 @@ export default function IncomingCall() {
   const setIgnored = useStore((s) => s.setCallIgnored)
   // Where I am from any session (another tab, the phone): answering there must silence this one too.
   const mineElsewhere = me ? voiceStates[me.id]?.channel_id ?? null : null
-  const ringing = Object.values(voiceStates).find((v) => v.guild_id === null && v.channel_id && dms[v.channel_id] && v.user_id !== me?.id && myChannel !== v.channel_id && mineElsewhere !== v.channel_id && !ignored[v.channel_id])
+  // Every DM call ringing for me, one entry per call; the first is shown and the rest are counted.
+  const calls = Object.values(voiceStates).filter((v, i, all) => v.guild_id === null && v.channel_id && dms[v.channel_id] && v.user_id !== me?.id && myChannel !== v.channel_id && mineElsewhere !== v.channel_id && !ignored[v.channel_id] && all.findIndex((o) => o.channel_id === v.channel_id) === i)
+  const ringing = calls[0]
+  const waiting = calls.length - 1
+  const modalOpen = useStore((s) => !!s.modal)
   const selfDeaf = useStore((s) => s.selfDeaf)
   const prefs = usePrefs()
   const wantRing = useNotifPrefs().sounds.incoming_ring && !(prefs.streamer && prefs.streamerMuteSounds)
@@ -47,6 +51,21 @@ export default function IncomingCall() {
     w.__parleyRing = true
     return () => { clearTimeout(cutoff); stop() }
   }, [ringFor, selfDeaf, wantRing])
+  // Keyboard: Ctrl/Cmd+Enter answers from anywhere; Escape ignores, unless it belongs to something else just now (a
+  // dialog, a field being typed in). Ignoring only silences it here; Decline also tells the caller.
+  const ringId = ringing?.channel_id ?? null
+  useEffect(() => {
+    if (!ringId) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); navigate(`/channels/@me/${ringId}`); void voice.join(ringId); return }
+      if (e.key !== 'Escape' || modalOpen || e.defaultPrevented) return
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      setIgnored(ringId, true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [ringId, modalOpen, navigate, setIgnored])
   if (!ringing || !ringing.channel_id) return null
   const dm = dms[ringing.channel_id]
   const caller = users[ringing.user_id] ?? dm.recipients.find((r) => r.id === ringing.user_id)
@@ -55,11 +74,15 @@ export default function IncomingCall() {
     <div className="pop fixed safe-corner z-40 w-72 rounded-xl bg-bg-1 border border-line shadow-2xl p-4" role="alert" data-incoming-call>
       <div className="flex items-center gap-3">
         {caller && <Avatar user={caller} size={40} />}
-        <div className="min-w-0"><div className="font-bold truncate">{(caller ? nameOf(caller, notes) : '') || t('Someone')}</div><div className="text-xs text-text-2">{t('Incoming call…')}</div></div>
+        <div className="min-w-0"><div className="font-bold truncate">{(caller ? nameOf(caller, notes) : '') || t('Someone')}</div><div className="text-xs text-text-2">{t('Incoming call…')}</div>{waiting > 0 && <div className="text-xs text-text-2" data-calls-waiting={waiting}>{waiting === 1 ? t('1 more call is waiting') : t('{n} more calls are waiting', { n: waiting })}</div>}</div>
       </div>
       <div className="mt-3 flex gap-2">
         <button onClick={join} className="flex-1 btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-call-join><Phone size={16} /> {t('Join')}</button>
         <button onClick={() => { setIgnored(dm.id, true); api.post(`/channels/${dm.id}/call/decline`).catch(() => {}) }} className="flex-1 btn-danger py-1.5" data-call-decline><PhoneOff size={16} /> {t('Decline')}</button>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-text-2">
+        <button type="button" onClick={() => setIgnored(dm.id, true)} className="hover:text-text-1 hover:underline" title={t('Stop it ringing here without telling the caller')} data-call-ignore>{t('Ignore')}</button>
+        <span className="phone:hidden" data-call-keys>{t('{join} to join · {ignore} to ignore', { join: /Mac/.test(navigator.userAgent) ? '⌘ Enter' : 'Ctrl + Enter', ignore: 'Esc' })}</span>
       </div>
     </div>
   )

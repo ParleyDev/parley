@@ -7,9 +7,12 @@ import { keyLabel, supportsSinkId, type VoiceSettings } from './settings'
 import { desktop, desktopBridge } from './desktop'
 import { keepAwake } from './native'
 import { onUserAudio, userAudio } from './userAudio'
-import { api } from './api'
+import { api, ApiError } from './api'
+import { IDLE, reduce, retryDelay, type CallEvent, type CallReason, type CallState } from './callState'
+import { rememberCall } from './callRestore'
+import { STORAGE_PREFIX } from './brand'
 import { captureConstraints, measure, profileOf, sameProfile, tuneAudioReceiver, tuneAudioSender, tuneOpusSdp, type AudioProfile, type AudioStat } from './audioProfile'
-import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant, type RemoteTrackPublication } from 'livekit-client'
+import { DisconnectReason, LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant, type RemoteTrackPublication } from 'livekit-client'
 import E2EEWorker from 'livekit-client/e2ee-worker?worker'
 import { CallCrypto, e2eeSupported, legacyInsertableStreams, MeshCrypto, ParleyKeyProvider } from './e2ee'
 import { CaptionSender, clearCaptions } from './captions'
@@ -36,6 +39,8 @@ interface Peer {
   stopMeter?: () => void
   /** We sent the first offer, so we drive renegotiation when the channel's audio profile changes. */
   offerer: boolean
+  /** Route repairs (ICE restarts) tried since this connection last worked. */
+  restarts: number
 }
 
 const CAMERA_MAX_BITRATE = 1_500_000
@@ -108,6 +113,16 @@ class VoiceManager {
   private channelId: string | null = null
   private joining = false
   private muteBeforeDeaf = false
+  /** The call's connection as the member sees it; every change goes through dispatch(). */
+  private call: CallState = IDLE
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
+  private restoreTimer: ReturnType<typeof setInterval> | null = null
+  /** What the microphone last refused with, for the failed call's words and the logs. */
+  private micError: Error | null = null
+  /** Audio devices seen in this call (by group), so one that appears can be offered. */
+  private knownDevices: Set<string> | null = null
+  /** The last connection events, for Copy Logs. */
+  readonly events: string[] = []
 
   // SFU (LiveKit) transport, used instead of the mesh when the instance has a server configured.
   private room: Room | null = null
@@ -130,6 +145,7 @@ class VoiceManager {
       window.addEventListener('keydown', (e) => this.onKey(e, true), true)
       window.addEventListener('keyup', (e) => this.onKey(e, false), true)
       window.addEventListener('blur', () => { this.pttDown = false; useStore.getState().setPttHeld(false) })
+      navigator.mediaDevices?.addEventListener?.('devicechange', () => { void this.onDevicesChanged() })
       // Desktop app: the shell watches the key while Parley is in the background, only during a call.
       const shell = window as unknown as { __parleyPtt?: (down: boolean) => void }
       shell.__parleyPtt = (down) => { if (this.settings.inputMode === 'ptt') this.setPtt(!!down) }
@@ -219,11 +235,35 @@ class VoiceManager {
   }
 
   get currentChannel() { return this.channelId }
+
+  /** Whether this instance offers a relay (TURN) at all. */
+  get hasRelay(): boolean { return useStore.getState().iceServers.some((x) => (Array.isArray(x.urls) ? x.urls : [x.urls]).some((u) => /^turns?:/i.test(u))) }
+  /** Direct calls are relayed: the member asked for it and there is a relay to use. */
+  get relayed(): boolean { return this.settings.relayOnly && this.hasRelay }
+  /** How this call's media travels, for Connection details. */
+  get route(): 'server' | 'relayed' | 'direct' { return this.sfu ? 'server' : this.relayed ? 'relayed' : 'direct' }
+
+  /**
+   * Joining a direct call: say once that such calls show your IP address to the people in them, with the way to stop
+   * that; and say every time when hiding was asked for but this instance has no relay to hide behind.
+   */
+  private explainRoute() {
+    if (this.sfu) return
+    const s = useStore.getState()
+    if (this.settings.relayOnly) {
+      if (!this.hasRelay) s.pushToast(t("This Parley has no relay server, so this call connects directly and the people in it can see your IP address."), 'error')
+      return
+    }
+    if (!this.hasRelay) return
+    try { if (localStorage.getItem(DIRECT_SEEN) === '1') return; localStorage.setItem(DIRECT_SEEN, '1') } catch { return }
+    s.pushToast(t('Calls here connect directly, so the people in a call can see your IP address.'), 'info', { label: t('Hide my IP address'), run: () => useStore.getState().updateVoiceSettings({ relayOnly: true }) })
+  }
   private get settings(): VoiceSettings { return useStore.getState().voiceSettings }
 
   // ---- public controls ----
 
-  async join(channelId: string) {
+  /** `listenOnly`: join even when no microphone can be opened (the call then says there is none, and picks one up when it appears). */
+  async join(channelId: string, listenOnly = false) {
     keepAwake(true)
     if (this.joining) return
     const s = useStore.getState()
@@ -235,11 +275,8 @@ class VoiceManager {
       this.profile = next
       if (this.raw && captureChanged) await this.reopenMicDevice()
       const e2ee = !!(s.channels[channelId] ?? s.dms[channelId])?.e2ee
-      if (e2ee && !e2eeSupported()) {
-        s.pushToast(t("This call is end-to-end encrypted, and this browser can't encrypt calls. Use a current version of Chrome, Edge, Firefox or Safari."), 'error')
-        return
-      }
-      if (!(await this.acquireMic('call'))) return
+      if (e2ee && !e2eeSupported()) { this.refuseJoin(channelId, 'unsupported', 'no encoded transforms'); return }
+      if (!(await this.acquireMic('call', listenOnly))) { this.refuseJoin(channelId, 'microphone', this.micError ? `${this.micError.name}: ${this.micError.message}` : undefined); return }
       await refreshIceServers()
       // Moving channels: tear down old peers; camera/screen stay on and re-attach to new peers.
       if (this.channelId) { this.closeAllPeers(); await this.disconnectSfu() }
@@ -247,12 +284,11 @@ class VoiceManager {
       if (e2ee) await this.startCrypto()
       this.channelId = channelId
       this.lastSpokeAt = Date.now()
+      this.dispatch({ type: 'join', channelId })
       s.setMyVoice(channelId, true)
       s.setLocalMedia({ camera: this.camera, screen: this.screen })
-      if (!sendOp({ op: 'voice_join', channel_id: channelId, e2ee: e2eeSupported() })) {
-        s.pushToast(t('Not connected to the server'), 'error')
-        this.leave()
-      }
+      void this.scanDevices(false)
+      if (!sendOp({ op: 'voice_join', channel_id: channelId, e2ee: e2eeSupported() })) this.dispatch({ type: 'fail', reason: 'socket', detail: 'no socket at join' })
     } finally {
       this.joining = false
     }
@@ -279,10 +315,55 @@ class VoiceManager {
     return true
   }
 
-  leave(evicted = false) {
+  /**
+   * A join that cannot start. Already in another call: say so and stay there. Otherwise the call shows as failed, with
+   * the reason and Try again, instead of a message that is gone in four seconds.
+   */
+  private refuseJoin(channelId: string, reason: CallReason, detail?: string) {
+    if (this.channelId) { useStore.getState().pushToast(callFailureText(reason, detail), 'error'); return }
+    keepAwake(false)
+    this.dispatch({ type: 'join', channelId })
+    this.dispatch({ type: 'fail', reason, detail })
+  }
+
+  /** Every change of the call's connection state: the store (what the member sees), the log, and what follows from it. */
+  private dispatch(e: CallEvent) {
+    const prev = this.call
+    const next = reduce(prev, e)
+    if (next === prev) return
+    this.call = next
+    this.events.push(`${new Date().toISOString()} ${e.type}${'reason' in e ? ` ${e.reason}` : ''}${'detail' in e && e.detail ? ` (${e.detail})` : ''} → ${next.phase}${next.attempts ? ` #${next.attempts}` : ''}`)
+    if (this.events.length > 60) this.events.shift()
+    useStore.getState().setCallStatus(next)
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null }
+    // A failed call is one we have left: nobody sees us in a call that carries nothing.
+    if (next.phase === 'failed' && this.channelId) { this.leave(true, true); return }
+    if (next.phase === 'connected' && next.channelId) this.keepRestorable(next.channelId)
+    const wait = retryDelay(next)
+    if (wait !== null) this.retryTimer = setTimeout(() => { this.retryTimer = null; const id = this.channelId; if (!id) return; this.dispatch({ type: 'retry' }); if (this.sfu) void this.connectSfu(id); else this.onReconnect() }, wait)
+  }
+
+  /** While connected, keep "the call this browser is in" fresh for the rejoin offer after a reload (lib/callRestore.ts). */
+  private keepRestorable(channelId: string) {
+    rememberCall(channelId)
+    if (!this.restoreTimer) this.restoreTimer = setInterval(() => { if (this.channelId && this.call.phase !== 'failed') rememberCall(this.channelId) }, 20_000)
+  }
+
+  /** Try again from a failed call, or dismiss it. */
+  retryCall(listenOnly = false) { const id = this.call.phase === 'failed' ? this.call.channelId : null; if (id) void this.join(id, listenOnly) }
+  dismissCall() { if (this.call.phase === 'failed') this.dispatch({ type: 'leave' }) }
+  /** Test hook: the transport dropped. */
+  dropForTest(detail = 'test') { const room = this.room; if (room) { this.room = null; void room.disconnect(false).catch(() => {}); void this.disconnectSfu() } this.transportLost(detail) }
+
+  leave(evicted = false, keepStatus = false) {
     keepAwake(false)
     this.priorityOn = false
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null }
+    if (this.restoreTimer) { clearInterval(this.restoreTimer); this.restoreTimer = null }
+    rememberCall(null)
+    this.knownDevices = null
     const s = useStore.getState()
+    s.setMicLost(false); s.setDeviceOffer(null)
     if (this.channelId) { sendOp({ op: 'voice_leave' }); playSfx(evicted ? 'disconnect' : 'user_leave') }
     // Leaving a DM or group call that's still going must not ring you back in: it stays quiet (rejoin from the DM)
     // until it ends.
@@ -297,6 +378,7 @@ class VoiceManager {
     this.stopTracks(this.camera); this.camera = null
     this.stopTracks(this.screen); this.screen = null
     s.setMyVoice(null)
+    if (!keepStatus) this.dispatch({ type: 'leave' })
   }
 
   /** Priority Speaker switched on (needs the permission; the server ignores it otherwise). */
@@ -367,24 +449,70 @@ class VoiceManager {
       this.pushState()
       return
     }
-    if (!navigator.mediaDevices?.getDisplayMedia) { s.pushToast(t('Screen sharing is not supported in this browser'), 'error'); return }
+    const stream = await this.pickScreen()
+    if (!stream) return
+    playSfx('stream_started')
+    await this.showScreen(stream)
+    this.pushState()
+  }
+
+  /** The browser's picker, asked for the chosen quality and (unless switched off) the source's sound. Null when cancelled or refused. */
+  private async pickScreen(): Promise<MediaStream | null> {
+    const s = useStore.getState()
+    if (!navigator.mediaDevices?.getDisplayMedia) { s.pushToast(t('Screen sharing is not supported in this browser'), 'error'); return null }
     try {
       const q = STREAM_QUALITY[this.settings.streamQuality] ?? STREAM_QUALITY.auto
       this.screenBitrate = q.bitrate; this.screenFps = q.fps
-      this.screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: q.fps, max: q.fps }, ...(q.height ? { height: { ideal: q.height, max: q.height } } : {}) }, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, systemAudio: 'include' } as DisplayMediaStreamOptions)
-      playSfx('stream_started')
+      const sound = this.settings.streamAudio !== false
+      return await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: q.fps, max: q.fps }, ...(q.height ? { height: { ideal: q.height, max: q.height } } : {}) }, audio: sound ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false, ...(sound ? { systemAudio: 'include' } : {}) } as DisplayMediaStreamOptions)
     } catch (e) {
       if ((e as Error).name !== 'NotAllowedError') s.pushToast(t('Screen share failed: {error}', { error: (e as Error).message }), 'error')
-      return
+      return null
     }
-    const track = this.screen.getVideoTracks()[0]
+  }
+
+  /** Put a picked screen on the air: to the peers watching, to the media server, to our own tile and the previews. */
+  private async showScreen(stream: MediaStream) {
+    this.screen = stream
+    const track = stream.getVideoTracks()[0]
     // Browser "Stop sharing" button ends the track.
-    track.onended = () => { if (this.screen) this.toggleScreen() }
+    track.onended = () => { if (this.screen === stream) this.toggleScreen() }
     this.peers.forEach((p, id) => { this.replaceVideo(p.pc, 1, this.screenFor(id)); this.replaceScreenAudio(p.pc, this.screenAudioFor(id)) })
     await this.sfuPublish('screen', track)
-    s.setLocalMedia({ screen: this.screen })
-    this.pushState()
+    useStore.getState().setLocalMedia({ screen: stream })
     if (this.channelId) startPreviews(this.channelId, track)
+  }
+
+  /** Share something else without stopping: viewers keep watching and see the new source. Cancelling the picker changes nothing. */
+  async changeScreen() {
+    if (!this.screen) return
+    const stream = await this.pickScreen()
+    if (!stream || !this.screen) { this.stopTracks(stream); return }
+    const old = this.screen
+    stopPreviews()
+    await this.showScreen(stream)
+    this.stopTracks(old)
+  }
+
+  /** What is going out: the shared picture's size and frame rate, and whether its sound is shared. */
+  get screenInfo(): { width: number; height: number; fps: number; sound: boolean } | null {
+    const track = this.screen?.getVideoTracks()[0]
+    if (!track) return null
+    const st = track.getSettings()
+    return { width: st.width ?? 0, height: st.height ?? 0, fps: Math.round(st.frameRate ?? this.screenFps), sound: !!this.screen?.getAudioTracks().length }
+  }
+
+  /** A quality chosen while sharing takes effect on the running share: the capture's size and frame rate, and the bitrate cap. */
+  private async applyStreamQuality() {
+    const track = this.screen?.getVideoTracks()[0]
+    if (!track) return
+    const q = STREAM_QUALITY[this.settings.streamQuality] ?? STREAM_QUALITY.auto
+    this.screenBitrate = q.bitrate; this.screenFps = q.fps
+    try { await track.applyConstraints({ frameRate: { ideal: q.fps, max: q.fps }, ...(q.height ? { height: { ideal: q.height, max: q.height } } : {}) }) } catch { /* the source can't do it: the bitrate cap still applies */ }
+    this.peers.forEach((p, id) => this.replaceVideo(p.pc, 1, this.screenFor(id)))
+    const sender = this.sfuScreen?.sender
+    if (sender) { const params = sender.getParameters(); if (params.encodings?.length) { params.encodings[0].maxBitrate = q.bitrate; params.encodings[0].maxFramerate = q.fps; sender.setParameters(params).catch(() => {}) } }
+    useStore.getState().setLocalMedia({ screen: this.screen })
   }
 
   // ---- settings ----
@@ -396,7 +524,7 @@ class VoiceManager {
     if (prev.outputDeviceId !== cur.outputDeviceId || prev.outputVolume !== cur.outputVolume) { this.peers.forEach((p) => this.applyOutput(p.audio)); this.sfuAudio.forEach((a) => this.applyOutput(a)); this.streamAudio.forEach((a) => this.applyOutput(a)); applySfxSink(cur.outputDeviceId) }
     const micChanged = prev.inputDeviceId !== cur.inputDeviceId || prev.echoCancellation !== cur.echoCancellation
       || prev.noiseSuppression !== cur.noiseSuppression || prev.autoGainControl !== cur.autoGainControl || prev.noiseSuppressionMode !== cur.noiseSuppressionMode
-    if (micChanged && this.raw) await this.reopenMicDevice()
+    if (micChanged && (this.raw || useStore.getState().micLost) && this.ctx && !this.recovering) await this.reopenMicDevice()
     if (prev.cameraDeviceId !== cur.cameraDeviceId && this.camera) {
       const stream = await this.openCamera()
       if (stream) {
@@ -409,6 +537,9 @@ class VoiceManager {
       }
     }
     if (prev.inputMode !== cur.inputMode) { this.pttDown = false; useStore.getState().setPttHeld(false) }
+    if (prev.streamQuality !== cur.streamQuality && this.screen) await this.applyStreamQuality()
+    // Hiding (or showing) the IP address takes new connections: rebuild the direct ones now, not at the next call.
+    if (prev.relayOnly !== cur.relayOnly && this.channelId && !this.sfu && this.hasRelay && this.peers.size) this.onReconnect()
   }
 
   /** Opens the mic (if needed) and plays it back locally so the user can hear themselves. */
@@ -449,7 +580,7 @@ class VoiceManager {
         useStore.getState().updateVoiceSettings({ cameraDeviceId: '' })
         try { return await navigator.mediaDevices.getUserMedia({ video: { ...video, deviceId: undefined }, audio: false }) } catch { /* fallthrough */ }
       }
-      useStore.getState().pushToast(t('Camera unavailable: {error}', { error: (e as Error).message }), 'error')
+      useStore.getState().pushToast(deviceErrorText('camera', e as Error), 'error')
       return null
     }
   }
@@ -474,7 +605,10 @@ class VoiceManager {
             this.connectSfu(this.channelId)
           } else {
             const others = Object.values(s.voiceStates).filter((o) => o.channel_id === this.channelId && o.user_id !== me)
+            if (others.length && this.call.phase === 'connecting') this.explainRoute()
             others.forEach((o) => { if (!this.peers.has(o.user_id)) this.offerTo(o.user_id) })
+            // Mesh has no one transport: the server placing us in the call is the call being up.
+            this.dispatch({ type: 'up' })
           }
           if (this.camera || this.screen || s.selfMute || s.selfDeaf) this.pushState()
         }
@@ -547,11 +681,13 @@ class VoiceManager {
   /** Tests: the device mic track's id and state, and ending it as a phone OS does to a backgrounded app. */
   get micDebug() { const tr = this.raw?.getAudioTracks()[0]; return { id: tr?.id ?? null, state: tr?.readyState ?? null } }
   endMicForTest() { this.raw?.getAudioTracks()[0]?.stop() }
+  /** Tests: the microphone unplugged while the page is in front (the track stops and says so). */
+  unplugMicForTest() { const tr = this.raw?.getAudioTracks()[0]; if (tr) { tr.stop(); tr.dispatchEvent(new Event('ended')) } }
 
   async resumeAfterBackground() {
     if (!this.channelId) return
     const mic = this.raw?.getAudioTracks()[0]
-    if (this.raw && (!mic || mic.readyState === 'ended')) await this.reopenMicDevice().catch(() => {})
+    if (this.raw && (!mic || mic.readyState === 'ended')) await this.recoverMic(false)
     const cam = this.camera?.getVideoTracks()[0]
     if (this.camera && cam?.readyState === 'ended') this.toggleCamera()
     if (this.ctx?.state === 'suspended') await this.ctx.resume().catch(() => {})
@@ -560,7 +696,13 @@ class VoiceManager {
   }
 
   onSocketLost() {
-    if (this.channelId) useStore.getState().setMyVoice(this.channelId, true)
+    if (this.channelId) { useStore.getState().setMyVoice(this.channelId, true); this.dispatch({ type: 'lost', reason: 'socket', now: Date.now() }) }
+  }
+
+  /** The media server dropped the call, or could not be reached: reconnect, a few times (lib/callState.ts). */
+  private transportLost(detail: string) {
+    if (!this.channelId) return
+    this.dispatch({ type: 'lost', reason: 'transport', detail, now: Date.now() })
   }
 
   // ---- mic pipeline ----
@@ -573,8 +715,9 @@ class VoiceManager {
     return { audio, video: false }
   }
 
-  private async getRawMic(): Promise<MediaStream | null> {
+  private async getRawMic(quiet = false): Promise<MediaStream | null> {
     const s = useStore.getState()
+    this.micError = null
     if (!navigator.mediaDevices?.getUserMedia) {
       s.pushToast(window.isSecureContext
         ? t('This browser does not support microphone capture')
@@ -588,27 +731,99 @@ class VoiceManager {
         s.updateVoiceSettings({ inputDeviceId: '' })
         try { return await navigator.mediaDevices.getUserMedia(this.micConstraints()) } catch { /* fallthrough */ }
       }
-      s.pushToast(t('Microphone unavailable: {error}', { error: (e as Error).message }), 'error')
+      this.micError = e as Error
+      // A call says why it could not start where the call is shown; the settings' microphone test says it here.
+      if (!quiet) s.pushToast(t('Microphone unavailable: {error}', { error: (e as Error).message }), 'error')
       return null
     }
   }
 
-  private acquireMic(holder: MicHolder): Promise<boolean> {
+  /** The device stopped giving sound (unplugged, taken away by the system): recover when it does, while the page is in front. */
+  private watchMic(raw: MediaStream) {
+    const track = raw.getAudioTracks()[0]
+    if (track) track.onended = () => { if (this.raw === raw && document.visibilityState !== 'hidden') void this.recoverMic(true) }
+  }
+
+  /** Open a microphone again after losing one: the chosen device if it is back, else the default. Says what happened. */
+  private recovering: Promise<void> | null = null
+  recoverMic(announce = true): Promise<void> {
+    if (this.recovering) return this.recovering
+    this.recovering = (async () => {
+      if (!this.holders.size || !this.ctx) return
+      const s = useStore.getState()
+      const ok = await this.reopenMicDevice(true)
+      s.setMicLost(!ok)
+      if (ok && announce && this.channelId) {
+        const label = this.raw?.getAudioTracks()[0]?.label
+        s.pushToast(label ? t('Your microphone was disconnected. Now using {device}.', { device: label }) : t('Your microphone was disconnected. Now using another one.'))
+      }
+    })().finally(() => { this.recovering = null })
+    return this.recovering
+  }
+
+  /** Devices came or went. A lost microphone may be back; a new one is offered once (not while several arrive together, as with a dock). */
+  private async onDevicesChanged() {
+    if (!this.channelId) return
+    if (useStore.getState().micLost) await this.recoverMic(false)
+    await this.scanDevices(true)
+  }
+
+  private async scanDevices(offer: boolean) {
+    let list: MediaDeviceInfo[]
+    try { list = await navigator.mediaDevices.enumerateDevices() } catch { return }
+    const groups = new Map<string, { label: string; inputId: string | null; outputId: string | null }>()
+    for (const d of list) {
+      if ((d.kind !== 'audioinput' && d.kind !== 'audiooutput') || !d.deviceId || d.deviceId === 'default' || d.deviceId === 'communications') continue
+      const key = d.groupId || d.deviceId
+      const g = groups.get(key) ?? { label: '', inputId: null, outputId: null }
+      if (d.kind === 'audioinput') { g.inputId = d.deviceId; g.label = d.label || g.label } else { g.outputId = d.deviceId; g.label ||= d.label }
+      groups.set(key, g)
+    }
+    const known = this.knownDevices
+    this.knownDevices = new Set(groups.keys())
+    const s = useStore.getState()
+    // An offer for a device that has gone again goes with it.
+    if (s.deviceOffer && !groups.has(s.deviceOffer.groupId)) s.setDeviceOffer(null)
+    if (!offer || !known || !this.channelId) return
+    const fresh = [...groups.entries()].filter(([key, g]) => !known.has(key) && g.label && !ignoredDevices().includes(g.label))
+    if (fresh.length !== 1) return
+    const [groupId, g] = fresh[0]
+    if (g.inputId && g.inputId === this.settings.inputDeviceId) return
+    s.setDeviceOffer({ groupId, ...g })
+  }
+
+  /** The offered device: use it for this and later calls, leave it this time, or never offer it again. */
+  acceptDevice() {
+    const s = useStore.getState(); const o = s.deviceOffer
+    if (!o) return
+    s.updateVoiceSettings({ ...(o.inputId ? { inputDeviceId: o.inputId } : {}), ...(o.outputId && supportsSinkId ? { outputDeviceId: o.outputId } : {}) })
+    s.setDeviceOffer(null)
+  }
+  declineDevice(forever = false) {
+    const s = useStore.getState(); const o = s.deviceOffer
+    if (o && forever) { try { localStorage.setItem(IGNORED_DEVICES, JSON.stringify([...new Set([...ignoredDevices(), o.label])].slice(-40))) } catch { /* private mode */ } }
+    s.setDeviceOffer(null)
+  }
+
+  private acquireMic(holder: MicHolder, allowNone = false): Promise<boolean> {
     this.holders.add(holder)
     if (this.mic) return Promise.resolve(true)
     if (this.acquiring) return this.acquiring
     this.acquiring = (async () => {
-      const raw = await this.getRawMic()
-      if (!raw) { this.holders.delete(holder); return false }
+      const raw = await this.getRawMic(holder === 'call')
+      if (!raw && !allowNone) { this.holders.delete(holder); return false }
       if (!this.holders.size) { this.stopTracks(raw); return false } // released while waiting
+      // Without a microphone (listen only) the same pipeline runs with nothing feeding it, so one that appears later
+      // is wired in like a replaced device.
       this.raw = raw
+      if (raw) this.watchMic(raw); else useStore.getState().setMicLost(true)
       const ctx = (this.ctx ??= newAudioContext())
       if (ctx.state === 'suspended') ctx.resume().catch(() => {})
       this.inputGain = ctx.createGain(); this.inputGain.gain.value = this.settings.inputVolume / 100
       this.gate = ctx.createGain(); this.gate.gain.value = 0
       this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 1024
       this.dest = ctx.createMediaStreamDestination()
-      this.source = ctx.createMediaStreamSource(raw)
+      this.source = raw ? ctx.createMediaStreamSource(raw) : null
       await this.wireSource()
       this.inputGain.connect(this.analyser)
       this.inputGain.connect(this.gate)
@@ -638,14 +853,17 @@ class VoiceManager {
   }
 
   /** Swap the capture device under the running pipeline; the outgoing track is unchanged. */
-  private async reopenMicDevice() {
-    const raw = await this.getRawMic()
-    if (!raw || !this.ctx || !this.inputGain) { if (raw) this.stopTracks(raw); return }
+  private async reopenMicDevice(quiet = false): Promise<boolean> {
+    const raw = await this.getRawMic(quiet)
+    if (!raw || !this.ctx || !this.inputGain) { if (raw) this.stopTracks(raw); return false }
     this.source?.disconnect()
     this.stopTracks(this.raw)
     this.raw = raw
+    this.watchMic(raw)
     this.source = this.ctx.createMediaStreamSource(raw)
     await this.wireSource()
+    useStore.getState().setMicLost(false)
+    return true
   }
 
   /** device → (RNNoise, when Enhanced suppression is on and can run) → input gain. */
@@ -839,14 +1057,15 @@ class VoiceManager {
 
   private createPeer(userId: string, offerer: boolean): Peer {
     const s = useStore.getState()
-    const pc = new RTCPeerConnection({ iceServers: s.iceServers, ...(this.meshCrypto && legacyInsertableStreams() ? { encodedInsertableStreams: true } : {}) } as RTCConfiguration)
+    // "Hide my IP address": only relayed routes are tried, so the other side sees the relay's address, never ours.
+    const pc = new RTCPeerConnection({ iceServers: s.iceServers, ...(this.relayed ? { iceTransportPolicy: 'relay' } : {}), ...(this.meshCrypto && legacyInsertableStreams() ? { encodedInsertableStreams: true } : {}) } as RTCConfiguration)
     const audio = document.createElement('audio')
     audio.autoplay = true
     audio.muted = s.selfDeaf
     audio.dataset.peer = userId
     document.body.appendChild(audio)
     this.applyOutput(audio)
-    const peer: Peer = { pc, audio, pendingCandidates: [], offerer }
+    const peer: Peer = { pc, audio, pendingCandidates: [], offerer, restarts: 0 }
     this.peers.set(userId, peer)
     s.setPeerStatus(userId, 'connecting')
 
@@ -882,14 +1101,33 @@ class VoiceManager {
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState
       if (st === 'connected') {
-        useStore.getState().setPeerStatus(userId, 'connected'); this.tunePeer(pc)
+        useStore.getState().setPeerStatus(userId, 'connected'); this.tunePeer(pc); peer.restarts = 0
         // A new connection to someone we were watching (they or we reconnected): ask for their screen again.
         if (useStore.getState().watching[userId]) sendOp({ op: 'voice_signal', to: userId, data: { type: 'watch', on: true } })
       }
-      else if (st === 'failed') { useStore.getState().setPeerStatus(userId, 'failed'); pc.restartIce() }
+      else if (st === 'failed') { useStore.getState().setPeerStatus(userId, 'failed'); this.repairPeer(userId, peer) }
       else if (st === 'disconnected') useStore.getState().setPeerStatus(userId, 'connecting')
     }
     return peer
+  }
+
+  /**
+   * The route to someone stopped working: whoever made the first offer makes a new one that looks for a fresh route
+   * (an ICE restart), a few times with a growing pause. The other side answers it like any renegotiation.
+   */
+  private repairPeer(userId: string, peer: Peer) {
+    if (!peer.offerer || peer.restarts >= 3) return
+    const n = ++peer.restarts
+    this.events.push(`${new Date().toISOString()} route to ${userId.slice(-6)} failed, repair #${n}`)
+    setTimeout(async () => {
+      if (this.peers.get(userId) !== peer || peer.pc.connectionState === 'connected' || peer.pc.signalingState !== 'stable') return
+      try {
+        const offer = await peer.pc.createOffer({ iceRestart: true })
+        const sdp = tuneOpusSdp(offer.sdp ?? '', this.profile)
+        await peer.pc.setLocalDescription({ type: 'offer', sdp })
+        sendOp({ op: 'voice_signal', to: userId, data: { type: 'offer', sdp } })
+      } catch (e) { console.warn('route repair failed', e) }
+    }, 1000 * n)
   }
 
   /** Answerer side: mirror the offerer's [audio, camera, screen] layout with our own tracks. */
@@ -1009,7 +1247,13 @@ class VoiceManager {
     const s = useStore.getState()
     if (this.room) await this.disconnectSfu()
     let grant: { url: string; token: string }
-    try { grant = await api.post<{ url: string; token: string }>('/voice/token', { channel_id: channelId }) } catch (e) { s.pushToast(t('Voice server refused: {error}', { error: (e as Error).message }), 'error'); this.leave(); return }
+    try { grant = await api.post<{ url: string; token: string }>('/voice/token', { channel_id: channelId }) } catch (e) {
+      // The server answering no (full, no permission) is final; not being able to ask is worth another try.
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500) this.dispatch({ type: 'fail', reason: 'refused', detail: e.message })
+      else this.transportLost(`token: ${(e as Error).message}`)
+      return
+    }
+    if (this.channelId !== channelId) return
     const keys = this.crypto && s.user ? new ParleyKeyProvider(s.user.id) : null
     const room = new Room({ adaptiveStream: true, dynacast: true, ...(keys ? { e2ee: { keyProvider: keys, worker: new E2EEWorker() } } : {}) })
     if (keys) this.crypto!.attach(keys)
@@ -1031,7 +1275,18 @@ class VoiceManager {
       room.remoteParticipants.forEach((p) => st.setSpeaking(p.identity, ids.has(p.identity)))
       if (me && !ids.has(me) && st.speaking[me]) { /* own speaking comes from the local meter */ }
     })
-    room.on(RoomEvent.Disconnected, () => { if (this.room === room) { this.room = null; if (this.channelId) useStore.getState().pushToast(t('Voice server connection lost'), 'error') } })
+    // The client repairs short drops itself: show that. A room that ends without our asking is reconnected by us, a
+    // few times; one the server ended on purpose (removed, room closed, another session took over) is an eviction.
+    room.on(RoomEvent.Reconnecting, () => { if (this.room === room) this.dispatch({ type: 'wobble' }) })
+    room.on(RoomEvent.Reconnected, () => { if (this.room === room) this.dispatch({ type: 'up' }) })
+    room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+      if (this.room !== room) return
+      this.room = null
+      if (!this.channelId) return
+      if (reason === DisconnectReason.PARTICIPANT_REMOVED || reason === DisconnectReason.ROOM_DELETED || reason === DisconnectReason.DUPLICATE_IDENTITY) { this.leave(true); return }
+      void this.disconnectSfu()
+      this.transportLost(reason === undefined ? 'disconnected' : DisconnectReason[reason] ?? String(reason))
+    })
     try {
       if (keys) await room.setE2EEEnabled(true)
       await room.connect(grant.url, grant.token, { autoSubscribe: false })
@@ -1040,10 +1295,11 @@ class VoiceManager {
       await this.sfuPublishMic()
       if (this.camera) await this.sfuPublish('camera', this.camera.getVideoTracks()[0])
       if (this.screen) await this.sfuPublish('screen', this.screen.getVideoTracks()[0])
+      if (this.room === room && this.channelId === channelId) this.dispatch({ type: 'up' })
     } catch (e) {
-      s.pushToast(t('Could not join the voice server: {error}', { error: (e as Error).message }), 'error')
+      if (this.room !== room) return // left, or replaced, while connecting
       await this.disconnectSfu()
-      this.leave()
+      this.transportLost(`connect: ${(e as Error).message}`)
     }
   }
 
@@ -1192,6 +1448,38 @@ class VoiceManager {
   }
 }
 
+/** The one-time note about direct calls and IP addresses has been shown on this device. */
+const DIRECT_SEEN = `${STORAGE_PREFIX}directCallNote`
+/** Labels of devices the member said never to offer again. */
+const IGNORED_DEVICES = `${STORAGE_PREFIX}ignoredDevices`
+function ignoredDevices(): string[] { try { const v = JSON.parse(localStorage.getItem(IGNORED_DEVICES) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [] } catch { return [] } }
+
+/** Why a microphone or camera could not be opened, from the browser's error name, in the member's words. */
+export function deviceErrorText(kind: 'microphone' | 'camera', err: { name?: string } | null): string {
+  const mic = kind === 'microphone'
+  switch (err?.name) {
+    case 'NotAllowedError': case 'SecurityError':
+      return mic ? t("Parley isn't allowed to use your microphone. Allow it for Parley in your browser's or system's settings, then try again.") : t("Parley isn't allowed to use your camera. Allow it for Parley in your browser's or system's settings, then try again.")
+    case 'NotFoundError': case 'OverconstrainedError':
+      return mic ? t('No microphone was found. Connect one, then try again.') : t('No camera was found. Connect one, then try again.')
+    case 'NotReadableError': case 'AbortError':
+      return mic ? t("Your microphone isn't responding. Another app may be using it.") : t("Your camera isn't responding. Another app may be using it.")
+    default:
+      return mic ? t("Parley couldn't use your microphone. Check that one is connected and allowed for Parley.") : t("Parley couldn't use your camera. Check that one is connected and allowed for Parley.")
+  }
+}
+
+/** A failed call's reason in the member's words. `detail` is the engine's note; a microphone's starts with the error's name. */
+export function callFailureText(reason: CallReason | null, detail?: string | null): string {
+  switch (reason) {
+    case 'socket': return t('Parley lost its connection to the server.')
+    case 'refused': return t("The server didn't let you join this call.")
+    case 'microphone': return deviceErrorText('microphone', { name: detail?.split(':')[0] })
+    case 'unsupported': return t("This call is end-to-end encrypted, and this browser can't encrypt calls. Use a current version of Chrome, Edge, Firefox or Safari.")
+    default: return t("The call's connection dropped and couldn't be restored.")
+  }
+}
+
 export const voice = new VoiceManager()
 declare global { interface Window { __parleyVoice?: () => { mode: string; room: string | null; remote: number; channel: string | null } } }
 if (typeof window !== 'undefined') window.__parleyVoice = () => voice.debug
@@ -1222,4 +1510,6 @@ useStore.subscribe((s) => {
 function newAudioContext(): AudioContext {
   try { return new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 }) } catch { return new AudioContext({ latencyHint: 'interactive' }) }
 }
-if (typeof window !== 'undefined') (window as unknown as { __parleyMic: { info: () => unknown; end: () => void } }).__parleyMic = { info: () => voice.micDebug, end: () => voice.endMicForTest() }
+if (typeof window !== 'undefined') (window as unknown as { __parleyMic: { info: () => unknown; end: () => void; unplug: () => void } }).__parleyMic = { info: () => voice.micDebug, end: () => voice.endMicForTest(), unplug: () => voice.unplugMicForTest() }
+/** Test hook: the call's connection state, its log, and dropping the transport as a network failure would. */
+if (typeof window !== 'undefined') (window as unknown as { __parleyCall: { events: () => string[]; drop: (detail?: string) => void } }).__parleyCall = { events: () => voice.events, drop: (d) => voice.dropForTest(d) }

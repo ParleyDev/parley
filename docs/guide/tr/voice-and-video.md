@@ -2,7 +2,7 @@
 title: Ses ve görüntü
 section: Konuşmak
 summary: Sesli kanallara katıl, arkadaşlarını ara, ekranını paylaş, sahneler düzenle ve aramalarını gizli tut.
-source: e2706effcd7d
+source: dab86ccace07
 ---
 
 ![Kameraları açık ve arama kontrolleri görünen bir sesli kanal](shot:voice)
@@ -20,6 +20,8 @@ Panelinin üstündeki **Ses Bağlandı** kartı içeride olduğunu gösterir. Bu
 Sesteyken metin kanallarında sohbet etmeye devam edebilirsin. Başka yere geçersen küçük bir arama penceresi seni takip eder; geri dönmek için **Aramaya dön**'e tıkla.
 
 > Tip: İlk seferde Parley tarayıcından mikrofon izni ister. Kimse seni duymuyorsa **Kullanıcı Ayarları → Ses ve Görüntü**'yü kontrol et ve **Mikrofon Testi**'ni dene.
+
+Küçük arama penceresini herhangi bir köşeye sürükleyebilir ve köşesindeki tutamaçla boyutunu değiştirebilirsin; Parley ikisini de hatırlar. **Sustur**, **İzlemeyi Durdur** ve **Bağlantıyı Kes** için üzerine gel. Ekranını paylaşırken de görünür; neyi paylaştığını ve kaç kişinin izlediğini gösterir. Kapatmak için **Kullanıcı Ayarları → Ses ve Görüntü** altında **Başka bir yere bakarken aramayı bir köşede göster** seçeneğini kapat. **Ses Bağlandı** kartındaki kanal adı da seni aramaya geri götürür.
 
 ## Arama kontrolleri
 
@@ -39,11 +41,32 @@ Birinin görüntüsüne odaklanmak için tıkla, tam ekran için çift tıkla. B
 
 **Sağırlaştır** (panelindeki kulaklık) duyduğun her şeyi ve onunla birlikte mikrofonunu kapatır.
 
+Herkesin görüntüsü pencereye sığacak boyuttadır, yani kaydırılacak bir şey yoktur. Sığandan fazla kişi olduğunda Parley sığanları ve bir **+N** kutusunu gösterir; **Herkesi göster** için ona tıkla. Tam ekran, aramanın tamamını denetimleriyle birlikte gösterir. Fareyi hareket ettirmeyi bıraktığında solarlar, hareket ettirdiğinde geri gelirler; çıkmak için <kbd>Esc</kbd> tuşuna bas.
+
+Şu anda kullanamadığın bir denetim yerinde kalır, soluk görünür. Nedenini görmek için üzerine gel: bu kanalda iznin olmayabilir, bir moderatör seni susturmuş olabilir ya da arama hâlâ bağlanıyor olabilir. Klavye kısayolunu görmek için **Sustur** düğmesinin üzerine gel.
+
+**Ekranını Paylaş** düğmesinin yanındaki ok **Ekran paylaşımı kalitesi** ayarını ve **Sesi paylaş** seçeneğini belirler. Paylaşırken neyin gönderildiğini gösterir ve durdurmadan **Başka bir şey paylaş** seçeneğini sunar.
+
 ## Birini aramak
 
 Bir DM'de veya grup DM'sinde üst çubuktaki **Sesli Arama Başlat** ya da **Görüntülü Arama Başlat**'a tıkla. Karşı taraf **Katıl** ve **Reddet** seçenekleriyle gelen bir arama görür. Kaçırırsa aradığını görür.
 
 İçinde bulunduğun bir sesli kanala bir arkadaşını da getirebilirsin: **Sesliye Davet Et** ona **Katıl** düğmeli bir mesaj gönderir.
+
+Klavyeden yanıt verebilirsin: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> katılır, <kbd>Esc</kbd> yok sayar. **Yok say**, arayana haber vermeden sende çalmayı durdurur; **Reddet** ise arayana bildirir. Aramada zaten başka bir cihazdaysan DM'de **Bu cihazda katıl** görünür.
+
+## Bir arama koparsa
+
+Bağlantın sallanırsa aramada **Yeniden bağlanıyor…** görünür ve Parley seni kendiliğinden geri alır. Birkaç denemeden sonra başaramazsa aramadan çıkarsın ve panelinin üstünde **Arama bağlantısı başarısız oldu** kartı belirir. Yeniden katılmak için **Tekrar dene** düğmesine, kapatmak için **Kapat** düğmesine tıkla.
+
+Parley, arama sırasında bir şey değiştiğinde de haber verir:
+
+- **Mikrofon yok**: mikrofonunun bağlantısı kesildi. Başka bir mikrofonun varsa Parley ona geçer ve bunu söyler. Yoksa bir mikrofon bağla, Parley onu kullanmaya başlar.
+- **Yeni ses cihazı**: bir kulaklık ya da mikrofon taktın. Kullanmak için **Değiştir** düğmesine ya da **Bu cihazı bir daha önerme** seçeneğine tıkla.
+- **Bir aramadaydın**: Parley bir aramanın ortasında yeniden yüklendi ya da yeniden başladı. Geri dönmek için **Yeniden katıl** düğmesine tıkla. Parley asla kendiliğinden yeniden katılmaz.
+- **Aramaya katılınamadı**: Parley mikrofonunu açamadı ve nedenini söylüyor. Sorunu gider ve **Tekrar dene** düğmesine tıkla ya da dinlemek için **Mikrofonsuz katıl** seçeneğine tıkla.
+
+> Tip: Birinin resmindeki **Bağlanılamıyor** yazısı, Parley'nin o kişiye doğrudan ulaşamadığı anlamına gelir; bunun nedeni genellikle bir güvenlik duvarıdır. Parley'nizi yöneten kişiden bir aktarma sunucusu kurmasını iste.
 
 ## Sahneler
 
@@ -59,6 +82,8 @@ Sahneler konuşmalar, soru-cevaplar ve gösteriler içindir:
 DM'lerdeki aramalar **uçtan uca şifreli** olabilir: aramayı yalnızca içindekiler duyup görebilir, sunucu bile değil. DM'nin üst çubuğundaki kilit düğmesiyle aç.
 
 Kimsenin dinlemediğinden emin olmak için aramada gösterilen **Güvenlik kodu**'nu yüksek sesle karşılaştırın. Herkes aynı kodu görüyorsa arama gizlidir. Şifreli aramalarda altyazılar ve klipler kapalıdır.
+
+Küçük bir aramada Parley seni diğerlerine doğrudan bağlar, bu da IP adresini görmelerine olanak tanır. Bunu önlemek için **Kullanıcı Ayarları → Ses ve Görüntü** altında **Aramalarda IP adresimi gizle** seçeneğini aç: aramaların o zaman, varsa, Parley'nin aktarma sunucusundan geçer.
 
 ## En iyi sesini vermek
 

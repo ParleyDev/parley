@@ -73,7 +73,7 @@ ok('bob hears alice in stereo', !!live && stereo(live), live ? fmt(live) : 'no r
 console.log('-- recording')
 const rec = (await callS(a.token, 'POST', `/channels/${studio.id}/studio/sessions`, { name: 'take 1' })).body
 await pa.waitForTimeout(3500)
-await pa.click('[data-voice-controls] button[title="Mute"]'); const mutedAt = Date.now()
+await pa.click('[data-voice-controls] button[aria-label="Mute"]'); const mutedAt = Date.now()
 await pa.waitForTimeout(3500)
 await callS(a.token, 'POST', `/channels/${studio.id}/studio/sessions/${rec.id}/stop`)
 await pa.waitForFunction(() => !document.querySelector('[data-studio-rec]'), null, { timeout: 15000 }).catch(() => {})

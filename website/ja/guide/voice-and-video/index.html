@@ -141,19 +141,30 @@ footer .langs .list { top:auto; bottom:calc(100% + 8px); }
 <ul><li>接続品質を確認する</li><li><strong>ノイズ抑制</strong> をオン・オフする</li><li>切断する</li></ul>
 <p>ボイス中でもテキストチャンネルでチャットを続けられます。ほかの場所に移動すると小さな通話ウィンドウがついてくるので、<strong>通話に戻る</strong> をクリックすれば戻れます。</p>
 <aside class="callout tip"><b>ヒント</b> 初回は、Parleyがブラウザーにマイクの使用許可を求めます。誰にも声が聞こえない場合は、<strong>ユーザー設定 → 音声・ビデオ</strong> を確認し、<strong>マイクテスト</strong> を試してください。</aside>
+<p>小さな通話ウィンドウは好きな隅にドラッグでき、隅のグリップでサイズを変えられます。どちらも Parley が記憶します。ポインターを合わせると <strong>ミュート</strong>、<strong>視聴を停止</strong>、<strong>切断</strong> が表示されます。画面を共有している間も表示され、共有中の内容と視聴者数がわかります。オフにするには、<strong>ユーザー設定 → 音声・ビデオ</strong> で <strong>他の場所を見ている間、通話を隅に表示する</strong> をオフにします。<strong>ボイス接続</strong> カードのチャンネル名からも通話に戻れます。</p>
 <h2 id="the-call-controls"><a class="anchor" href="#the-call-controls" aria-hidden="true">#</a>通話のコントロール</h2>
 <div class="table"><table><thead><tr><th>ボタン</th><th>動作</th></tr></thead><tbody><tr><td><strong>ミュート</strong></td><td>マイクをオフにします。横の矢印で、マイク、スピーカー、音量を選べます。</td></tr><tr><td><strong>カメラ</strong></td><td>カメラをオンにします。矢印でプレビューしたり、使うカメラを選んだりできます。</td></tr><tr><td><strong>画面を共有</strong></td><td>ウィンドウ、タブ、または画面全体を表示します。</td></tr><tr><td><strong>リアクション</strong></td><td>通話の上に絵文字を浮かべます。</td></tr><tr><td><strong>字幕</strong></td><td>話している内容のライブ字幕です（サーバーが対応している場合）。</td></tr><tr><td><strong>アクティビティ</strong></td><td><strong>一緒に観る</strong>（YouTubeを同期再生）、<strong>三目並べ</strong> などのゲーム、アプリ。</td></tr><tr><td><strong>サウンドボード</strong></td><td>サーバーの短いサウンドを全員に向けて再生します。</td></tr><tr><td><strong>その他</strong></td><td>グリッド表示、自分のカメラやビデオなしの人を表示するかどうか。</td></tr><tr><td><strong>切断</strong></td><td>通話から抜けます。</td></tr></tbody></table></div>
 <p>誰かのビデオをクリックするとその人に注目し、ダブルクリックすると全画面になります。誰かが画面を共有したら、<strong>配信を視聴</strong> をクリックすると見られます。小さな文字はズームして読めます。</p>
 <p><strong>スピーカーミュート</strong>（パネルのヘッドホン）にすると、聞こえる音がすべてミュートされ、マイクも一緒にミュートされます。</p>
+<p>全員の映像はウィンドウに収まる大きさで表示されるため、スクロールは不要です。収まりきらない人数のときは、収まる分と <strong>+N</strong> のタイルを表示します。クリックすると <strong>全員を表示</strong> になります。全画面表示では、通話全体が操作ボタンと一緒に表示されます。マウスを止めると操作ボタンは消え、動かすと戻ります。終了するには <kbd>Esc</kbd> を押します。</p>
+<p>今は使えない操作ボタンは、その場に薄く表示されたままになります。ポインターを合わせると理由がわかります。このチャンネルで権限がない、モデレーターにミュートされている、通話がまだ接続中、などです。<strong>ミュート</strong> にポインターを合わせるとキーボードショートカットが表示されます。</p>
+<p><strong>画面を共有</strong> の横の矢印で <strong>画面共有の画質</strong> と <strong>音声を共有</strong> を設定できます。共有中は、送信中の内容が表示され、止めずに <strong>別のものを共有</strong> を選べます。</p>
 <h2 id="calling-someone"><a class="anchor" href="#calling-someone" aria-hidden="true">#</a>通話をかける</h2>
 <p>DMやグループDMで、上部バーの <strong>音声通話を開始</strong> か <strong>ビデオ通話を開始</strong> をクリックします。相手には <strong>参加</strong> と <strong>拒否</strong> のある着信が表示されます。出られなかった場合は、着信があったことがわかります。</p>
 <p>自分がいるボイスチャンネルにフレンドを呼ぶこともできます。<strong>ボイスに招待</strong> で、<strong>参加</strong> ボタン付きのメッセージが送られます。</p>
+<p>キーボードで応答できます。<kbd>Ctrl</kbd>+<kbd>Enter</kbd> で参加、<kbd>Esc</kbd> で無視します。<strong>無視</strong> は発信者に知らせずに自分側の呼び出しを止め、<strong>拒否</strong> は発信者に伝えます。すでに別のデバイスでその通話に参加している場合、DM に <strong>このデバイスで参加</strong> が表示されます。</p>
+<h2 id="if-a-call-drops"><a class="anchor" href="#if-a-call-drops" aria-hidden="true">#</a>通話が切れたとき</h2>
+<p>接続が不安定になると、通話に <strong>再接続中…</strong> と表示され、Parley が自動的に通話へ戻します。何度か試しても戻れない場合は通話から退出し、パネルの上に <strong>通話の接続に失敗しました</strong> のカードが表示されます。<strong>もう一度試す</strong> をクリックすると再参加でき、<strong>閉じる</strong> で閉じられます。</p>
+<p>通話中に何かが変わったときも Parley が知らせます:</p>
+<ul><li><strong>マイクがありません</strong>: マイクが抜かれました。別のマイクがあれば Parley がそちらに切り替えて知らせます。なければ、マイクを接続すると Parley が自動的に使用します。</li><li><strong>新しいオーディオデバイス</strong>: ヘッドセットやマイクを接続しました。使う場合は <strong>切り替える</strong> を、そうでなければ <strong>このデバイスを今後提案しない</strong> をクリックします。</li><li><strong>通話中でした</strong>: 通話の途中で Parley が再読み込みまたは再起動されました。<strong>再参加</strong> をクリックすると戻れます。Parley が勝手に再参加することはありません。</li><li><strong>通話に参加できませんでした</strong>: Parley がマイクを開けず、その理由を表示します。解決して <strong>もう一度試す</strong> をクリックするか、<strong>マイクなしで参加</strong> をクリックして聞くだけで参加します。</li></ul>
+<aside class="callout tip"><b>ヒント</b> 相手の画像に <strong>接続できません</strong> と表示されている場合、Parley はその相手に直接接続できていません。たいていはファイアウォールが原因です。Parley の管理者にリレーサーバーの設定を依頼してください。</aside>
 <h2 id="stages"><a class="anchor" href="#stages" aria-hidden="true">#</a>ステージ</h2>
 <p>ステージは、トーク、Q&amp;A、ショー向けです。</p>
 <ul><li><strong>スピーカー</strong> はステージ上にいます。それ以外の人は <strong>観客</strong> として聴きます。</li><li>観客は <strong>挙手</strong> をクリックして発言を求められます。</li><li>モデレーターは <strong>発言に招待</strong> と <strong>観客に移動</strong> ができます。</li><li>公開サーバーのライブ中のステージは <strong>見つける → ステージ</strong> に表示されます。</li></ul>
 <h2 id="private-calls"><a class="anchor" href="#private-calls" aria-hidden="true">#</a>プライベート通話</h2>
 <p>DMでの通話は <strong>エンドツーエンド暗号化</strong> できます。通話の内容を見聞きできるのは参加者だけで、サーバーでさえ見られません。DMの上部バーの鍵ボタンでオンにします。</p>
 <p>誰も盗聴していないことを確かめるには、通話に表示される <strong>安全コード</strong> を声に出して照合しましょう。全員に同じコードが表示されていれば、その通話はプライベートです。暗号化された通話では、字幕とクリップは使えません。</p>
+<p>少人数の通話では Parley があなたを他の参加者と直接つなぐため、相手にあなたの IP アドレスが見えます。防ぐには <strong>ユーザー設定 → 音声・ビデオ</strong> で <strong>通話で IP アドレスを隠す</strong> をオンにします。リレーがある Parley では、通話がそのリレーを経由するようになります。</p>
 <h2 id="sounding-your-best"><a class="anchor" href="#sounding-your-best" aria-hidden="true">#</a>音質を最適にする</h2>
 <p><strong>ユーザー設定 → 音声・ビデオ</strong> で：</p>
 <ul><li><strong>入力モード</strong>：<ul><li><strong>音声検出</strong> では、話したときに音声を送ります。</li><li><strong>プッシュトゥトーク</strong> では、キーを押している間だけ送ります。キーは <strong>キー割り当てを記録</strong> で設定します。ブラウザーではParleyのタブが前面にあるときだけ使えますが、デスクトップアプリならどこでも反応します。</li></ul></li><li><strong>入力感度</strong> では、どれくらいの大きさの声で反応するかを設定します。キーボードの音が聞こえると言われない限り、自動のままにしておきましょう。</li><li><strong>ノイズ抑制</strong>：<strong>強化</strong> にすると、キーボード、ファン、周りの話し声を取り除きます。処理は自分のデバイス上で行われます。</li><li><strong>エコー除去</strong> と <strong>自動ゲイン調整</strong> は、ノートパソコンやスピーカーを使うときに役立ちます。</li><li><strong>ビデオをテスト</strong> でカメラをプレビューできます。画面共有の画質もここで設定します。</li></ul>
@@ -162,7 +173,7 @@ footer .langs .list { top:auto; bottom:calc(100% + 8px); }
 <h2 id="in-game-overlay"><a class="anchor" href="#in-game-overlay" aria-hidden="true">#</a>ゲーム内オーバーレイ</h2>
 <p>デスクトップアプリでは、全画面のゲームの上に誰が話しているかを表示できます。<strong>ユーザー設定 → 詳細設定</strong> でオンにし、<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> で表示・非表示を切り替えます。</p>
 <nav class="pager" aria-label="ほかのトピック"><a href="/ja/guide/direct-messages/"><small>前へ</small>フレンドとダイレクトメッセージ</a><a class="next" href="/ja/guide/notifications/"><small>次へ</small>通知と受信トレイ</a></nav></article>
-<nav class="toc" aria-label="このページの内容"><b>このページの内容</b><a href="#joining-a-voice-channel">ボイスチャンネルに参加する</a><a href="#the-call-controls">通話のコントロール</a><a href="#calling-someone">通話をかける</a><a href="#stages">ステージ</a><a href="#private-calls">プライベート通話</a><a href="#sounding-your-best">音質を最適にする</a><a href="#clips">クリップ</a><a href="#in-game-overlay">ゲーム内オーバーレイ</a></nav>
+<nav class="toc" aria-label="このページの内容"><b>このページの内容</b><a href="#joining-a-voice-channel">ボイスチャンネルに参加する</a><a href="#the-call-controls">通話のコントロール</a><a href="#calling-someone">通話をかける</a><a href="#if-a-call-drops">通話が切れたとき</a><a href="#stages">ステージ</a><a href="#private-calls">プライベート通話</a><a href="#sounding-your-best">音質を最適にする</a><a href="#clips">クリップ</a><a href="#in-game-overlay">ゲーム内オーバーレイ</a></nav>
 </div>
 <footer><div class="wrap"><span>Parleyユーザーガイド</span><a href="/ja/">runparley.com</a><a href="/ja/guide/">すべてのトピック</a><a href="https://github.com/ParleyDev/parley/issues">間違いや不足がありますか？お知らせください</a></div></footer>
 <script>

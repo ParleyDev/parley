@@ -3,6 +3,7 @@ import type { AppCommand } from './lib/commands'
 import type { Incoming } from './lib/shareIn'
 import { getNotifPrefs } from './lib/notifPrefs'
 import { create } from 'zustand'
+import { IDLE as CALL_IDLE, type CallState } from './lib/callState'
 import { api, getToken, setToken } from './lib/api'
 import { forgetToken, rememberAccount } from './lib/accounts'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
@@ -240,6 +241,12 @@ interface State {
   iceServers: RTCIceServer[]
   myVoiceChannelId: string | null
   voiceConnecting: boolean
+  /** The call's connection as the member should see it (lib/callState.ts): connecting, connected, reconnecting, failed. */
+  callStatus: CallState
+  /** The microphone went away mid-call (unplugged, taken by the system) and no other could be opened. */
+  micLost: boolean
+  /** An audio device that appeared during a call, offered once: switch to it or not. */
+  deviceOffer: DeviceOffer | null
   selfMute: boolean
   selfDeaf: boolean
   speaking: Record<string, true>
@@ -331,6 +338,9 @@ interface State {
   applyVoiceState: (v: VoiceState) => void
   setMyVoice: (channelId: string | null, connecting?: boolean) => void
   setSelfVoiceFlags: (mute: boolean, deaf: boolean) => void
+  setCallStatus: (callStatus: CallState) => void
+  setMicLost: (micLost: boolean) => void
+  setDeviceOffer: (deviceOffer: DeviceOffer | null) => void
   setSpeaking: (userId: string, on: boolean) => void
   setPeerStatus: (userId: string, status: PeerStatus | null) => void
   setLocalMedia: (m: { camera?: MediaStream | null; screen?: MediaStream | null }) => void
@@ -365,6 +375,8 @@ interface State {
 
 let toastSeq = 1
 /** A button on a toast ("Show in folder"); the toast closes when it is pressed. */
+/** A newly plugged-in audio device: its name, and the input and output it brings (either may be missing). */
+export interface DeviceOffer { groupId: string; label: string; inputId: string | null; outputId: string | null }
 export interface ToastAction { label: string; run: () => void }
 
 /** On first load, land on the content pane only if the URL already points at a channel. */
@@ -459,6 +471,9 @@ export const useStore = create<State>((set, get) => ({
   iceServers: [],
   myVoiceChannelId: null,
   voiceConnecting: false,
+  callStatus: CALL_IDLE,
+  micLost: false,
+  deviceOffer: null,
   selfMute: false,
   selfDeaf: false,
   speaking: {},
@@ -491,7 +506,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
       members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, notifSettings: {}, messages: {}, hasMore: {}, online: {}, idle: {}, users: {}, typing: {}, typingStyles: {}, readStates: {}, lastMessageId: {}, modal: null,
-      voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {}, watching: {},
+      voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, callStatus: CALL_IDLE, micLost: false, deviceOffer: null, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {}, watching: {},
     })
   },
 
@@ -843,6 +858,9 @@ export const useStore = create<State>((set, get) => ({
   }),
   setMyVoice: (channelId, connecting = false) => set((s) => ({ myVoiceChannelId: channelId, voiceConnecting: connecting, ...(channelId !== s.myVoiceChannelId ? { watching: {} } : {}), ...(channelId ? {} : { speaking: {}, peerStatus: {}, remoteMedia: {}, localCamera: null, localScreen: null }) })),
   setSelfVoiceFlags: (selfMute, selfDeaf) => set({ selfMute, selfDeaf }),
+  setCallStatus: (callStatus) => set({ callStatus }),
+  setMicLost: (micLost) => set({ micLost }),
+  setDeviceOffer: (deviceOffer) => set({ deviceOffer }),
   setSpeaking: (userId, on) => set((s) => {
     if (!!s.speaking[userId] === on) return {}
     const speaking = { ...s.speaking }

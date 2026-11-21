@@ -3,7 +3,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronUp, Eye, MoreHorizo
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../store'
-import { voice } from '../lib/voice'
+import { STREAM_QUALITY, voice } from '../lib/voice'
 import { DeviceOptions, deviceLabel, titles, useCurrentDevice, useDevices, type DeviceKind } from './DeviceMenu'
 import VideoTile from './VideoTile'
 
@@ -65,9 +65,28 @@ export function ControlGroup({ children }: { children: ReactNode }) {
  * One control. `tone` colours it while `on`: 'danger' for states that cut you off (muted), 'active' for features
  * that are running (camera, screen share, an open picker).
  */
-export function ControlButton({ label, on = false, tone = 'active', onClick, disabled, children, ...data }: { label: string; on?: boolean; tone?: 'active' | 'danger'; onClick: () => void; disabled?: boolean; children: ReactNode } & Record<`data-${string}`, string | undefined>) {
+/**
+ * `why` says a control can't be used right now and why (no permission here, a moderator's mute, still connecting): it
+ * stays where it is, dimmed, shows the reason as its tooltip and says it when pressed, instead of vanishing or doing
+ * nothing. `keys` is the control's keyboard shortcut, shown in the tooltip.
+ */
+export function ControlButton({ label, on = false, tone = 'active', onClick, disabled, why, keys, children, ...data }: { label: string; on?: boolean; tone?: 'active' | 'danger'; onClick: () => void; disabled?: boolean; why?: string | null; keys?: string | null; children: ReactNode } & Record<`data-${string}`, string | undefined>) {
   const compact = useContext(Compact)
   const labeled = useContext(Labeled)
+  if (why) {
+    const say = () => useStore.getState().pushToast(why)
+    if (labeled) return (
+      <button type="button" aria-label={t(label)} aria-disabled="true" title={why} onClick={say} className="w-full min-w-0 flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-text-1 opacity-50" data-control-why={why} {...data}>
+        <span className="h-12 w-12 rounded-full flex items-center justify-center bg-bg-3 text-text-0">{children}</span>
+        <span className="w-full truncate text-center text-[11px] leading-tight">{t(label)}</span>
+      </button>
+    )
+    return (
+      <button type="button" title={why} aria-label={`${t(label)}: ${why}`} aria-disabled="true" onClick={say} className={`${compact ? 'h-9 w-9' : 'h-10 w-10'} shrink-0 rounded-lg flex items-center justify-center text-text-0 opacity-40 cursor-not-allowed`} data-control-why={why} {...data}>
+        {children}
+      </button>
+    )
+  }
   const state = !on ? 'text-text-0 hover:bg-bg-3' : tone === 'danger' ? 'bg-danger/15 text-danger hover:bg-danger/25' : 'bg-text-0 text-bg-0 hover:bg-text-1'
   if (labeled) return (
     <button type="button" aria-label={t(label)} aria-pressed={on} onClick={onClick} disabled={disabled} className="w-full min-w-0 flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-text-1 disabled:opacity-50" {...data}>
@@ -76,14 +95,14 @@ export function ControlButton({ label, on = false, tone = 'active', onClick, dis
     </button>
   )
   return (
-    <button type="button" title={t(label)} aria-label={t(label)} aria-pressed={on} onClick={onClick} disabled={disabled} className={`${compact ? 'h-9 w-9' : 'h-10 w-10'} shrink-0 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 ${state}`} {...data}>
+    <button type="button" title={keys ? `${t(label)} (${keys})` : t(label)} aria-label={t(label)} aria-keyshortcuts={keys ?? undefined} aria-pressed={on} onClick={onClick} disabled={disabled} className={`${compact ? 'h-9 w-9' : 'h-10 w-10'} shrink-0 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 ${state}`} {...data}>
       {children}
     </button>
   )
 }
 
 /** A control with a chevron beside it that opens `menu` above the bar. */
-export function SplitControl({ chevronLabel, menuKind, menu, align = 'start', children }: { chevronLabel: string; menuKind: DeviceKind; menu: (close: () => void) => ReactNode; align?: 'start' | 'end'; children: ReactNode }) {
+export function SplitControl({ chevronLabel, menuKind, menu, align = 'start', children }: { chevronLabel: string; menuKind: DeviceKind | 'screen'; menu: (close: () => void) => ReactNode; align?: 'start' | 'end'; children: ReactNode }) {
   const compact = useContext(Compact)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
@@ -177,9 +196,9 @@ export function CheckRow({ label, checked, onChange, ...data }: { label: string;
   )
 }
 
-export function ActionRow({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+export function ActionRow({ icon, label, onClick, ...data }: { icon: ReactNode; label: string; onClick: () => void } & Record<`data-${string}`, string | undefined>) {
   return (
-    <button type="button" role="menuitem" onClick={onClick} className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm font-semibold text-text-0 hover:bg-bg-3">
+    <button type="button" role="menuitem" onClick={onClick} className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm font-semibold text-text-0 hover:bg-bg-3" {...data}>
       <span className="text-text-1">{icon}</span>{label}
     </button>
   )
@@ -295,6 +314,42 @@ export function CameraMenu({ close }: { close: () => void }) {
       {preview && <CameraPreview />}
       <ActionRow icon={<Eye size={18} />} label={preview ? t('Hide Preview') : t('Preview Camera')} onClick={() => setPreview((p) => !p)} />
       <SettingsRow label={t('Video Settings')} close={close} />
+    </div>
+  )
+}
+
+/**
+ * Screen share choices where the share is started: quality (it applies at once, also to a running share), whether the
+ * source's sound goes with it, and while sharing what is going out, sharing something else, and stopping.
+ */
+export function ScreenMenu({ close }: { close: () => void }) {
+  const st = useStore((s) => s.voiceSettings)
+  const update = useStore((s) => s.updateVoiceSettings)
+  const sharing = useStore((s) => !!s.localScreen)
+  const [, tick] = useState(0)
+  // The capture settles a moment after it starts or changes: keep the "going out" line current while the menu is open.
+  useEffect(() => { if (!sharing) return; const id = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(id) }, [sharing])
+  const info = sharing ? voice.screenInfo : null
+  return (
+    <div data-screen-menu>
+      <div className="px-2.5 pt-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Screen share quality')}</div>
+      {Object.entries(STREAM_QUALITY).map(([k, q]) => (
+        <button key={k} type="button" role="menuitemradio" aria-checked={st.streamQuality === k} onClick={() => update({ streamQuality: k })} className="w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-text-0 hover:bg-bg-3" data-stream-quality-option={k}>
+          <span className={`h-4 w-4 shrink-0 rounded-full border-2 ${st.streamQuality === k ? 'border-accent bg-accent shadow-[inset_0_0_0_3px_var(--color-bg-1)]' : 'border-text-2'}`} />
+          <span className="flex-1">{t(q.label)}</span>
+        </button>
+      ))}
+      <MenuDivider />
+      <CheckRow label={t('Share sound')} checked={st.streamAudio !== false} onChange={(v) => update({ streamAudio: v })} data-stream-sound="" />
+      <p className="px-2.5 pb-1 text-[11px] text-text-2">{t('The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.')}</p>
+      {info && (
+        <>
+          <MenuDivider />
+          <div className="px-2.5 py-1 text-xs text-text-1" data-stream-info>{info.sound ? t('Sharing {width}×{height} at {fps} fps, with sound', { width: info.width, height: info.height, fps: info.fps }) : t('Sharing {width}×{height} at {fps} fps, without sound', { width: info.width, height: info.height, fps: info.fps })}</div>
+          <ActionRow icon={<Eye size={18} />} label={t('Share Something Else')} onClick={() => { close(); void voice.changeScreen() }} data-stream-change="" />
+          <ActionRow icon={<PhoneOff size={18} />} label={t('Stop Sharing')} onClick={() => { close(); void voice.toggleScreen() }} data-stream-stop="" />
+        </>
+      )}
     </div>
   )
 }

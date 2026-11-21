@@ -17,6 +17,12 @@ export interface VoiceSettings {
   autoGainControl: boolean
   /** Screen share quality (a key of STREAM_QUALITY in voice.ts). */
   streamQuality: string
+  /** Direct (mesh) calls go through the instance's relay only, so the people in them never learn this device's IP address. */
+  relayOnly: boolean
+  /** While in a call but looking elsewhere, float its video in a corner (MiniCall). */
+  miniCall: boolean
+  /** Share the sound of the tab or screen along with its picture, where the browser offers it. */
+  streamAudio: boolean
 }
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -35,6 +41,9 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   noiseSuppressionMode: 'standard',
   autoGainControl: true,
   streamQuality: 'auto',
+  relayOnly: false,
+  miniCall: true,
+  streamAudio: true,
 }
 
 const KEY = `${STORAGE_PREFIX}voiceSettings`

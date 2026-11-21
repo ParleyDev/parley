@@ -2,7 +2,7 @@
 title: Voz e vídeo
 section: Conversando
 summary: Entre em canais de voz, ligue para amigos, compartilhe a tela, conduza palcos e mantenha as chamadas privadas.
-source: e2706effcd7d
+source: dab86ccace07
 ---
 
 ![Um canal de voz com câmeras ligadas e os controles da chamada](shot:voice)
@@ -20,6 +20,8 @@ O cartão de **Voz conectada** acima do seu painel mostra que você está na cha
 Você pode continuar conversando nos canais de texto enquanto está na voz. Se você sair para outro lugar, uma pequena janela da chamada acompanha você; clique em **Voltar para a chamada** para retornar.
 
 > Tip: Na primeira vez, o Parley pede ao navegador acesso ao microfone. Se ninguém ouvir você, confira **Configurações de usuário → Voz e vídeo** e faça o **Teste de microfone**.
+
+Você pode arrastar a janelinha da chamada para qualquer canto e redimensioná-la pela alça no canto; o Parley lembra as duas coisas. Aponte para ela para ver **Silenciar**, **Parar de assistir** e **Desconectar**. Ela também aparece enquanto você compartilha sua tela, com o que você está compartilhando e quantas pessoas estão assistindo. Para desativá-la, desligue **Mostrar a chamada flutuando em um canto enquanto olho outra coisa** em **Configurações de usuário → Voz e vídeo**. O nome do canal no cartão **Voz conectada** também leva você de volta à chamada.
 
 ## Os controles da chamada
 
@@ -39,11 +41,32 @@ Clique no vídeo de alguém para destacá-lo, e clique duas vezes para tela chei
 
 **Desativar áudio** (os fones no seu painel) silencia tudo o que você ouve, e seu microfone junto.
 
+A imagem de cada pessoa é dimensionada para caber na janela, então não há nada para rolar. Quando há mais pessoas do que cabem, o Parley mostra as que cabem e um bloco **+N**; clique nele para **Mostrar todos**. A tela cheia mostra a chamada inteira com os controles. Eles somem quando você para de mexer o mouse e voltam quando você o move; pressione <kbd>Esc</kbd> para sair.
+
+Um controle que você não pode usar agora fica onde está, esmaecido. Aponte para ele para ver o motivo: talvez você não tenha permissão neste canal, um moderador tenha silenciado você ou a chamada ainda esteja conectando. Aponte para **Silenciar** para ver o atalho de teclado.
+
+A seta ao lado de **Compartilhar sua tela** define a **Qualidade do compartilhamento de tela** e se você quer **Compartilhar som**. Enquanto você compartilha, ela mostra o que está sendo enviado e permite **Compartilhar outra coisa** sem parar.
+
 ## Ligando para alguém
 
 Em uma DM ou DM em grupo, clique em **Iniciar chamada de voz** ou **Iniciar chamada de vídeo** na barra do topo. A outra pessoa vê uma chamada recebida com **Entrar** e **Recusar**. Se ela não atender, vai ver que você ligou.
 
 Você também pode chamar um amigo para um canal de voz em que você está: **Convidar para a voz** manda uma mensagem para ele com **Entrar**.
+
+Você pode atender pelo teclado: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> entra e <kbd>Esc</kbd> ignora. **Ignorar** para de tocar para você sem avisar quem está ligando; **Recusar** avisa. Se você já estiver na chamada em outro dispositivo, a MD mostra **Entrar neste dispositivo**.
+
+## Se uma chamada cair
+
+Se a sua conexão oscilar, a chamada mostra **Reconectando…** e o Parley coloca você de volta sozinho. Se não conseguir depois de algumas tentativas, você sai da chamada e o cartão **Falha na conexão da chamada** aparece acima do seu painel. Clique em **Tentar de novo** para entrar de novo, ou em **Dispensar**.
+
+O Parley também avisa quando algo muda durante uma chamada:
+
+- **Sem microfone**: seu microfone foi desconectado. Se você tiver outro, o Parley troca para ele e avisa. Se não, conecte um e o Parley vai usá-lo.
+- **Novo dispositivo de áudio**: você conectou um headset ou microfone. Clique em **Trocar** para usá-lo, ou em **Não sugerir este dispositivo novamente**.
+- **Você estava em uma chamada**: o Parley foi recarregado ou reiniciado no meio de uma chamada. Clique em **Entrar novamente** para voltar. O Parley nunca entra de novo sozinho.
+- **Não foi possível entrar na chamada**: o Parley não conseguiu abrir seu microfone e diz o motivo. Resolva e clique em **Tentar de novo**, ou clique em **Entrar sem microfone** para ouvir.
+
+> Tip: **Não foi possível conectar** na imagem de alguém significa que o Parley não consegue alcançar essa pessoa diretamente, geralmente por causa de um firewall. Peça a quem administra o seu Parley para configurar um servidor de retransmissão.
 
 ## Palcos
 
@@ -59,6 +82,8 @@ Os palcos são para palestras, sessões de perguntas e respostas e shows:
 As chamadas em DMs podem ter **criptografia de ponta a ponta**: só quem está na chamada pode ouvir ou ver, nem o servidor. Ative pelo botão de cadeado na barra do topo da DM.
 
 Para ter certeza de que ninguém está escutando, comparem em voz alta o **Código de segurança** mostrado na chamada. Se todos virem o mesmo código, a chamada é privada. Legendas e clipes ficam desligados em chamadas criptografadas.
+
+Em uma chamada pequena, o Parley conecta você diretamente aos outros, o que permite que vejam seu endereço IP. Para evitar isso, ative **Ocultar meu endereço IP nas chamadas** em **Configurações de usuário → Voz e vídeo**: suas chamadas passam então pelo servidor de retransmissão do seu Parley, se ele tiver um.
 
 ## Soando o melhor possível
 
