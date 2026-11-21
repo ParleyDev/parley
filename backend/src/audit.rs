@@ -22,6 +22,9 @@ pub async fn reason_scope(req: Request, next: Next) -> Response {
     CLIENT.scope(client, REASON.scope(reason, next.run(req))).await
 }
 
+/// The current request's client address and user agent (empty outside a request).
+pub fn client() -> (String, String) { CLIENT.try_with(|c| c.clone()).unwrap_or_default() }
+
 /// The reason sent with the current request, if any.
 pub fn request_reason() -> Option<String> {
     REASON.try_with(|r| r.clone()).ok().flatten()

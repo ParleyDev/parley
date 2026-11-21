@@ -1,13 +1,15 @@
 import ThemesPane from './AdminThemes'
 import CropImg from '../components/CropImg'
 import BlockedLinksPane from './AdminBlockedLinks'
+import { MatchesPane, MatchingSetupPane } from './AdminMatching'
+import ReportEvidence, { REPORT_CATEGORIES } from './AdminEvidence'
 import AppsPane from './AdminApps'
 import UserDetailPane from './AdminUser'
 import NetworkPane from './AdminNetwork'
 import ServerDetailPane from './AdminServer'
 import CosmeticsPane from './AdminCosmetics'
 import ReviewQueue from './AdminDiscovery'
-import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, Share2, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, Share2, ShieldAlert, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
@@ -23,7 +25,7 @@ import { useT, t as tr, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
 import { globalName } from '../lib/names'
 
-type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail'
+type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail' | 'matching' | 'matches'
 
 /** Root console for Parley admins: stats, users, servers, instance settings. Shown in the settings window, one route per page. */
 export default function AdminPage() {
@@ -63,6 +65,8 @@ export default function AdminPage() {
       it('cases', 'Cases', <Briefcase size={18} />, can(a, 'report_context_read', 'case_approve'), 'investigation'),
       it('reports', 'Reports', <Flag size={18} />, can(a, 'report_context_read'), 'reported'),
       it('blocked-links', 'Blocked Links', <Ban size={18} />, can(a, 'instance_manage'), 'urls domains'),
+      it('matches', 'Matched Uploads', <ShieldAlert size={18} />, can(a, 'safety_match_review'), 'csam abuse material quarantine child safety'),
+      it('matching', 'Known-Material Matching', <ShieldCheck size={18} />, can(a, 'instance_manage'), 'csam hash photodna matching service child safety'),
       it('audit', 'Audit Log', <ScrollText size={18} />, can(a, 'audit_read_own', 'audit_read_team', 'audit_read_all'), 'history actions'),
     ]),
   ].filter((g) => g.items.length)
@@ -91,6 +95,8 @@ export default function AdminPage() {
             <Route path="cases" element={<CasesPane />} />
             <Route path="cases/:id" element={<CasePane />} />
             <Route path="blocked-links" element={<BlockedLinksPane />} />
+            <Route path="matching" element={<MatchingSetupPane />} />
+            <Route path="matches" element={<MatchesPane />} />
             <Route path="apps" element={<AppsPane />} />
             <Route path="messages" element={<MessagesPane />} />
             <Route path="users/:id" element={<UserDetailPane />} />
@@ -810,10 +816,14 @@ function AuditPane() {
   )
 }
 
-interface Report { id: string; case_id?: string | null; reporter_id: string | null; reporter_username: string | null; kind: 'message' | 'user'; target_user_id: string | null; target_username: string; message_id: string | null; channel_id: string | null; channel_name: string; guild_id: string | null; guild_name: string; content: string; reason: string; status: 'open' | 'resolved' | 'dismissed'; note: string; created_at: string; resolved_at: string | null; message_exists: boolean; target_suspended: boolean }
+interface Report { id: string; case_id?: string | null; reporter_id: string | null; reporter_username: string | null; kind: 'message' | 'user'; target_user_id: string | null; target_username: string; message_id: string | null; channel_id: string | null; channel_name: string; guild_id: string | null; guild_name: string; content: string; reason: string; status: 'open' | 'resolved' | 'dismissed'; note: string; created_at: string; resolved_at: string | null; message_exists: boolean; target_suspended: boolean; category: string; urgent: boolean; legal_hold: boolean; has_evidence: boolean }
 
 function ReportsPane() {
   const t = useT()
+  const a = useAccess()
+  // A legal hold is for trust-and-safety leads and legal to set.
+  const canHold = !!a?.roles.some((r) => r === 'TS_LEAD' || r === 'LEGAL')
+  const [evidenceOf, setEvidenceOf] = useState<string | null>(null)
   const [status, setStatus] = useState<'open' | 'resolved' | 'dismissed' | 'all'>('open')
   const [rows, setRows] = useState<Report[] | null>(null)
   const pushToast = useStore((s) => s.pushToast)
@@ -836,14 +846,17 @@ function ReportsPane() {
         {rows === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
         {rows?.length === 0 && <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2" data-admin-reports-empty>{status === 'all' ? t('No reports.') : t('No {status} reports.', { status: statusLabel[status] })}</div>}
         {rows?.map((r) => (
-          <div key={r.id} className="rounded-xl border border-line bg-bg-1 p-4" data-admin-report={r.id} data-report-status={r.status} data-report-kind={r.kind}>
+          <div key={r.id} className={`rounded-xl border bg-bg-1 p-4 ${r.urgent && r.status === 'open' ? 'border-danger/60' : 'border-line'}`} data-admin-report={r.id} data-report-status={r.status} data-report-kind={r.kind} data-report-category={r.category} data-report-urgent={r.urgent ? '1' : '0'} data-report-hold={r.legal_hold ? '1' : '0'}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${r.status === 'open' ? 'bg-warn/20 text-warn' : r.status === 'resolved' ? 'bg-success/20 text-success' : 'bg-bg-3 text-text-2'}`}>{statusLabel[r.status]}</span>
+              {r.urgent && <span className="rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-danger" data-report-urgent-badge>{t('Urgent')}</span>}
+              {r.legal_hold && <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-accent" data-report-hold-badge>{t('Legal hold')}</span>}
               <span className="font-semibold">{r.kind === 'message' ? t('Message report') : t('User report')}</span>
               <span className="text-text-2">· {tn('@{reporter} reported {target}', { reporter: r.reporter_username ?? t('deleted user'), target: <b className="text-text-0">@{r.target_username || t('unknown')}</b> })}{r.target_suspended && <span className="ml-1 rounded bg-danger/20 text-danger px-1 text-[10px] font-bold">{t('SUSPENDED')}</span>}</span>
               <span className="ml-auto text-xs text-text-2">{new Date(r.created_at).toLocaleString()}</span>
             </div>
-            <div className="mt-2 text-sm"><span className="text-text-2">{t('Reason:')} </span><span data-report-reason>{r.reason}</span></div>
+            <div className="mt-2 text-sm"><span className="text-text-2">{t('About:')} </span><span className="font-semibold" data-report-category-label>{t(REPORT_CATEGORIES[r.category] ?? REPORT_CATEGORIES.other)}</span></div>
+            <div className="mt-1 text-sm"><span className="text-text-2">{t('Reason:')} </span><span data-report-reason>{r.reason}</span></div>
             {r.kind === 'message' && (
               <div className="mt-2 rounded-lg bg-bg-0/60 border border-line p-3 text-sm" data-report-context>
                 <div className="text-xs text-text-2 mb-1">{r.guild_id ? `${r.guild_name} · #${r.channel_name}` : t('Direct message')}{!r.message_exists && <span className="ml-2 rounded bg-bg-3 px-1 text-[10px] font-bold">{t('DELETED')}</span>}</div>
@@ -855,6 +868,8 @@ function ReportsPane() {
               {r.kind === 'message' && r.message_exists && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.delete(`/admin/messages/${r.message_id}`), t('Message deleted'))} data-report-delete-message>{t('Delete message')}</button>}
               {r.target_user_id && !r.target_suspended && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.patch(`/admin/users/${r.target_user_id}`, { suspended: true }), t('@{username} suspended', { username: r.target_username }))} data-report-suspend>{t('Suspend @{username}', { username: r.target_username })}</button>}
               {r.case_id && <NavLink to={`/admin/cases/${r.case_id}`} className="btn-ghost py-1 text-xs" data-report-case>{t('Case')}</NavLink>}
+              <button type="button" className="btn-ghost py-1 text-xs" aria-expanded={evidenceOf === r.id} onClick={() => setEvidenceOf(evidenceOf === r.id ? null : r.id)} data-report-evidence-toggle>{evidenceOf === r.id ? t('Hide what was kept') : t('What was kept')}</button>
+              {canHold && <button type="button" className="btn-ghost py-1 text-xs" onClick={() => act(() => api.post(`/admin/reports/${r.id}/hold`, { on: !r.legal_hold }), r.legal_hold ? t('Legal hold lifted') : t('Report put on legal hold'))} data-report-hold-toggle>{r.legal_hold ? t('Lift legal hold') : t('Put on legal hold')}</button>}
               {r.guild_id && r.channel_id && <a className="btn-ghost py-1 text-xs" href={`/channels/${r.guild_id}/${r.channel_id}?message=${r.message_id}`} target="_blank" rel="noreferrer">{t('Open channel')}</a>}
               {r.status === 'open' ? (
                 <>
@@ -863,6 +878,7 @@ function ReportsPane() {
                 </>
               ) : <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setState(r, 'open')} data-report-reopen>{t('Reopen')}</button>}
             </div>
+            {evidenceOf === r.id && <ReportEvidence key={`${r.id}:${r.legal_hold}`} reportId={r.id} />}
           </div>
         ))}
       </div>

@@ -66,6 +66,8 @@ You can also exempt roles or channels, like a channel where your moderators disc
 
 When members **Report Message** or **Report User** and tick the box to tell this server's moderators too, the report lands under **Server Settings → Reports**. **Jump** to see it in context, then **Resolve** or **Dismiss** it.
 
+Reports about a child's safety or about intimate pictures shared without consent never show up here. They go only to the team that runs your Parley server.
+
 ## The audit log
 
 **Audit Log** records who changed what: roles, channels, bans, kicks, timeouts, deleted messages and settings. Filter by person or by kind of action. It's the first place to look when something changes and nobody knows why.
@@ -73,3 +75,15 @@ When members **Report Message** or **Report User** and tick the box to tell this
 ## Reporting to Parley
 
 Some things go beyond one server, like threats, illegal content or spam across many servers. Every report goes to the admins who run your Parley server. Ticking the box also sends it to that server's moderators.
+
+To report, right-click a message and choose **Report Message**, or right-click a person and choose **Report User**. Pick what's wrong, add anything that helps, and choose **Submit Report**.
+
+Some reasons are looked at first: **Threat of violence**, **Someone may hurt themselves**, **Intimate pictures shared without consent**, and most of the choices under **A child is at risk**. Reports about a child's safety or about intimate pictures go only to the team that runs your Parley server, never to a server's moderators, so the box isn't offered for them.
+
+What you report is copied the moment you send it: the message, any files on it and, in a server channel, what was said just before and after. Deleting the message afterwards doesn't remove the copy.
+
+> Heads up: If you come across sexual pictures or video of a child, don't save, screenshot or forward them, even as proof. Report the message and leave it there. Your report keeps what's needed.
+
+> Note: If someone is in danger right now, call your local emergency number first, then report.
+
+You can send up to 10 reports an hour. The reasons that are looked at first have their own, larger allowance.

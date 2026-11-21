@@ -2,7 +2,7 @@
 title: Moderação e segurança
 section: Administrando um servidor
 summary: Mantenha seu servidor amigável com AutoMod, castigos, banimentos, denúncias, proteção contra raids e o registro de auditoria.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Lidando com alguém
@@ -54,6 +54,8 @@ Você também pode isentar cargos ou canais, como um canal onde os moderadores d
 
 Quando os membros usam **Denunciar mensagem** ou **Denunciar usuário** e marcam a opção de avisar também os moderadores deste servidor, a denúncia cai em **Configurações do servidor → Denúncias**. Use **Ir** para vê-la no contexto, e depois **Resolver** ou **Dispensar**.
 
+Denúncias sobre a segurança de uma criança ou sobre imagens íntimas compartilhadas sem consentimento nunca aparecem aqui. Elas vão apenas para a equipe que roda o seu servidor Parley.
+
 ## O registro de auditoria
 
 O **Registro de auditoria** guarda quem mudou o quê: cargos, canais, banimentos, expulsões, castigos, mensagens excluídas e configurações. Filtre por pessoa ou por tipo de ação. É o primeiro lugar para olhar quando algo muda e ninguém sabe por quê.
@@ -61,3 +63,15 @@ O **Registro de auditoria** guarda quem mudou o quê: cargos, canais, banimentos
 ## Denunciando ao Parley
 
 Algumas coisas vão além de um servidor, como ameaças, conteúdo ilegal ou spam em vários servidores. Toda denúncia vai para os admins que rodam o seu servidor Parley. Marcar a opção também a envia para os moderadores daquele servidor.
+
+Para denunciar, clique com o botão direito em uma mensagem e escolha **Denunciar mensagem**, ou clique com o botão direito em uma pessoa e escolha **Denunciar usuário**. Escolha o que está errado, acrescente o que puder ajudar e escolha **Enviar denúncia**.
+
+Alguns motivos são analisados primeiro: **Ameaça de violência**, **Alguém pode se machucar**, **Imagens íntimas compartilhadas sem consentimento** e a maioria das opções em **Uma criança está em risco**. Denúncias sobre a segurança de uma criança ou sobre imagens íntimas vão apenas para a equipe que roda o seu servidor Parley, nunca para os moderadores de um servidor, por isso a opção de avisá-los não aparece nesses casos.
+
+O que você denuncia é copiado no momento do envio: a mensagem, os arquivos anexados a ela e, em um canal de servidor, o que foi dito logo antes e logo depois. Excluir a mensagem depois não remove a cópia.
+
+> Heads up: Se você encontrar imagens ou vídeos sexuais de uma criança, não salve, não faça captura de tela e não encaminhe, nem mesmo como prova. Denuncie a mensagem e deixe-a onde está. Sua denúncia guarda o que é necessário.
+
+> Note: Se alguém estiver em perigo agora, ligue primeiro para o número de emergência local e depois denuncie.
+
+Você pode enviar até 10 denúncias por hora. Os motivos analisados primeiro têm um limite próprio, maior.

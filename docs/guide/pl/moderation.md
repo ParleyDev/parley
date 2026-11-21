@@ -2,7 +2,7 @@
 title: Moderacja i bezpieczeństwo
 section: Prowadzenie serwera
 summary: Dbaj o przyjazną atmosferę dzięki AutoModowi, przerwom, banom, zgłoszeniom, ochronie przed najazdami i dziennikowi zdarzeń.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Radzenie sobie z kimś
@@ -54,6 +54,8 @@ Możesz też wyłączyć z reguł wybrane role lub kanały, np. kanał, na któr
 
 Gdy członkowie użyją opcji **Zgłoś wiadomość** lub **Zgłoś użytkownika** i zaznaczą pole, by powiadomić też moderatorów tego serwera, zgłoszenie trafia do **Ustawienia serwera → Zgłoszenia**. **Przejdź**, aby zobaczyć je w kontekście, a potem **Rozwiąż** lub **Odrzuć**.
 
+Zgłoszenia dotyczące bezpieczeństwa dziecka albo intymnych zdjęć udostępnionych bez zgody nigdy się tu nie pojawiają. Trafiają wyłącznie do zespołu, który prowadzi twój serwer Parley.
+
 ## Dziennik zdarzeń
 
 **Dziennik zdarzeń** zapisuje, kto co zmienił: role, kanały, bany, wyrzucenia, przerwy, usunięte wiadomości i ustawienia. Filtruj według osoby lub rodzaju działania. To pierwsze miejsce, do którego warto zajrzeć, gdy coś się zmienia i nikt nie wie dlaczego.
@@ -61,3 +63,15 @@ Gdy członkowie użyją opcji **Zgłoś wiadomość** lub **Zgłoś użytkownika
 ## Zgłaszanie do Parley
 
 Niektóre sprawy wykraczają poza jeden serwer, np. groźby, nielegalne treści albo spam na wielu serwerach. Każde zgłoszenie trafia do administratorów, którzy prowadzą twój serwer Parley. Zaznaczenie pola wysyła je też moderatorom danego serwera.
+
+Aby coś zgłosić, kliknij wiadomość prawym przyciskiem i wybierz **Zgłoś wiadomość** albo kliknij osobę prawym przyciskiem i wybierz **Zgłoś użytkownika**. Wybierz, co jest nie tak, dodaj wszystko, co może pomóc, i wybierz **Wyślij zgłoszenie**.
+
+Niektóre powody są rozpatrywane w pierwszej kolejności: **Groźba przemocy**, **Ktoś może zrobić sobie krzywdę**, **Intymne zdjęcia udostępnione bez zgody** oraz większość opcji w grupie **Dziecko jest zagrożone**. Zgłoszenia dotyczące bezpieczeństwa dziecka albo intymnych zdjęć trafiają wyłącznie do zespołu, który prowadzi twój serwer Parley, nigdy do moderatorów serwera, dlatego pole się przy nich nie pojawia.
+
+To, co zgłaszasz, jest kopiowane w chwili wysłania: wiadomość, dołączone do niej pliki, a na kanale serwera także to, co napisano tuż przed nią i tuż po niej. Późniejsze usunięcie wiadomości nie usuwa kopii.
+
+> Heads up: Jeśli natkniesz się na zdjęcia lub filmy o charakterze seksualnym przedstawiające dziecko, nie zapisuj ich, nie rób zrzutów ekranu i nie przesyłaj ich dalej, nawet jako dowodu. Zgłoś wiadomość i zostaw ją tam, gdzie jest. Twoje zgłoszenie zachowa to, co potrzebne.
+
+> Note: Jeśli komuś w tej chwili grozi niebezpieczeństwo, najpierw zadzwoń pod lokalny numer alarmowy, a dopiero potem wyślij zgłoszenie.
+
+Możesz wysłać do 10 zgłoszeń na godzinę. Powody rozpatrywane w pierwszej kolejności mają własny, większy limit.

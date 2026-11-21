@@ -2,7 +2,7 @@
 title: Moderation und Sicherheit
 section: Einen Server leiten
 summary: Halte deinen Server freundlich mit AutoMod, Timeouts, Banns, Meldungen, Raid-Schutz und dem Audit-Log.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Mit jemandem umgehen
@@ -54,6 +54,8 @@ Du kannst auch Rollen oder Kanäle ausnehmen, etwa einen Kanal, in dem deine Mod
 
 Wenn Mitglieder **Nachricht melden** oder **Benutzer melden** nutzen und das Häkchen setzen, um auch die Moderatoren dieses Servers zu informieren, landet die Meldung unter **Servereinstellungen → Meldungen**. Mit **Springen** siehst du sie im Zusammenhang, dann wählst du **Erledigen** oder **Schließen**.
 
+Meldungen zur Sicherheit eines Kindes oder zu intimen Bildern, die ohne Einwilligung geteilt wurden, tauchen hier nie auf. Sie gehen nur an das Team, das deinen Parley-Server betreibt.
+
 ## Das Audit-Log
 
 Das **Audit-Log** hält fest, wer was geändert hat: Rollen, Kanäle, Banns, Kicks, Timeouts, gelöschte Nachrichten und Einstellungen. Filtere nach Person oder nach Art der Aktion. Hier schaust du zuerst nach, wenn sich etwas ändert und niemand weiß, warum.
@@ -61,3 +63,15 @@ Das **Audit-Log** hält fest, wer was geändert hat: Rollen, Kanäle, Banns, Kic
 ## An Parley melden
 
 Manches geht über einen einzelnen Server hinaus, etwa Drohungen, illegale Inhalte oder Spam auf vielen Servern. Jede Meldung geht an die Admins, die deinen Parley-Server betreiben. Mit dem Häkchen geht sie außerdem an die Moderatoren des jeweiligen Servers.
+
+Zum Melden klickst du mit der rechten Maustaste auf eine Nachricht und wählst **Nachricht melden**, oder du klickst mit der rechten Maustaste auf eine Person und wählst **Benutzer melden**. Wähle aus, was nicht stimmt, ergänze alles, was weiterhilft, und wähle **Meldung absenden**.
+
+Einige Gründe werden zuerst geprüft: **Gewaltandrohung**, **Jemand könnte sich selbst etwas antun**, **Intime Bilder, die ohne Einwilligung geteilt wurden** und die meisten Auswahlmöglichkeiten unter **Ein Kind ist in Gefahr**. Meldungen zur Sicherheit eines Kindes oder zu intimen Bildern gehen nur an das Team, das deinen Parley-Server betreibt, nie an die Moderatoren eines Servers. Deshalb wird das Häkchen bei ihnen nicht angeboten.
+
+Was du meldest, wird in dem Moment kopiert, in dem du die Meldung absendest: die Nachricht, alle Dateien daran und, in einem Serverkanal, was kurz davor und danach geschrieben wurde. Wird die Nachricht später gelöscht, bleibt die Kopie erhalten.
+
+> Heads up: Wenn du auf sexuelle Bilder oder Videos eines Kindes stößt, speichere sie nicht, mach keinen Screenshot und leite sie nicht weiter, auch nicht als Beweis. Melde die Nachricht und lass sie, wo sie ist. Deine Meldung sichert, was gebraucht wird.
+
+> Note: Wenn jemand in diesem Moment in Gefahr ist, ruf zuerst den Notruf bei dir vor Ort an und melde es danach.
+
+Du kannst bis zu 10 Meldungen pro Stunde absenden. Für die Gründe, die zuerst geprüft werden, gilt ein eigenes, höheres Limit.

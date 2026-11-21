@@ -121,6 +121,7 @@ pub async fn store_bytes(state: &AppState, uid: Uuid, kind: &str, bytes: Vec<u8>
     let animated = is_animated(&content_type, &bytes);
     crate::routes::storage::check_quota(state, uid, bytes.len() as i64).await?;
     crate::av::check(state, &bytes, "image").await?;
+    crate::routes::matching::check(state, &bytes, crate::routes::matching::Ctx { user_id: uid, surface: "image", channel_id: None, filename: "", content_type: &content_type }).await?;
 
     let id = Uuid::new_v4();
     let dir = &state.config.upload_dir;

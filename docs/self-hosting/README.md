@@ -152,6 +152,13 @@ Registration and token requests are limited per IP by `RL_OAUTH` (default `300/6
 
 Voice channels (Channel Settings → End-to-end encryption) and DM or group calls (the lock in the conversation header) can be end-to-end encrypted. Nothing to configure: it works with peer-to-peer calls and with LiveKit, and your server only relays the encrypted key exchange. People compare the safety code in the call header to check nobody is in the middle. Members need a current browser or app (Chrome, Edge, Firefox or Safari from the last few years); older ones are told they can't join an encrypted call.
 
+## Before you open registration to the public
+
+When you run an instance for people you don't know, you are the provider of that service, with the duties your country puts on one. Two things are worth doing first:
+
+- **Reports**: members can report messages and people, and the reports wait under **Admin Console → Reports**. Child-safety, threat, self-harm and intimate-image reports are marked urgent and sorted first. Make sure someone looks.
+- **Known abuse material**: Parley can check every upload against known child sexual abuse material, hold a match in quarantine and suspend the account. It ships the plumbing and no lists, so it does nothing until you connect a source you are entitled to. See [Matching uploads against known abuse material](media-matching.md).
+
 ## Optional extras
 
 The root `docker-compose.yml` in the repository also has profiles for ClamAV upload scanning (`av`), voice-message transcription (`stt`), a LiveKit SFU (`sfu`), and a second backend (`cluster`). Each one is documented in the [main README](../../README.md). You can copy the service you need into your `compose.yaml`.

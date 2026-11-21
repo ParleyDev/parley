@@ -2,7 +2,7 @@
 title: Moderatie en veiligheid
 section: Een server runnen
 summary: Houd je server vriendelijk met AutoMod, time-outs, verbanningen, meldingen, raidbescherming en het auditlogboek.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Iemand aanpakken
@@ -54,6 +54,8 @@ Je kunt ook rollen of kanalen uitzonderen, zoals een kanaal waarin je moderators
 
 Als leden **Bericht rapporteren** of **Gebruiker rapporteren** gebruiken en het vakje aanvinken om ook de moderators van deze server in te lichten, komt de melding terecht onder **Serverinstellingen → Meldingen**. Kies **Springen** om hem in context te zien, en daarna **Oplossen** of **Sluiten**.
 
+Meldingen over de veiligheid van een kind of over intieme beelden die zonder toestemming zijn gedeeld, verschijnen hier nooit. Ze gaan alleen naar het team dat je Parley-server draait.
+
 ## Het auditlogboek
 
 Het **Auditlogboek** houdt bij wie wat heeft gewijzigd: rollen, kanalen, verbanningen, verwijderingen, time-outs, verwijderde berichten en instellingen. Filter op persoon of op soort actie. Het is de eerste plek om te kijken als er iets verandert en niemand weet waarom.
@@ -61,3 +63,15 @@ Het **Auditlogboek** houdt bij wie wat heeft gewijzigd: rollen, kanalen, verbann
 ## Melden bij Parley
 
 Sommige dingen gaan verder dan één server, zoals bedreigingen, illegale inhoud of spam over veel servers. Elke melding gaat naar de beheerders die je Parley-server draaien. Als je het vakje aanvinkt, gaat hij ook naar de moderators van die server.
+
+Om iets te melden klik je met rechts op een bericht en kies je **Bericht rapporteren**, of klik je met rechts op een persoon en kies je **Gebruiker rapporteren**. Kies wat er mis is, voeg toe wat kan helpen en kies **Melding indienen**.
+
+Sommige redenen worden als eerste bekeken: **Dreiging met geweld**, **Iemand doet zichzelf mogelijk iets aan**, **Intieme beelden die zonder toestemming zijn gedeeld** en de meeste keuzes onder **Een kind loopt gevaar**. Meldingen over de veiligheid van een kind of over intieme beelden gaan alleen naar het team dat je Parley-server draait, nooit naar de moderators van een server. Daarom krijg je het vakje daarbij niet te zien.
+
+Wat je meldt, wordt gekopieerd op het moment dat je het verstuurt: het bericht, de bestanden die erbij zitten en, in een serverkanaal, wat er vlak ervoor en erna is gezegd. Als het bericht daarna wordt verwijderd, blijft de kopie bestaan.
+
+> Heads up: Kom je seksuele foto's of video's van een kind tegen, sla ze dan niet op, maak er geen screenshot van en stuur ze niet door, ook niet als bewijs. Meld het bericht en laat het staan. Je melding bewaart wat nodig is.
+
+> Note: Is iemand nu in gevaar, bel dan eerst het lokale alarmnummer en dien daarna een melding in.
+
+Je kunt maximaal 10 meldingen per uur versturen. Voor de redenen die als eerste worden bekeken, geldt een eigen, ruimere limiet.

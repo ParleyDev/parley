@@ -29,6 +29,8 @@ pub struct Counters {
     pub uploads: AtomicU64,
     /// Uploads rejected by the antivirus scanner.
     pub av_rejected: AtomicU64,
+    /// Uploads that matched known abuse material (hash list or matching service) and were quarantined.
+    pub media_matched: AtomicU64,
     /// Push notifications delivered to FCM.
     pub push_sent: AtomicU64,
     pub upload_bytes: AtomicU64,
@@ -46,6 +48,7 @@ pub static METRICS: Counters = Counters {
     ws_resumes: AtomicU64::new(0),
     uploads: AtomicU64::new(0),
     av_rejected: AtomicU64::new(0),
+    media_matched: AtomicU64::new(0),
     push_sent: AtomicU64::new(0),
     upload_bytes: AtomicU64::new(0),
     errors_5xx: AtomicU64::new(0),
@@ -117,6 +120,7 @@ pub fn render(state: &AppState, online_users: u64) -> String {
         ("parley_ws_resumes_total", "counter", "WebSocket sessions resumed with replay.", METRICS.ws_resumes.load(Relaxed)),
         ("parley_uploads_total", "counter", "Attachment uploads accepted.", METRICS.uploads.load(Relaxed)),
         ("parley_av_rejected_total", "counter", "Uploads refused by the antivirus scanner.", METRICS.av_rejected.load(Relaxed)),
+        ("parley_media_matched_total", "counter", "Uploads that matched known abuse material and were quarantined.", METRICS.media_matched.load(Relaxed)),
         ("parley_push_sent_total", "counter", "Push notifications handed to FCM.", METRICS.push_sent.load(Relaxed)),
         ("parley_upload_bytes_total", "counter", "Bytes of attachments accepted.", METRICS.upload_bytes.load(Relaxed)),
         ("parley_ws_connections", "gauge", "Open WebSocket connections.", state.hub.socket_count() as u64),

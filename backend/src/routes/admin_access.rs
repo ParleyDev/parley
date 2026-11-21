@@ -64,6 +64,9 @@ pub enum Perm {
     AuditReadAll,
     /// Instance settings, mail settings, Discover review, app verification, maintenance, blocked domains, stats.
     InstanceManage,
+    /// The queue of uploads that matched known abuse material: who sent what, the report filed, release or closure.
+    /// Never the file itself. Trust-and-safety leads and legal only; every look is logged.
+    SafetyMatchReview,
     /// The Network view: who is friends with whom and who is in which server, and friend lists on account pages.
     /// Super admins only; every look is logged.
     NetworkRead,
@@ -76,8 +79,8 @@ pub fn perms_for(role: &str) -> &'static [Perm] {
     match role {
         "SUPPORT" => &[AccountMetadataRead, AccountPiiReveal],
         "MODERATOR" => &[AccountMetadataRead, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentAction, AuditReadOwn],
-        "TS_LEAD" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentAction, CaseApprove, AuditReadTeam],
-        "LEGAL" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentExport, AuditReadAll],
+        "TS_LEAD" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentAction, CaseApprove, AuditReadTeam, SafetyMatchReview],
+        "LEGAL" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentExport, AuditReadAll, SafetyMatchReview],
         "SUPER_ADMIN" => &[AccountMetadataRead, AdminRolesManage, AuditReadAll, InstanceManage, NetworkRead],
         "AUDITOR" => &[AuditReadAll],
         _ => &[],

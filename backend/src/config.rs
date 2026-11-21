@@ -12,6 +12,8 @@ pub struct Config {
     pub deletion_grace_days: i64,
     /// Admin cases: messages shown either side of a reported one, hours an approved grant lasts, days a case stays usable.
     pub report_context_window: i64,
+    /// Days a closed report's evidence is kept (`REPORT_RETENTION_DAYS`, default 365; 0 = kept until removed by hand).
+    pub report_retention_days: i64,
     pub case_grant_hours: i64,
     pub case_expiry_days: i64,
     /// Console audit entries are kept this long (at least a year; default about seven, longer than case data).
@@ -88,6 +90,7 @@ impl Config {
             upload_dir: std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()).into(),
             deletion_grace_days: std::env::var("ACCOUNT_DELETION_GRACE_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(14i64).clamp(0, 365),
             report_context_window: std::env::var("REPORT_CONTEXT_WINDOW").ok().and_then(|v| v.parse().ok()).unwrap_or(20i64).clamp(0, 200),
+            report_retention_days: std::env::var("REPORT_RETENTION_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(365i64).clamp(0, 36500),
             case_grant_hours: std::env::var("CASE_GRANT_HOURS").ok().and_then(|v| v.parse().ok()).unwrap_or(72i64).clamp(1, 24 * 90),
             case_expiry_days: std::env::var("CASE_EXPIRY_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(30i64).clamp(1, 3650),
             server_deletion_grace_days: std::env::var("SERVER_DELETION_GRACE_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(7i64).clamp(0, 365),

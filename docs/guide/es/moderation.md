@@ -2,7 +2,7 @@
 title: Moderación y seguridad
 section: Gestionar un servidor
 summary: Mantén un buen ambiente en tu servidor con AutoMod, aislamientos temporales, baneos, reportes, protección contra raids y el registro de auditoría.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Actuar con alguien
@@ -54,6 +54,8 @@ También puedes eximir roles o canales, como un canal en el que tus moderadores 
 
 Cuando los miembros usan **Reportar mensaje** o **Reportar usuario** y marcan la casilla para avisar también a los moderadores de este servidor, el reporte llega a **Ajustes del servidor → Reportes**. Usa **Ir** para verlo en su contexto y luego **Resolver** o **Descartar**.
 
+Los reportes sobre la seguridad de un menor o sobre imágenes íntimas compartidas sin consentimiento nunca aparecen aquí. Solo llegan al equipo que gestiona tu servidor de Parley.
+
 ## El registro de auditoría
 
 El **Registro de auditoría** guarda quién cambió qué: roles, canales, baneos, expulsiones, aislamientos, mensajes eliminados y ajustes. Filtra por persona o por tipo de acción. Es el primer sitio donde mirar cuando algo cambia y nadie sabe por qué.
@@ -61,3 +63,15 @@ El **Registro de auditoría** guarda quién cambió qué: roles, canales, baneos
 ## Reportar a Parley
 
 Algunas cosas van más allá de un servidor, como las amenazas, el contenido ilegal o el spam en muchos servidores. Todos los reportes llegan a los administradores que gestionan tu servidor de Parley. Si marcas la casilla, también se envían a los moderadores de ese servidor.
+
+Para reportar, haz clic derecho en un mensaje y elige **Reportar mensaje**, o haz clic derecho en una persona y elige **Reportar usuario**. Indica qué ocurre, añade lo que pueda ayudar y elige **Enviar denuncia**.
+
+Algunos motivos se revisan primero: **Amenaza de violencia**, **Alguien podría hacerse daño**, **Imágenes íntimas compartidas sin consentimiento** y la mayoría de las opciones de **Un menor está en peligro**. Los reportes sobre la seguridad de un menor o sobre imágenes íntimas solo llegan al equipo que gestiona tu servidor de Parley, nunca a los moderadores de un servidor, por eso en ellos no se ofrece la casilla.
+
+Lo que reportas se copia en el momento en que lo envías: el mensaje, los archivos que lleve y, en un canal de servidor, lo que se dijo justo antes y después. Eliminar el mensaje después no borra la copia.
+
+> Heads up: Si encuentras imágenes o vídeos sexuales de un menor, no los guardes, no hagas capturas de pantalla ni los reenvíes, ni siquiera como prueba. Reporta el mensaje y déjalo donde está. Tu reporte conserva lo necesario.
+
+> Note: Si alguien corre peligro ahora mismo, llama primero al número de emergencias de tu zona y después reporta.
+
+Puedes enviar hasta 10 reportes por hora. Los motivos que se revisan primero tienen su propio límite, más amplio.

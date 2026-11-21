@@ -2,7 +2,7 @@
 title: Modération et sécurité
 section: Gérer un serveur
 summary: Garde ton serveur convivial avec AutoMod, les exclusions temporaires, les bannissements, les signalements, la protection anti-raid et les logs du serveur.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Gérer une personne
@@ -54,6 +54,8 @@ Tu peux aussi exempter des rôles ou des salons, comme un salon où tes modérat
 
 Quand des membres utilisent **Signaler le message** ou **Signaler l'utilisateur** et cochent la case pour prévenir aussi les modérateurs de ce serveur, le signalement arrive dans **Paramètres du serveur → Signalements**. **Aller à** pour le voir dans son contexte, puis **Résoudre** ou **Ignorer**.
 
+Les signalements concernant la sécurité d'un enfant ou des images intimes partagées sans consentement n'apparaissent jamais ici. Ils sont envoyés uniquement à l'équipe qui gère ton serveur Parley.
+
 ## Les logs du serveur
 
 Les **Logs du serveur** enregistrent qui a changé quoi : rôles, salons, bannissements, expulsions, exclusions temporaires, messages supprimés et paramètres. Filtre par personne ou par type d'action. C'est le premier endroit où regarder quand quelque chose change et que personne ne sait pourquoi.
@@ -61,3 +63,15 @@ Les **Logs du serveur** enregistrent qui a changé quoi : rôles, salons, bannis
 ## Signaler à Parley
 
 Certaines choses dépassent un seul serveur, comme les menaces, les contenus illégaux ou le spam sur de nombreux serveurs. Chaque signalement est envoyé aux admins qui gèrent ton serveur Parley. Cocher la case l'envoie aussi aux modérateurs de ce serveur.
+
+Pour signaler, fais un clic droit sur un message et choisis **Signaler le message**, ou fais un clic droit sur une personne et choisis **Signaler l'utilisateur**. Indique ce qui ne va pas, ajoute tout ce qui peut aider, puis choisis **Envoyer le signalement**.
+
+Certains motifs sont examinés en premier : **Menace de violence**, **Quelqu'un risque de se faire du mal**, **Images intimes partagées sans consentement**, et la plupart des choix sous **Un enfant est en danger**. Les signalements concernant la sécurité d'un enfant ou des images intimes sont envoyés uniquement à l'équipe qui gère ton serveur Parley, jamais aux modérateurs d'un serveur : la case n'est donc pas proposée pour eux.
+
+Ce que tu signales est copié au moment où tu l'envoies : le message, les fichiers qui y sont joints et, dans un salon de serveur, ce qui a été dit juste avant et juste après. Supprimer le message ensuite ne supprime pas la copie.
+
+> Heads up: Si tu tombes sur des images ou des vidéos à caractère sexuel d'un enfant, ne les enregistre pas, ne fais pas de capture d'écran et ne les transfère pas, même comme preuve. Signale le message et laisse-le où il est. Ton signalement conserve ce qu'il faut.
+
+> Note: Si quelqu'un est en danger en ce moment même, appelle d'abord le numéro d'urgence local, puis fais un signalement.
+
+Tu peux envoyer jusqu'à 10 signalements par heure. Les motifs examinés en premier ont leur propre limite, plus élevée.

@@ -65,6 +65,7 @@ pub mod relationships;
 pub mod reports;
 pub mod roles;
 pub mod safety;
+pub mod matching;
 pub mod search;
 pub mod sessions;
 pub mod sounds;
@@ -125,6 +126,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(widget::router())
         .merge(automod::router())
         .merge(safety::router())
+        .merge(matching::router())
         .merge(highlights::router())
         .merge(customize::router())
         .merge(templates::router())

@@ -2,7 +2,7 @@
 title: Moderazione e sicurezza
 section: Gestire un server
 summary: Mantieni il server accogliente con AutoMod, timeout, ban, segnalazioni, protezione anti-raid e registro attività.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Gestire una persona
@@ -54,6 +54,8 @@ Puoi anche escludere ruoli o canali, come un canale in cui i moderatori discuton
 
 Quando i membri usano **Segnala messaggio** o **Segnala utente** e spuntano la casella per avvisare anche i moderatori di questo server, la segnalazione arriva in **Impostazioni server → Segnalazioni**. Usa **Vai** per vederla nel contesto, poi **Risolvi** o **Ignora**.
 
+Le segnalazioni sulla sicurezza di un minore o su immagini intime condivise senza consenso non compaiono mai qui. Arrivano solo al team che gestisce il tuo server Parley.
+
 ## Il registro attività
 
 **Registro attività** registra chi ha cambiato cosa: ruoli, canali, ban, espulsioni, timeout, messaggi eliminati e impostazioni. Filtra per persona o per tipo di azione. È il primo posto dove guardare quando qualcosa cambia e nessuno sa perché.
@@ -61,3 +63,15 @@ Quando i membri usano **Segnala messaggio** o **Segnala utente** e spuntano la c
 ## Segnalare a Parley
 
 Alcune cose vanno oltre un singolo server, come minacce, contenuti illegali o spam in tanti server. Ogni segnalazione arriva agli amministratori che gestiscono il tuo server Parley. Spuntando la casella la mandi anche ai moderatori di quel server.
+
+Per segnalare, fai clic destro su un messaggio e scegli **Segnala messaggio**, oppure fai clic destro su una persona e scegli **Segnala utente**. Indica cosa non va, aggiungi tutto ciò che può aiutare e scegli **Invia segnalazione**.
+
+Alcuni motivi vengono esaminati per primi: **Minaccia di violenza**, **Qualcuno potrebbe farsi del male**, **Immagini intime condivise senza consenso** e la maggior parte delle scelte sotto **Un minore è in pericolo**. Le segnalazioni sulla sicurezza di un minore o su immagini intime arrivano solo al team che gestisce il tuo server Parley, mai ai moderatori di un server, quindi per queste la casella non viene proposta.
+
+Ciò che segnali viene copiato nel momento in cui lo invii: il messaggio, gli eventuali file allegati e, in un canale di un server, quello che è stato detto subito prima e subito dopo. Eliminare il messaggio in seguito non rimuove la copia.
+
+> Heads up: Se ti imbatti in immagini o video a sfondo sessuale di un minore, non salvarli, non fare screenshot e non inoltrarli, nemmeno come prova. Segnala il messaggio e lascialo dov'è. La tua segnalazione conserva ciò che serve.
+
+> Note: Se qualcuno è in pericolo in questo momento, chiama prima il numero di emergenza locale, poi segnala.
+
+Puoi inviare fino a 10 segnalazioni all'ora. I motivi esaminati per primi hanno un limite a parte, più alto.

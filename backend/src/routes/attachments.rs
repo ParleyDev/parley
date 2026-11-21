@@ -159,6 +159,13 @@ async fn finish_file(state: &AppState, uid: Uuid, channel_id: Uuid, id: Uuid, mu
             let _ = tokio::fs::remove_file(&path).await;
             return Err(e);
         }
+        // Known abuse material (when a hash list or matching service is set up): a match is quarantined and recorded
+        // by the check itself; the copy here is removed like any refused upload.
+        let kind = infer::get(head).map(|t| t.mime_type().to_string()).unwrap_or_else(|| declared.clone());
+        if let Err(e) = crate::routes::matching::check(state, &bytes, crate::routes::matching::Ctx { user_id: uid, surface: "attachment", channel_id: Some(channel_id), filename: &filename, content_type: &kind }).await {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(e);
+        }
     }
 
     // Trust magic bytes over the declared type for anything we'd render inline.

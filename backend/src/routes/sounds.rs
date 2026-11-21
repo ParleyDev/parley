@@ -124,6 +124,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     let emoji: String = emoji.trim().chars().take(8).collect();
     let volume = volume.clamp(0.05, 1.0);
     crate::av::check(&state, &bytes, "sound").await?;
+    crate::routes::matching::check(&state, &bytes, crate::routes::matching::Ctx { user_id: uid, surface: "sound", channel_id: None, filename: &name, content_type: &content_type }).await?;
     let sid = Uuid::new_v4();
     let dir = &state.config.upload_dir;
     tokio::fs::create_dir_all(dir).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;

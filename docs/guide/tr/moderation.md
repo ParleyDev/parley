@@ -2,7 +2,7 @@
 title: Moderasyon ve güvenlik
 section: Sunucu yönetmek
 summary: AutoMod, zaman aşımları, yasaklar, bildirimler, baskın koruması ve denetim kaydıyla sunucunu dostane tut.
-source: ede402610205
+source: 902efa01e18b
 ---
 
 ## Biriyle ilgilenmek
@@ -54,6 +54,8 @@ Rolleri veya kanalları da muaf tutabilirsin; örneğin moderatörlerin kötü k
 
 Üyeler **Mesajı Bildir** veya **Kullanıcıyı Bildir** dediğinde ve bu sunucunun moderatörlerine de haber verme kutusunu işaretlediğinde, bildirim **Sunucu Ayarları → Şikayetler** altına düşer. Bağlamında görmek için **Atla**, sonra **Çöz** ya da **Kapat**.
 
+Bir çocuğun güvenliğiyle veya rıza olmadan paylaşılan mahrem görüntülerle ilgili bildirimler burada asla görünmez. Yalnızca Parley sunucunu yöneten ekibe gider.
+
 ## Denetim kaydı
 
 **Denetim Kaydı** kimin neyi değiştirdiğini kaydeder: roller, kanallar, yasaklar, atmalar, zaman aşımları, silinen mesajlar ve ayarlar. Kişiye veya işlem türüne göre filtrele. Bir şey değiştiğinde ve kimse nedenini bilmediğinde ilk bakılacak yer burasıdır.
@@ -61,3 +63,15 @@ Rolleri veya kanalları da muaf tutabilirsin; örneğin moderatörlerin kötü k
 ## Parley'ye bildirmek
 
 Tehditler, yasa dışı içerik veya birçok sunucuya yayılan spam gibi bazı şeyler tek bir sunucuyu aşar. Her bildirim Parley sunucunu yöneten yöneticilere gider. Kutuyu işaretlemek onu o sunucunun moderatörlerine de gönderir.
+
+Bildirmek için bir mesaja sağ tıklayıp **Mesajı Bildir**'i seç ya da bir kişiye sağ tıklayıp **Kullanıcıyı Bildir**'i seç. Neyin yanlış olduğunu seç, yardımcı olabilecek her şeyi ekle ve **Bildirimi Gönder**'i seç.
+
+Bazı nedenlere önce bakılır: **Şiddet tehdidi**, **Biri kendine zarar verebilir**, **Rıza olmadan paylaşılan mahrem görüntüler** ve **Bir çocuk risk altında** altındaki seçeneklerin çoğu. Bir çocuğun güvenliğiyle veya mahrem görüntülerle ilgili bildirimler yalnızca Parley sunucunu yöneten ekibe gider, asla bir sunucunun moderatörlerine gitmez; bu yüzden bunlarda kutu sunulmaz.
+
+Bildirdiğin şey, gönderdiğin anda kopyalanır: mesaj, mesajdaki dosyalar ve bir sunucu kanalındaysa hemen öncesinde ve sonrasında söylenenler. Mesajı sonradan silmek kopyayı kaldırmaz.
+
+> Heads up: Bir çocuğun cinsel içerikli resimlerine veya videosuna rastlarsan, kanıt olarak bile olsa bunları kaydetme, ekran görüntüsünü alma ve kimseye iletme. Mesajı bildir ve olduğu yerde bırak. Bildirimin gerekeni saklar.
+
+> Note: Biri şu anda tehlikedeyse önce yerel acil durum numarasını ara, sonra bildir.
+
+Saatte en fazla 10 bildirim gönderebilirsin. Önce bakılan nedenlerin kendine ait, daha yüksek bir sınırı vardır.
