@@ -286,7 +286,34 @@ body {
 /* The card that drops in under a status bubble to reply to it. */
 @keyframes status-reply-drop { from { opacity: 0; transform: translateY(-8px) scale(.96) } to { opacity: 1; transform: none } }
 .status-reply-card { animation: status-reply-drop .18s cubic-bezier(.2,.9,.3,1.2); transform-origin: 30% 0 }
-@media (prefers-reduced-motion: reduce) { .status-reply-card { animation: none } }
+/* A custom status's thought bubble (ProfilePopout), drawn the way Discord draws it: the two puffs are circles that take
+   the bubble's own background, border and shadow; the padded inner box (same background, painted over them) covers the
+   lower half of the big one, so it reads as a bump in the bubble's top edge with one small puff beyond it. */
+.status-bubble { background: var(--sb-bg); border: 1px solid var(--sb-border); border-radius: 12px; box-shadow: 0 1px 4px rgb(0 0 0 / .16); box-sizing: border-box; min-width: 42px; overflow: hidden }
+.status-bubble::before, .status-bubble::after { content: ""; position: absolute; box-sizing: border-box; background: inherit; border: inherit; border-radius: 50%; box-shadow: inherit }
+.status-bubble::before { width: 20px; height: 20px; inset-inline-start: 10px; top: -8px }
+.status-bubble::after { width: 10px; height: 10px; inset-inline-start: -3px; top: -15px }
+.status-bubble-inner { position: relative; display: block; background: var(--sb-bg); padding: 8px 12px; word-break: break-word }
+/* Its Send Reaction / Reply toolbar, as Discord does it (one pill, the icon growing a little under the pointer): it fades in and rise 2px after the pointer has rested on the
+   bubble for .45s (so passing over it doesn't flash them), and can't be clicked until they're in. Always up on touch
+   screens and while replying or reacting. */
+@keyframes status-actions-in { 0% { opacity: 0; pointer-events: none; top: -14px } 99% { pointer-events: none } 100% { opacity: 1; pointer-events: auto; top: -16px } }
+.status-actions { position: absolute; top: -16px; inset-inline-end: min(8px, 50% - 29px); display: inline-flex; gap: 2px; padding: 2px; background: var(--sb-bg); border: 1px solid var(--sb-border); border-radius: 100px; box-shadow: 0 1px 4px rgb(0 0 0 / .16); opacity: 0; pointer-events: none; transition: box-shadow .1s ease-out }
+.status-action { display: flex; align-items: center; justify-content: center; padding: 4px; color: #b5bac1 }
+.status-action:first-child { border-radius: 100px 6px 6px 100px; padding-inline-start: 6px }
+.status-action:last-child { border-radius: 6px 100px 100px 6px; padding-inline-end: 6px }
+.status-action:hover { background: rgb(255 255 255 / .08); color: #fff }
+.status-action:hover svg { transform: scale(1.1) }
+.status-action:active { background: rgb(255 255 255 / .12) }
+.status-action:active svg { transform: scale(1) }
+[data-custom-status-wrap]:hover .status-actions, [data-custom-status-wrap]:focus-within .status-actions { animation: status-actions-in .15s ease .45s forwards }
+.status-actions.shown { animation: none; opacity: 1; pointer-events: auto }
+.status-action svg { transition: transform .4s cubic-bezier(.16, 1, .3, 1) }
+@media (hover: none) { .status-actions { animation: none !important; opacity: 1; pointer-events: auto } }
+@media (prefers-reduced-motion: reduce) { [data-custom-status-wrap]:hover .status-actions, [data-custom-status-wrap]:focus-within .status-actions { animation-duration: 0s } }
+@keyframes status-dim-in { from { opacity: 0 } }
+.status-dim { animation: status-dim-in .15s ease-out }
+@media (prefers-reduced-motion: reduce) { .status-reply-card, .status-dim { animation: none } }
 .fade-in { animation: fade-in .15s ease-out both; }
 @keyframes call-react { 0% { opacity: 0; transform: translateY(0) scale(.6) } 15% { opacity: 1; transform: translateY(-20px) scale(1.1) } 100% { opacity: 0; transform: translateY(-160px) scale(1) } }
 .call-react { animation: call-react 2.5s ease-out forwards }

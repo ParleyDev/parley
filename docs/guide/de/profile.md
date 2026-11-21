@@ -2,7 +2,7 @@
 title: Dein Profil
 section: Du
 summary: Dein Bild, Banner, Namensstil, Namensschild, Dekorationen und Effekte, dein Status und ein eigener Look pro Server.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Dein Profil ist das, was andere sehen, wenn sie auf deinen Namen klicken. Öffne den Editor über dein Bild in der Ecke unten links und dann **Profil bearbeiten**.
@@ -64,10 +64,10 @@ Klicke auf dein Bild in der Ecke unten links:
 - **Online**, **Abwesend**, **Nicht stören** (keine Benachrichtigungs-Pop-ups oder Töne) oder **Unsichtbar** (du wirkst offline, kannst aber alles nutzen). Du kannst einen Status für eine Weile wählen, danach schaltet Parley zurück.
 - **Benutzerdefinierten Status festlegen**: ein Emoji und bis zu 128 Zeichen, die nach einer festgelegten Zeit verschwinden oder bleiben, bis du sie löschst.
 
-Dein benutzerdefinierter Status erscheint vollständig in einer Gedankenblase neben deinem Bild auf deiner Profilkarte. Auf der Karte von jemand anderem fährst du mit der Maus über die Blase, um darauf zu antworten:
+Dein benutzerdefinierter Status erscheint in einer Gedankenblase neben deinem Bild auf deiner Profilkarte. Von einem langen Status siehst du die ersten zwei Zeilen; fahr mit der Maus über die Blase, um alles zu lesen. Auf der Karte von jemand anderem fährst du mit der Maus über die Blase, um darauf zu antworten:
 
 - **Reaktion senden** öffnet die Emoji-Auswahl; das gewählte Emoji wird an die Person geschickt.
-- **Antworten** öffnet ein Feld unter dem Status. Tippe deine Antwort und drück <kbd>Enter</kbd>, oder drück <kbd>Esc</kbd>, um es zu schließen.
+- **Antworten** dunkelt die Karte ab und öffnet ein Feld unter dem Status. Tippe deine Antwort und drück <kbd>Enter</kbd>, oder drück <kbd>Esc</kbd>, um es zu schließen.
 
 Beides landet in deinen Direktnachrichten mit der Person, unter einer Zeile „Hat auf den Status von *Name* geantwortet“ bzw. „Hat auf den Status von *Name* reagiert“, die den Status so zitiert, wie er damals war. Wenn jemand auf deinen antwortet, steht dort „deinen Status“.
 

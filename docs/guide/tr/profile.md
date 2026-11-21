@@ -2,7 +2,7 @@
 title: Profilin
 section: Sen
 summary: Resmin, banner'ın, ad stilin, ad plakan, süslemelerin ve efektlerin, durumun ve her sunucu için farklı bir görünüm.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Profilin, insanların adına tıkladığında gördükleri şeydir. Düzenleyiciyi sol alt köşedeki resminden, ardından **Profili Düzenle** ile aç.
@@ -64,10 +64,10 @@ Sol alt köşedeki resmine tıkla:
 - **Çevrimiçi**, **Boşta**, **Rahatsız Etmeyin** (bildirim pencereleri veya sesleri yok) ya da **Görünmez** (çevrimdışı görünürsün ama her şeyi kullanabilirsin). Birini bir süreliğine seçebilirsin; süre bitince Parley geri döner.
 - **Özel durum ayarla**: bir emoji ve en fazla 128 karakter; belirlenen bir süre sonra temizlenir ya da sen temizleyene kadar kalır.
 
-Özel durumun, profil kartında resminin yanındaki bir düşünce balonunda tam olarak gösterilir. Başka birinin kartında yanıtlamak için balonunun üzerine gel:
+Özel durumun, profil kartında resminin yanındaki bir düşünce balonunda gösterilir. Uzun bir durumun ilk iki satırı görünür; tamamını okumak için balonun üzerine gel. Başka birinin kartında yanıtlamak için balonunun üzerine gel:
 
 - **Tepki gönder** emoji panelini açar; seçtiğin emoji ona gönderilir.
-- **Yanıtla** durumunun altında bir kutu açar. Yanıtını yaz ve <kbd>Enter</kbd>'a bas ya da kapatmak için <kbd>Esc</kbd>'ye bas.
+- **Yanıtla** kartı karartır ve durumunun altında bir kutu açar. Yanıtını yaz ve <kbd>Enter</kbd>'a bas ya da kapatmak için <kbd>Esc</kbd>'ye bas.
 
 İkisi de onunla olan doğrudan mesajlarına, durumu o anki haliyle alıntılayan "*ad* adlı kişinin durumunu yanıtladı" veya "*ad* adlı kişinin durumuna tepki verdi" satırının altında gelir. Biri seninkini yanıtladığında "durumun" yazar.
 

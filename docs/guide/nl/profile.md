@@ -2,7 +2,7 @@
 title: Je profiel
 section: Jij
 summary: Je profielfoto, banner, naamstijl, naamplaatje, decoraties en effecten, status, en een andere look per server.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Je profiel is wat mensen zien als ze op je naam klikken. Open de editor via je profielfoto in de hoek linksonder en dan **Profiel bewerken**.
@@ -64,10 +64,10 @@ Klik op je profielfoto in de hoek linksonder:
 - **Online**, **Afwezig**, **Niet storen** (geen pop-upmeldingen of geluiden) of **Onzichtbaar** (je lijkt offline, maar kunt nog alles gebruiken). Je kunt er een kiezen voor een tijdje, en daarna schakelt Parley terug.
 - **Aangepaste status instellen**: een emoji en tot 128 tekens, gewist na een ingestelde tijd of bewaard tot je hem zelf wist.
 
-Je aangepaste status staat volledig in een denkwolkje naast je profielfoto op je profielkaart. Op de kaart van iemand anders ga je met de muis over diens wolkje om erop te reageren:
+Je aangepaste status staat in een denkwolkje naast je profielfoto op je profielkaart. Van een lange status zie je de eerste twee regels; ga met de muis over het wolkje om alles te lezen. Op de kaart van iemand anders ga je met de muis over diens wolkje om erop te reageren:
 
 - **Reactie sturen** opent het emojipaneel; de emoji die je kiest, wordt naar diegene gestuurd.
-- **Beantwoorden** opent een vak onder de status. Typ je antwoord en druk op <kbd>Enter</kbd>, of druk op <kbd>Esc</kbd> om het te sluiten.
+- **Beantwoorden** maakt de kaart donkerder en opent een vak onder de status. Typ je antwoord en druk op <kbd>Enter</kbd>, of druk op <kbd>Esc</kbd> om het te sluiten.
 
 Beide komen binnen in je privéberichten met die persoon, onder een regel "Antwoordde op de status van *naam*" of "Reageerde op de status van *naam*", die de status citeert zoals hij toen was. Als iemand op die van jou reageert, staat er "je status".
 

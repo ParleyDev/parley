@@ -2,7 +2,7 @@
 title: Ton profil
 section: Toi
 summary: Ta photo, ta bannière, le style de ton nom, ta plaque de nom, tes décorations et effets, ton statut, et un look différent par serveur.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Ton profil, c'est ce que les gens voient quand ils cliquent sur ton nom. Ouvre l'éditeur depuis ta photo en bas à gauche, puis **Modifier le profil**.
@@ -64,10 +64,10 @@ Clique sur ta photo en bas à gauche :
 - **En ligne**, **Inactif**, **Ne pas déranger** (pas d'alertes de notification ni de sons) ou **Invisible** (tu apparais hors ligne, mais tu peux tout utiliser). Tu peux en choisir un pour un moment, et Parley revient ensuite au précédent.
 - **Définir un statut personnalisé** : un émoji et jusqu'à 128 caractères, effacé après un délai choisi ou gardé jusqu'à ce que tu l'effaces.
 
-Ton statut personnalisé s'affiche en entier dans une bulle de pensée à côté de ta photo sur ta carte de profil. Sur la carte de quelqu'un d'autre, survole sa bulle pour y répondre :
+Ton statut personnalisé s'affiche dans une bulle de pensée à côté de ta photo sur ta carte de profil. Un statut long montre ses deux premières lignes ; survole la bulle pour le lire en entier. Sur la carte de quelqu'un d'autre, survole sa bulle pour y répondre :
 
 - **Envoyer une réaction** ouvre le panneau d'émojis ; l'émoji choisi lui est envoyé.
-- **Répondre** ouvre une zone sous son statut. Tape ta réponse et appuie sur <kbd>Enter</kbd>, ou appuie sur <kbd>Esc</kbd> pour la fermer.
+- **Répondre** assombrit la carte et ouvre une zone sous son statut. Tape ta réponse et appuie sur <kbd>Enter</kbd>, ou appuie sur <kbd>Esc</kbd> pour la fermer.
 
 Les deux arrivent dans tes messages privés avec cette personne, sous une ligne « A répondu au statut de *nom* » ou « A réagi au statut de *nom* » qui cite le statut tel qu'il était alors. Quand quelqu'un répond au tien, il est écrit « ton statut ».
 

@@ -2,7 +2,7 @@
 title: Il tuo profilo
 section: Tu
 summary: La tua immagine, il banner, lo stile del nome, la targhetta, le decorazioni e gli effetti, lo stato e un aspetto diverso per ogni server.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Il tuo profilo è quello che vedono le persone quando fanno clic sul tuo nome. Apri l'editor dalla tua immagine nell'angolo in basso a sinistra, poi scegli **Modifica profilo**.
@@ -64,10 +64,10 @@ Fai clic sulla tua immagine nell'angolo in basso a sinistra:
 - **Online**, **Inattivo**, **Non disturbare** (niente notifiche a comparsa né suoni) o **Invisibile** (sembri offline, ma puoi usare tutto). Puoi sceglierne uno per un po' di tempo, e poi Parley torna a quello di prima.
 - **Imposta uno stato personalizzato**: un'emoji e fino a 128 caratteri, che si cancella dopo un certo tempo o resta finché non lo togli tu.
 
-Il tuo stato personalizzato compare per intero in una nuvoletta accanto alla tua immagine sulla scheda del profilo. Sulla scheda di qualcun altro, passa il mouse sulla sua nuvoletta per rispondere:
+Il tuo stato personalizzato compare in una nuvoletta accanto alla tua immagine sulla scheda del profilo. Di uno stato lungo si vedono le prime due righe; passa il mouse sulla nuvoletta per leggerlo tutto. Sulla scheda di qualcun altro, passa il mouse sulla sua nuvoletta per rispondere:
 
 - **Invia reazione** apre il pannello delle emoji; l'emoji che scegli gli viene inviata.
-- **Rispondi** apre una casella sotto il suo stato. Scrivi la risposta e premi <kbd>Enter</kbd>, oppure premi <kbd>Esc</kbd> per chiuderla.
+- **Rispondi** scurisce la scheda e apre una casella sotto il suo stato. Scrivi la risposta e premi <kbd>Enter</kbd>, oppure premi <kbd>Esc</kbd> per chiuderla.
 
 Entrambe arrivano nei vostri messaggi diretti, sotto una riga "Ha risposto allo stato di *nome*" o "Ha reagito allo stato di *nome*" che cita lo stato com'era in quel momento. Quando qualcuno risponde al tuo, la riga dice "al tuo stato".
 

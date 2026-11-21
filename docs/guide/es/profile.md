@@ -2,7 +2,7 @@
 title: Tu perfil
 section: Tú
 summary: Tu foto, tu banner, el estilo de tu nombre, la placa de nombre, las decoraciones y los efectos, tu estado y un aspecto distinto en cada servidor.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Tu perfil es lo que ve la gente cuando hace clic en tu nombre. Abre el editor desde tu foto en la esquina inferior izquierda y luego **Editar perfil**.
@@ -64,10 +64,10 @@ Haz clic en tu foto en la esquina inferior izquierda:
 - **En línea**, **Ausente**, **No molestar** (sin avisos ni sonidos de notificación) o **Invisible** (parece que no estás conectado, pero puedes usarlo todo). Puedes elegir uno durante un rato, y después Parley vuelve al anterior.
 - **Establecer un estado personalizado**: un emoji y hasta 128 caracteres, que se borra pasado un tiempo o se queda hasta que lo borres tú.
 
-Tu estado personalizado se muestra completo en un bocadillo de pensamiento junto a tu foto en tu tarjeta de perfil. En la tarjeta de otra persona, pasa el cursor sobre su bocadillo para responder:
+Tu estado personalizado se muestra en un bocadillo de pensamiento junto a tu foto en tu tarjeta de perfil. De uno largo se ven las dos primeras líneas; pasa el cursor sobre el bocadillo para leerlo entero. En la tarjeta de otra persona, pasa el cursor sobre su bocadillo para responder:
 
 - **Enviar reacción** abre el panel de emoji; el emoji que elijas se le envía.
-- **Responder** abre un cuadro bajo su estado. Escribe tu respuesta y pulsa <kbd>Enter</kbd>, o pulsa <kbd>Esc</kbd> para cerrarlo.
+- **Responder** oscurece la tarjeta y abre un cuadro bajo su estado. Escribe tu respuesta y pulsa <kbd>Enter</kbd>, o pulsa <kbd>Esc</kbd> para cerrarlo.
 
 Las dos cosas llegan a vuestros mensajes directos, bajo una línea "Respondió al estado de *nombre*" o "Reaccionó al estado de *nombre*" que cita el estado tal como era entonces. Cuando alguien responde al tuyo, pone "tu estado".
 

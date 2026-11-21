@@ -8,7 +8,9 @@ import { WEB, reg, call, callS, ok, openDms, finish } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('roro'), c = await reg('cleo')
 await openDms(a, b, c)
 const STATUS = 'i js called my 2 year old brother a fart knocker and now he will not stop saying it at the dinner table :sob:'
-await call(b.token, 'PATCH', '/users/@me', { custom_status: STATUS })
+// An animated name and a friend (the badge and nickname pencil in the name row): neither may show through the bubble.
+await call(b.token, 'PATCH', '/users/@me', { custom_status: STATUS, name_style: { font: 'default', effect: 'wave', colors: ['#6d5dfc', '#f04172'] } })
+await call(a.token, 'POST', '/users/@me/relationships', { user_id: b.user.id }); await call(b.token, 'PUT', `/users/@me/relationships/${a.user.id}`)
 const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
 await call(b.token, 'POST', `/channels/${dm.id}/messages`, { content: 'hi' })
 
@@ -32,26 +34,34 @@ await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector('[data-msg
 
 console.log('-- popout')
 await p.locator('[data-msg-avatar]').first().click(); await p.waitForSelector('[data-profile-popout] [data-custom-status]')
-const bubble = await p.locator('[data-profile-popout] [data-custom-status]').evaluate((e) => ({ text: e.textContent + [...e.querySelectorAll('img[alt]')].map((i) => i.alt).join(''), sw: e.scrollWidth, cw: e.clientWidth, sh: e.scrollHeight, ch: e.clientHeight, h: e.getBoundingClientRect().height }))
-ok('the whole status shows, wrapped over several lines', bubble.sw <= bubble.cw && bubble.sh <= bubble.ch + 1 && bubble.h > 40 && bubble.text.includes('dinner table') && bubble.text.includes('😭'), JSON.stringify(bubble))
+const bubbleBox = () => p.locator('[data-profile-popout] [data-custom-status]').evaluate((e) => ({ text: e.textContent + [...e.querySelectorAll('img[alt]')].map((i) => i.alt).join(''), sw: e.scrollWidth, cw: e.clientWidth, sh: e.scrollHeight, ch: e.clientHeight, h: e.getBoundingClientRect().height }))
+const collapsed = await bubbleBox()
+ok('a long status shows two lines, the rest cut off', collapsed.h < 52 && collapsed.sh > collapsed.ch + 1, JSON.stringify(collapsed))
+await p.hover('[data-profile-popout] [data-custom-status]'); await p.waitForTimeout(150)
+const bubble = await bubbleBox()
+ok('and all of it, wrapped, on hover', bubble.sw <= bubble.cw && bubble.sh <= bubble.ch + 1 && bubble.h > 52 && bubble.text.includes('dinner table') && bubble.text.includes('😭'), JSON.stringify(bubble))
+await p.mouse.move(5, 5); await p.waitForTimeout(150)
 const opacity = () => p.locator('[data-profile-popout] [data-status-actions]').evaluate((e) => getComputedStyle(e).opacity)
 ok('its actions stay hidden until hovered', (await opacity()) === '0')
-await p.hover('[data-profile-popout] [data-custom-status]'); await p.waitForTimeout(250)
-ok('and show on hover', (await opacity()) === '1')
+await p.hover('[data-profile-popout] [data-custom-status]'); await p.waitForTimeout(150)
+ok('not straight away (passing over the bubble does not flash them)', Number(await opacity()) < 0.5)
+await p.waitForTimeout(600)
+ok('and show once the pointer rests on it', (await opacity()) === '1')
 await p.click('[data-profile-popout] [data-status-react]'); await p.waitForSelector('[data-emoji-search]')
 await p.fill('[data-emoji-search]', 'fire'); await p.waitForTimeout(150); await p.click('[data-emoji-btn=":fire:"]')
 await p.waitForTimeout(600)
 const sent = (await call(a.token, 'GET', `/channels/${dm.id}/messages?limit=5`)).find((m) => m.content === '🔥')
 ok('Send Reaction sends the emoji as a reaction to the status', sent?.status_reply?.reaction === true && sent.status_reply.text === STATUS, JSON.stringify(sent))
 
-ok('the bubble sits beside the avatar, from just under the banner down', await p.locator('[data-profile-popout] [data-custom-status-wrap]').evaluate((e) => { const banner = e.parentElement.getBoundingClientRect(), r = e.getBoundingClientRect(); return r.top >= banner.bottom - 8 && r.top <= banner.bottom }))
+ok('the bubble sits beside the avatar, from just under the banner down', await p.locator('[data-profile-popout] [data-custom-status-wrap]').evaluate((e) => { const banner = e.closest('[data-profile-popout]').querySelector('[data-profile-banner]').getBoundingClientRect(), r = e.getBoundingClientRect(); return r.top >= banner.bottom - 8 && r.top <= banner.bottom }))
 await p.hover('[data-profile-popout] [data-custom-status]'); await p.click('[data-profile-popout] [data-status-reply]')
 ok('Reply drops a card in under the bubble', await p.locator('[data-status-reply-card]').isVisible())
+ok('and dims the profile card behind it', await p.locator('[data-profile-popout] [data-status-dim]').evaluate((d) => { const card = d.closest('[data-profile-card]').getBoundingClientRect(), r = d.getBoundingClientRect(), under = document.elementFromPoint(card.left + 10, card.bottom - 10); return Math.abs(r.width - card.width) <= 3 && Math.abs(r.height - card.height) <= 3 && under === d }))
 ok('with the cursor in its box', await p.locator('[data-status-reply-input]').evaluate((e) => e === document.activeElement && e.placeholder === "Reply to Roro's status"))
 await p.waitForTimeout(250)
 ok('the buttons stay up while replying', (await opacity()) === '1')
 await p.keyboard.press('Escape'); await p.waitForTimeout(150)
-ok('Escape closes the card but not the popout', (await p.locator('[data-status-reply-card]').count()) === 0 && (await p.locator('[data-profile-popout]').count()) === 1)
+ok('Escape closes the card but not the popout', (await p.locator('[data-status-reply-card]').count()) === 0 && (await p.locator('[data-status-dim]').count()) === 0 && (await p.locator('[data-profile-popout]').count()) === 1)
 await p.hover('[data-profile-popout] [data-custom-status]'); await p.click('[data-profile-popout] [data-status-reply]')
 await p.mouse.click(5, 5); await p.waitForTimeout(150)
 ok('so does a click outside', (await p.locator('[data-status-reply-card]').count()) === 0)
@@ -64,6 +74,29 @@ await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector('[data-sta
 const quote = p.locator('[data-msg-id]', { hasText: 'oop' }).locator('[data-status-reply-quote="reply"]')
 ok('the reply shows "Replied to Roro\'s status" with the status above the message', /Replied to Roro's status/.test(await quote.textContent()) && (await quote.textContent()).includes('dinner table'), await quote.textContent())
 ok('a reaction shows "Reacted to"', /Reacted to Roro's status/.test(await p.locator('[data-status-reply-quote="reaction"]').first().textContent()))
+
+console.log('-- overlap')
+// A short status puts the reply card level with the name row (an animated name, the friend badge and the nickname
+// pencil).
+await call(b.token, 'PATCH', '/users/@me', { custom_status: "I'm here and that's ok." })
+const o = await page(a)
+await o.goto(`${WEB}/channels/@me/${dm.id}`); await o.waitForSelector('[data-msg-avatar]')
+await o.locator('[data-msg-avatar]').first().click(); await o.waitForSelector('[data-profile-popout] [data-custom-status]')
+await o.hover('[data-profile-popout] [data-custom-status]'); await o.click('[data-profile-popout] [data-status-reply]'); await o.waitForTimeout(300)
+// Nothing on the card (name row, badges, pencil, the animated name's letters) shows on top of the bubble or the card.
+const covered = await o.locator('[data-profile-popout] [data-custom-status-wrap]').evaluate((wrap) => {
+  const out = []
+  for (const el of [wrap.querySelector('[data-custom-status]'), wrap.querySelector('[data-status-reply-card]')]) {
+    const r = el.getBoundingClientRect()
+    for (let i = 1; i < 24; i++) for (let j = 1; j < 8; j++) {
+      const x = r.left + (r.width * i) / 24, y = r.top + (r.height * j) / 8, hit = document.elementFromPoint(x, y)
+      if (hit && !wrap.contains(hit)) out.push(`${hit.tagName}.${String(hit.className).slice(0, 40)}@${Math.round(x)},${Math.round(y)}`)
+    }
+  }
+  return out
+})
+ok('nothing on the card shows over the bubble or the reply card', covered.length === 0, covered.slice(0, 5).join(' | '))
+await o.close()
 
 console.log('-- the owner')
 await call(b.token, 'PATCH', '/users/@me', { custom_status: 'new status' })

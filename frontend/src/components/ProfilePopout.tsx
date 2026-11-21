@@ -230,7 +230,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const contents = (
     <>
       {/* Banner with overlaid buttons */}
-      <div className={`relative isolate ${full ? 'h-[140px] shrink-0 rounded-t-xl' : 'h-[105px] rounded-t-lg'} bg-cover bg-center`} style={user.banner_url ? { backgroundImage: bgUrl(user.banner_url) } : { background: gradient }}>
+      <div data-profile-banner className={`relative isolate ${full ? 'h-[140px] shrink-0 rounded-t-xl' : 'h-[105px] rounded-t-lg'} bg-cover bg-center`} style={user.banner_url ? { backgroundImage: bgUrl(user.banner_url) } : { background: gradient }}>
         <CropLayer url={user.banner_url} />
         {!full && <div className="absolute right-3 top-3 flex gap-2">
           {full && !isMe && rel !== 'blocked' && (
@@ -250,24 +250,6 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
           </div>
         </div>}
-        {user.custom_status && (
-          // A thought bubble beside the avatar, from just under the banner's edge down, with two puffs rising to the
-          // avatar. Someone else's has Send Reaction and Reply on hover (always shown on touch screens, and kept while
-          // replying): Reply drops a card in under the bubble, Send Reaction opens the emoji panel.
-          <div ref={statusRef} className={`group/status absolute z-10 ${full ? 'left-[164px] max-w-[280px]' : 'left-[112px] max-w-[176px]'} top-[calc(100%-6px)]`} data-custom-status-wrap>
-            <span aria-hidden className="absolute -left-[6px] -top-[5px] h-[11px] w-[11px] rounded-full shadow-lg" style={{ background: themed ? '#1a1527' : surface }} />
-            <span aria-hidden className="absolute -left-[13px] -top-[13px] h-[6px] w-[6px] rounded-full shadow-lg" style={{ background: themed ? '#1a1527' : surface }} />
-            <div className="relative rounded-2xl px-3 py-1.5 text-sm leading-[18px] shadow-lg break-words whitespace-pre-wrap line-clamp-6" style={{ background: themed ? '#1a1527' : surface }} data-custom-status title={user.custom_status}><StatusEmojiText text={user.custom_status} /></div>
-            {!isMe && rel !== 'blocked' && !user.bot && (
-              <div className={`absolute -top-4 right-1.5 flex gap-1 transition-opacity group-hover/status:opacity-100 group-focus-within/status:opacity-100 [@media(hover:none)]:opacity-100 ${statusReply || statusEmoji ? 'opacity-100' : 'opacity-0'}`} data-status-actions>
-                <button type="button" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setStatusEmoji((cur) => (cur ? null : r)) }} title={t('Send Reaction')} aria-label={t('Send Reaction')} className="h-7 w-7 rounded-full bg-[#111214] text-[#dbdee1] shadow-lg flex items-center justify-center hover:text-white" data-status-react><Smile size={16} /></button>
-                <button type="button" onClick={() => { setStatusEmoji(null); setStatusReply((o) => !o) }} title={t('Reply')} aria-label={t('Reply')} aria-expanded={statusReply} className="h-7 w-7 rounded-full bg-[#111214] text-[#dbdee1] shadow-lg flex items-center justify-center hover:text-white" data-status-reply><Reply size={16} /></button>
-              </div>
-            )}
-            {statusEmoji && <ExpressionPicker tabs={['emoji']} anchor={statusEmoji} onClose={() => setStatusEmoji(null)} onEmoji={reactToStatus} />}
-            {statusReply && <StatusReplyCard name={shownName(user, member, friendNote?.nickname)} full={full} within={statusRef} onSend={replyToStatus} onClose={() => setStatusReply(false)} />}
-          </div>
-        )}
       </div>
       {/* Avatar */}
       <div className={full ? 'px-5 -mt-[64px]' : 'px-4 -mt-[42px]'}>
@@ -421,6 +403,35 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {rel === 'blocked' && <div className="flex items-center gap-2 text-sm text-text-2"><UserX size={16} /> {t('You blocked this user.')}</div>}
       </div>
       </div>
+        {user.custom_status && (() => {
+          // A thought bubble beside the avatar, drawn the way Discord draws it (.status-bubble in index.css): a raised
+          // surface a step lighter than the card with a hairline edge, a bump in its top edge by the left corner and one
+          // small puff beyond it towards the avatar, and two lines at most, up to eight on hover (and while replying or
+          // reacting). It comes last in the card, positioned against it rather than inside the banner (its own stacking
+          // context), so the name row, badges and animated names stay under it and its reply card. Someone else's has
+          // Send Reaction and Reply on hover (always shown on touch screens, and kept while replying): Reply dims the
+          // card and drops a card in under the bubble, Send Reaction opens the emoji panel.
+          const bubble = { '--sb-bg': `color-mix(in srgb, ${themed ? '#1a1527' : surface}, white 9%)`, '--sb-border': themed ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)' } as React.CSSProperties
+          const open = statusReply || !!statusEmoji
+          return <>
+            {statusReply && <div aria-hidden className="status-dim absolute inset-0 z-[9] rounded-[inherit] bg-black/60" data-status-dim />}
+            <div ref={statusRef} className={`group/status absolute z-10 ${full ? 'left-[164px] top-[132px]' : panel ? 'left-[109px] top-[98px]' : 'left-[105px] top-[98px]'}`} style={bubble} data-custom-status-wrap>
+              <div className={`status-bubble ${full ? 'max-w-[280px]' : 'max-w-[181px]'}`} data-custom-status-bubble>
+                <span className="status-bubble-inner">
+                  <span className={`break-words whitespace-pre-wrap text-sm leading-[18px] text-[#dbdee1] ${open ? 'line-clamp-8' : 'line-clamp-2 group-hover/status:line-clamp-8 group-focus-within/status:line-clamp-8'}`} data-custom-status title={user.custom_status}><StatusEmojiText text={user.custom_status} /></span>
+                </span>
+              </div>
+              {!isMe && rel !== 'blocked' && !user.bot && (
+                <div className={`status-actions ${open ? 'shown' : ''}`} data-status-actions>
+                  <button type="button" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setStatusEmoji((cur) => (cur ? null : r)) }} title={t('Send Reaction')} aria-label={t('Send Reaction')} className="status-action" data-status-react><Smile size={16} /></button>
+                  <button type="button" onClick={() => { setStatusEmoji(null); setStatusReply((o) => !o) }} title={t('Reply')} aria-label={t('Reply')} aria-expanded={statusReply} className="status-action" data-status-reply><Reply size={16} /></button>
+                </div>
+              )}
+              {statusEmoji && <ExpressionPicker tabs={['emoji']} anchor={statusEmoji} onClose={() => setStatusEmoji(null)} onEmoji={reactToStatus} />}
+              {statusReply && <StatusReplyCard name={shownName(user, member, friendNote?.nickname)} full={full} within={statusRef} onSend={replyToStatus} onClose={() => setStatusReply(false)} />}
+            </div>
+          </>
+        })()}
     </>
   )
   if (sheet) return (
@@ -440,7 +451,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         <ProfileEffect id={user.profile_effect} />
         {/* Bar room only when the card overflows (not the app's always-reserved gutter): the banner scrolls with the card
             and has to reach both edges. */}
-        <div className="scroller-thin-fade flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain" style={{ scrollbarGutter: 'auto' }} data-profile-scroll>{contents}</div>
+        <div className="scroller-thin-fade relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain" style={{ scrollbarGutter: 'auto' }} data-profile-scroll>{contents}</div>
         <div className="relative z-[7] shrink-0 p-4" data-profile-footer>
           <button onClick={() => fullProfile()} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#383a40' }} data-view-full-profile>{t('View Full Profile')}</button>
         </div>

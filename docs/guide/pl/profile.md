@@ -2,7 +2,7 @@
 title: Twój profil
 section: Ty
 summary: Zdjęcie, baner, styl nazwy, tabliczka, dekoracje i efekty, status oraz inny wygląd na każdym serwerze.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Profil to to, co ludzie widzą po kliknięciu twojej nazwy. Otwórz edytor, klikając swoje zdjęcie w lewym dolnym rogu, a potem **Edytuj profil**.
@@ -64,10 +64,10 @@ Kliknij swoje zdjęcie w lewym dolnym rogu:
 - **Online**, **Zaraz wracam**, **Nie przeszkadzać** (bez wyskakujących powiadomień i dźwięków) lub **Niewidoczny** (wyglądasz na offline, ale możesz ze wszystkiego korzystać). Możesz wybrać status na jakiś czas, a potem Parley przełączy go z powrotem.
 - **Ustaw własny status**: emoji i do 128 znaków, czyszczony po ustalonym czasie albo trzymany, dopóki go nie usuniesz.
 
-Twój własny status jest widoczny w całości w dymku obok twojego zdjęcia na karcie profilu. Na czyjejś karcie najedź na dymek, aby na niego odpowiedzieć:
+Twój własny status jest widoczny w dymku obok twojego zdjęcia na karcie profilu. Z długiego statusu widać dwie pierwsze linijki; najedź na dymek, aby przeczytać całość. Na czyjejś karcie najedź na dymek, aby na niego odpowiedzieć:
 
 - **Wyślij reakcję** otwiera panel emoji; wybrane emoji trafi do tej osoby.
-- **Odpowiedz** otwiera pole pod statusem. Wpisz odpowiedź i naciśnij <kbd>Enter</kbd> albo naciśnij <kbd>Esc</kbd>, aby je zamknąć.
+- **Odpowiedz** przyciemnia kartę i otwiera pole pod statusem. Wpisz odpowiedź i naciśnij <kbd>Enter</kbd> albo naciśnij <kbd>Esc</kbd>, aby je zamknąć.
 
 Obie trafiają do waszych wiadomości prywatnych, pod linijką „Odpowiedziano na status użytkownika *nazwa*” lub „Zareagowano na status użytkownika *nazwa*”, która cytuje status w ówczesnej postaci. Gdy ktoś odpowie na twój status, będzie tam „Odpowiedziano na twój status”.
 

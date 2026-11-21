@@ -2,7 +2,7 @@
 title: Seu perfil
 section: Você
 summary: Sua foto, banner, estilo do nome, placa de identificação, decorações e efeitos, status e um visual diferente em cada servidor.
-source: f32d7b8d7cf6
+source: 45c7a2e66457
 ---
 
 Seu perfil é o que as pessoas veem quando clicam no seu nome. Abra o editor pela sua foto no canto inferior esquerdo e depois em **Editar perfil**.
@@ -64,10 +64,10 @@ Clique na sua foto no canto inferior esquerdo:
 - **Online**, **Ausente**, **Não perturbe** (sem avisos nem sons de notificação) ou **Invisível** (você parece offline, mas pode usar tudo normalmente). Você pode escolher um por um tempo, e o Parley volta ao anterior depois.
 - **Definir um status personalizado**: um emoji e até 128 caracteres, que somem depois de um tempo definido ou ficam até você limpar.
 
-Seu status personalizado aparece inteiro em um balão de pensamento ao lado da sua foto no cartão de perfil. No cartão de outra pessoa, passe o mouse sobre o balão dela para responder:
+Seu status personalizado aparece em um balão de pensamento ao lado da sua foto no cartão de perfil. De um status longo aparecem as duas primeiras linhas; passe o mouse sobre o balão para ler tudo. No cartão de outra pessoa, passe o mouse sobre o balão dela para responder:
 
 - **Enviar reação** abre o painel de emojis; o emoji que você escolher é enviado para a pessoa.
-- **Responder** abre uma caixa embaixo do status dela. Digite sua resposta e pressione <kbd>Enter</kbd>, ou pressione <kbd>Esc</kbd> para fechar.
+- **Responder** escurece o cartão e abre uma caixa embaixo do status dela. Digite sua resposta e pressione <kbd>Enter</kbd>, ou pressione <kbd>Esc</kbd> para fechar.
 
 Os dois chegam nas suas mensagens diretas com a pessoa, embaixo de uma linha "Respondeu ao status de *nome*" ou "Reagiu ao status de *nome*" que cita o status como ele estava na hora. Quando alguém responde ao seu, aparece "seu status".
 
