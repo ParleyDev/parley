@@ -154,10 +154,15 @@ Voice channels (Channel Settings → End-to-end encryption) and DM or group call
 
 ## Before you open registration to the public
 
-When you run an instance for people you don't know, you are the provider of that service, with the duties your country puts on one. Two things are worth doing first:
+When you run an instance for people you don't know, you are the provider of that service, with the duties your country puts on one. These are worth doing first:
 
 - **Reports**: members can report messages and people, and the reports wait under **Admin Console → Reports**. Child-safety, threat, self-harm and intimate-image reports are marked urgent and sorted first. Make sure someone looks.
 - **Known abuse material**: Parley can check every upload against known child sexual abuse material, hold a match in quarantine and suspend the account. It ships the plumbing and no lists, so it does nothing until you connect a source you are entitled to. See [Matching uploads against known abuse material](media-matching.md).
+- **Reporting to the authorities**: register with the body you would report to before you need it, and read [what Parley does and does not do for you](reporting-to-authorities.md). A child-safety report cannot be closed until the report you made, or the decision that none was needed, is on record.
+- **Ages**: Parley asks nobody for a date of birth and treats every account as a possible minor until it is confirmed as an adult. Decide [what counts as confirmed](age-assurance.md) on your instance: your staff's word, or a verification service you connect.
+- **Spam and bans**: Parley limits accounts that behave like spam and queues them for you to review, and you can limit, silence, suspend or hard-ban an account everywhere. See [abuse and bans](abuse-and-bans.md).
+- **Explicit pictures**: optional. [Connect a classifier](explicit-images.md) and the server checks profile pictures, emoji and (where a server asks for it) attachments, not only members' own apps.
+- **Your terms and contacts**: publish your terms and community guidelines and a safety contact, and tell Parley where they are (**Admin Console → Policies & Contacts**). Templates are in [docs/policies](../policies/README.md).
 
 ## Optional extras
 
