@@ -2,7 +2,7 @@
 title: Kanäle, Threads und Foren
 section: Reden
 summary: Die Kanalarten, Threads für Nebengespräche, Foren, Communities und Veranstaltungen.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Jeder Server ist in **Kanäle** aufgeteilt, jeder für ein Thema oder eine Aktivität. Kanäle sind in einklappbaren **Kategorien** gruppiert.
@@ -24,7 +24,7 @@ Ein kleines Schloss an einem Kanal bedeutet, dass er **privat** ist: Nur bestimm
 
 Manche Kanäle zeigen einen Hinweis, bevor du hineingehst:
 
-- **Altersbeschränkte** Kanäle bitten dich zu bestätigen, dass du mindestens 18 bist.
+- **Altersbeschränkte** Kanäle sind nur für Leute, die als mindestens 18 bestätigt sind. Bist du bestätigt, bekommst du einmal eine Warnung und gehst dann hinein. Bist du es nicht, zeigt der Kanal ein Schloss und die Wege, dich bestätigen zu lassen. Siehe [Dein Alter](settings#your-age).
 - **Spoiler**-Kanäle halten Bilder und Videos verborgen, bis du sie anklickst.
 - In Kanälen mit **Langsamer Modus** darf jede Person nur ab und zu posten. Das Nachrichtenfeld sagt dir, wie lange du warten musst.
 

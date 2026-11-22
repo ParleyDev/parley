@@ -2,7 +2,7 @@
 title: Vrienden en privéberichten
 section: Praten
 summary: Voeg vrienden toe, chat één-op-één of in kleine groepen, en handel berichtverzoeken af.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Klik op **Privéberichten** bovenaan de serverlijst om je vrienden en privégesprekken te zien.
@@ -46,6 +46,8 @@ Een groeps-DM is een kleine privéchat voor maximaal 10 mensen, zonder dat je ee
 Berichten van mensen die geen vriend van je zijn, komen in **Berichtverzoeken** terecht, zodat vreemden niet zomaar in je DM's belanden. Kies bij elk verzoek **Accepteren**, **Negeren** of **Blokkeren**.
 
 Berichten die op spam lijken, worden apart bewaard onder **Spam**. Is er een in orde, markeer het dan als **Geen spam**.
+
+Totdat is bevestigd dat je volwassen bent, toont een verzoek alleen de tekst. Afbeeldingen, bestanden en linkvoorbeelden blijven verborgen tot je op **Accepteren** klikt, en je kunt berichtverzoeken niet uitzetten. Zie [Je leeftijd](settings#your-age).
 
 Kies wie je berichten mag sturen in **Gebruikersinstellingen → Inhoud & sociaal**. Zie [Instellingen](settings#content-and-social).
 

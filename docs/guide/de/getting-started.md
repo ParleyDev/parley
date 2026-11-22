@@ -2,7 +2,7 @@
 title: Erste Schritte
 section: Erste Schritte
 summary: Erstelle ein Konto, melde dich auf jedem Gerät an und wähle die Parley-App, die zu dir passt.
-source: 9e3cf6b58c63
+source: a4675d9c72bd
 ---
 
 Parley ist ein Ort, um mit Freunden und Communities zu reden: Textchat, Sprach- und Videoanrufe, Live-Stages und ein Musikstudio. Alles ist für alle kostenlos.
@@ -19,6 +19,10 @@ Ein Gastkonto wird eine Stunde nach deinem Verlassen gelöscht. Um es zu behalte
 2. Gib deine E-Mail-Adresse ein und wähle einen **Benutzernamen**: 2 bis 32 Buchstaben, Ziffern, `_` oder `.`. Darüber können andere dich finden.
 3. Füge optional einen **Anzeigenamen** hinzu. Das ist der Name, den andere sehen, und er darf Leerzeichen und Großbuchstaben enthalten.
 4. Wähle ein Passwort mit mindestens 8 Zeichen und klicke dann auf **Weiter**.
+
+Wenn die Betreiber deines Parley ihre **Nutzungsbedingungen** und **Community-Richtlinien** veröffentlichen, stehen die Links dazu unter dem Formular. Mit dem Erstellen eines Kontos stimmst du ihnen zu.
+
+Parley fragt nicht nach deinem Geburtsdatum. Manche Bereiche stehen nur Leuten offen, die als erwachsen bestätigt sind; siehe [Dein Alter](settings#your-age).
 
 Parley schickt dir eine E-Mail mit einem Link, um deine Adresse zu bestätigen. Bis du ihn anklickst, kannst du chatten, aber keine Server erstellen und **Entdecken** nicht nutzen. Wenn die E-Mail nicht angekommen ist, nutze **Erneut senden** im Banner oben in der App.
 

@@ -2,7 +2,7 @@
 title: Konfiguracja serwera
 section: Prowadzenie serwera
 summary: Nazwa, ikona i baner, zaproszenia, kanały, emoji i naklejki, powitanie i wdrażanie, szablony i nie tylko.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Otwórz menu serwera, klikając jego nazwę, a potem **Ustawienia serwera**. Widzisz tylko te strony, do których zmiany masz uprawnienia. Właściciel widzi wszystko. Ustawienia otwierają się w tym samym oknie co Ustawienia użytkownika; wpisz coś w polu wyszukiwania na górze listy, aby znaleźć stronę.
@@ -46,7 +46,7 @@ Każde aktywne zaproszenie jest na liście, a **Cofnij** je anuluje. Publiczne s
 - Przeciągaj kanały i kategorie, aby zmienić ich kolejność.
 - Kliknij kanał prawym przyciskiem i wybierz **Edytuj kanał**, aby ustawić:
   - temat i **Tryb powolny**
-  - ustawienia **Kanał z ograniczeniem wiekowym** i **Spoiler**
+  - ustawienia **Kanał z ograniczeniem wiekowym** i **Spoiler**. Kanał z ograniczeniem wiekowym jest dostępny tylko dla członków z potwierdzonym ukończeniem 18 lat; pozostali widzą przy nim kłódkę. Włącz je dla kategorii, a ograniczony będzie każdy kanał w niej. Wyłączyć je z powrotem może tylko ktoś, kto sam ma potwierdzenie.
   - dla kanałów głosowych: **limit użytkowników**, jakość wideo i dźwięku oraz **szyfrowanie end-to-end**
   - **Tagi** forum
   - **Uprawnienia**: zobacz [Role i uprawnienia](roles-and-permissions#channel-permissions)

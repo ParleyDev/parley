@@ -41,6 +41,8 @@ export default function App() {
   const signedInTo = (location.state as { from?: string } | null)?.from ?? '/channels/@me'
 
   useEffect(() => { if (token) startAttachmentLinkRefresh() }, [token])
+  // The media cookie: lets pictures and video in age-restricted channels load for this signed-in session.
+  useEffect(() => { if (token) void api.post('/attachments/session').catch(() => {}) }, [token])
   useEffect(() => {
     if (token) connectSocket()
     else disconnectSocket()

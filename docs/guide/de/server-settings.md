@@ -2,7 +2,7 @@
 title: Einen Server einrichten
 section: Einen Server leiten
 summary: Name, Icon und Banner, Einladungen, Kanäle, Emojis und Sticker, Begrüßung und Onboarding, Vorlagen und mehr.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Öffne das Servermenü mit einem Klick auf den Namen des Servers und dann **Servereinstellungen**. Du siehst nur die Seiten, die du ändern darfst. Der Eigentümer sieht alles. Die Einstellungen öffnen sich im selben Fenster wie die Benutzereinstellungen; tippe in das Suchfeld oben in der Liste, um eine Seite zu finden.
@@ -46,7 +46,7 @@ Jede aktive Einladung wird aufgelistet, mit **Widerrufen**, um sie ungültig zu 
 - Zieh Kanäle und Kategorien, um sie neu anzuordnen.
 - Klicke mit der rechten Maustaste auf einen Kanal und wähle **Kanal bearbeiten** für:
   - sein Thema und den **Langsamen Modus**
-  - die Einstellungen **Altersbeschränkter Kanal** und **Spoiler**
+  - die Einstellungen **Altersbeschränkter Kanal** und **Spoiler**. Ein altersbeschränkter Kanal steht nur Mitgliedern offen, die als mindestens 18 bestätigt sind; alle anderen sehen ihn verschlossen. Schaltest du das für eine Kategorie ein, ist jeder Kanal darin beschränkt. Nur wer selbst bestätigt ist, kann es wieder ausschalten.
   - bei Sprachkanälen: das **Benutzerlimit**, die Video- und Audioqualität und die **Ende-zu-Ende-Verschlüsselung**
   - Forum-**Tags**
   - **Berechtigungen**: siehe [Rollen und Berechtigungen](roles-and-permissions#channel-permissions)

@@ -2,7 +2,7 @@
 title: Arkadaşlar ve doğrudan mesajlar
 section: Konuşmak
 summary: Arkadaş ekle, birebir veya küçük gruplar halinde sohbet et ve mesaj isteklerini yönet.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Arkadaşlarını ve özel sohbetlerini görmek için sunucu listesinin en üstündeki **Doğrudan Mesajlar**'a tıkla.
@@ -46,6 +46,8 @@ Grup DM'si, sunucu gerektirmeyen, en fazla 10 kişilik küçük bir özel sohbet
 Arkadaşın olmayan kişilerden gelen mesajlar **Mesaj İstekleri**'ne düşer; böylece yabancılar doğrudan DM'lerine giremez. Her istek için **Kabul et**, **Yok say** veya **Engelle**'yi seç.
 
 Spam gibi görünen mesajlar ayrıca **Spam** altında tutulur. Sorun yoksa **Spam değil** olarak işaretle.
+
+Yetişkin olduğun onaylanana kadar bir istek yalnızca metnini gösterir. Sen **Kabul et**'e basana kadar resimler, dosyalar ve bağlantı önizlemeleri gizli kalır ve mesaj isteklerini kapatamazsın. Bkz. [Yaşın](settings#your-age).
 
 Sana kimlerin mesaj atabileceğini **Kullanıcı Ayarları → İçerik ve Sosyal** bölümünden seç. Bkz. [Ayarlar](settings#content-and-social).
 

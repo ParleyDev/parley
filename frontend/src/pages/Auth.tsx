@@ -1,4 +1,5 @@
 import { LogoNeon } from '../components/Logo'
+import { SignupPolicies } from '../lib/policies'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { KeyRound } from 'lucide-react'
 import { getPasskey, passkeyError, passkeysSupported, signInWithPasskey } from '../lib/passkey'
@@ -212,6 +213,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </div>
 
         {mode === 'register' && captcha && !closed && <div className="mt-4"><Captcha provider={captcha.provider} siteKey={captcha.siteKey} onToken={setCaptchaToken} resetKey={captchaRound} /></div>}
+        {mode === 'register' && !closed && <SignupPolicies />}
         <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || closed || (mode === 'register' && !!captcha && !captchaToken)}>{busy ? t('Please wait…') : mode === 'login' ? t('Log In') : t('Continue')}</button>
         {canPasskey && (
           <>

@@ -2,7 +2,7 @@
 title: Freunde und Direktnachrichten
 section: Reden
 summary: Freunde hinzufügen, zu zweit oder in kleinen Gruppen chatten und Nachrichtenanfragen bearbeiten.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Klicke oben in der Serverliste auf **Direktnachrichten**, um deine Freunde und privaten Unterhaltungen zu sehen.
@@ -46,6 +46,8 @@ Eine Gruppen-DM ist ein kleiner privater Chat für bis zu 10 Leute, ganz ohne Se
 Nachrichten von Leuten, die nicht mit dir befreundet sind, landen unter **Nachrichtenanfragen**, damit Fremde nicht direkt in deinen DMs auftauchen. Wähle bei jeder Anfrage **Annehmen**, **Ignorieren** oder **Blockieren**.
 
 Nachrichten, die nach Spam aussehen, werden getrennt unter **Spam** aufbewahrt. Wenn eine in Ordnung ist, markiere sie als **Kein Spam**.
+
+Solange du nicht als erwachsen bestätigt bist, zeigt eine Anfrage nur ihren Text. Bilder, Dateien und Linkvorschauen bleiben ausgeblendet, bis du auf **Annehmen** klickst, und du kannst Nachrichtenanfragen nicht ausschalten. Siehe [Dein Alter](settings#your-age).
 
 Wer dir schreiben darf, legst du unter **Benutzereinstellungen → Inhalte & Soziales** fest. Siehe [Einstellungen](settings#content-and-social).
 

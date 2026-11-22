@@ -239,6 +239,9 @@ interface State {
   membersOpen: boolean
   /** DM view: the recipient's profile panel on the right (desktop). */
   dmProfileOpen: boolean
+  /** Bumped when the server says this account's age standing changed (lib/age re-reads it). */
+  ageTick: number
+  bumpAge: () => void
   // voice
   voiceStates: Record<string, VoiceState>
   iceServers: RTCIceServer[]
@@ -470,6 +473,8 @@ export const useStore = create<State>((set, get) => ({
   readyCount: 0,
   mobilePane: initialPane(),
   membersOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
+  ageTick: 0,
+  bumpAge: () => set((s) => ({ ageTick: s.ageTick + 1 })),
   dmProfileOpen: (() => { try { return localStorage.getItem(STORAGE_PREFIX + 'dmProfile') !== '0' } catch { return true } })(),
   voiceStates: {},
   iceServers: [],

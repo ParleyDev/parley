@@ -73,7 +73,7 @@ const THREAD_SELECT: &str = "SELECT c.id, c.parent_id, c.guild_id, c.name, t.roo
     (SELECT m.id FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS first_message_id,
     cov.url AS cover_url, cov.content_type AS cover_type
     FROM threads t JOIN channels c ON c.id = t.channel_id LEFT JOIN users u ON u.id = t.owner_id
-    LEFT JOIN LATERAL (SELECT '/api/attachments/' || a.id || CASE WHEN a.thumb_type IS NOT NULL THEN '/thumb?v=2' ELSE '/cover' END AS url, a.content_type
+    LEFT JOIN LATERAL (SELECT CASE WHEN channel_min_age(c.id) IS NOT NULL THEN '!' ELSE '' END || '/api/attachments/' || a.id || CASE WHEN a.thumb_type IS NOT NULL THEN '/thumb?v=2' ELSE '/cover' END AS url, a.content_type
         FROM attachments a WHERE a.channel_id = c.id AND (a.content_type LIKE 'image/%' OR a.content_type LIKE 'video/%') AND a.message_id = (SELECT m.id FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1)
         ORDER BY a.created_at LIMIT 1) cov ON true";
 
@@ -149,9 +149,14 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     }
     perms::check(p, perms::SEND_MESSAGES)?;
     crate::signup_guard::require_can_post(&state, uid).await?;
+    crate::routes::guests::check_post(&state, uid, parent.guild_id).await?;
+    crate::abuse::rate("threads", uid, 10.0, 60.0)?;
     let name = clean_name(&req.name)?;
     let is_forum = parent.kind == "forum";
     let content = crate::routes::channels::tidy_content(&req.content);
+    // The title and the post body get the text checks a message would.
+    crate::routes::automod::check_message(&state, &parent, uid, p, &format!("{name}\n{content}"), 0).await?;
+    crate::routes::safety::check_links(&state, &format!("{name} {content}")).await?;
     if is_forum && ((content.trim().is_empty() && req.attachment_ids.is_empty()) || content.chars().count() > 2000) {
         return Err(AppError::BadRequest("A post needs a message of 1-2000 characters".into()));
     }

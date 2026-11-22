@@ -2,7 +2,7 @@
 title: Configurer un serveur
 section: Gérer un serveur
 summary: Nom, icône et bannière, invitations, salons, émojis et autocollants, accueil et intégration, modèles et plus encore.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Ouvre le menu du serveur en cliquant sur son nom, puis **Paramètres du serveur**. Tu ne vois que les pages que tu as la permission de modifier. Le propriétaire voit tout. Ils s'ouvrent dans la même fenêtre que les Paramètres utilisateur ; tape dans la zone de recherche en haut de la liste pour trouver une page.
@@ -46,7 +46,7 @@ Chaque invitation active est listée, avec **Révoquer** pour en annuler une. Le
 - Fais glisser les salons et les catégories pour les réorganiser.
 - Fais un clic droit sur un salon et choisis **Modifier le salon** pour :
   - son sujet et le **Mode lent**
-  - les réglages **Salon réservé aux +18 ans** et **Spoiler**
+  - les réglages **Salon réservé aux +18 ans** et **Spoiler**. Un salon réservé aux +18 ans n'est ouvert qu'aux membres confirmés comme ayant 18 ans ou plus ; tous les autres le voient verrouillé. Active-le sur une catégorie et tous ses salons sont restreints. Seule une personne elle-même confirmée peut le désactiver ensuite.
   - pour le vocal : la **limite d'utilisateurs**, la qualité vidéo et audio, et le **chiffrement de bout en bout**
   - les **Tags** du forum
   - les **Permissions** : voir [Rôles et permissions](roles-and-permissions#channel-permissions)

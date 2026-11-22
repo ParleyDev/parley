@@ -48,8 +48,8 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, tag_color, partnered, explicit_filter, summaries_enabled, theme, scheduled_off, invite_preview_channel_id";
-pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction, news, media";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, min_age, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, tag_color, partnered, explicit_filter, summaries_enabled, theme, scheduled_off, invite_preview_channel_id";
+pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, min_age, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction, news, media";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
     let g = sqlx::query_as::<_, Guild>(&format!(
@@ -130,6 +130,7 @@ async fn create_guild(
     Json(req): Json<CreateGuild>,
 ) -> AppResult<(StatusCode, Json<serde_json::Value>)> {
     crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
+    crate::abuse::deny_new(&state.db, uid).await?;
     let name = req.name.trim().to_string();
     if name.is_empty() || name.len() > 100 {
         return Err(AppError::BadRequest("Server name must be 1-100 characters".into()));
@@ -233,6 +234,8 @@ struct UpdateGuild {
     /// Joins per minute that count as a raid (3-100).
     raid_threshold: Option<i32>,
     explicit_filter: Option<String>,
+    /// The age everyone must meet to read anything in this server: 0 for none, or 13-21 (18 for an 18+ server).
+    min_age: Option<i16>,
     summaries_enabled: Option<bool>,
     /// Turn scheduled messages off server-wide; pending ones here fail when due.
     scheduled_off: Option<bool>,
@@ -360,6 +363,15 @@ async fn update_guild(
     }
     if let Some(off) = req.scheduled_off {
         sqlx::query("UPDATE guilds SET scheduled_off = $2 WHERE id = $1").bind(id).bind(off).execute(&state.db).await?;
+    }
+    if let Some(age) = req.min_age {
+        let new = crate::age::setting(age)?;
+        let (old,): (Option<i16>,) = sqlx::query_as("SELECT min_age FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+        crate::age::may_change(&state.db, uid, old, new).await?;
+        if old != new {
+            sqlx::query("UPDATE guilds SET min_age = $2 WHERE id = $1").bind(id).bind(new).execute(&state.db).await?;
+            crate::audit::guild(&state, id, uid, "guild.min_age", "guild", Some(id), "", json!({ "from": old, "to": new })).await;
+        }
     }
     if let Some(f) = &req.explicit_filter {
         if !["off", "no_roles", "all"].contains(&f.as_str()) { return Err(AppError::BadRequest("explicit_filter is off, no_roles or all".into())) }
@@ -527,7 +539,7 @@ async fn create_channel(
     .await?;
     // Inherit the category's overwrites (so a private category yields a private channel).
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
-    let target = perms::channel_audience(&state.db, &c).await?;
+    let target = perms::channel_listing_audience(&state.db, &c).await?;
     state.hub.emit(target, "CHANNEL_CREATE", json!(c));
     crate::audit::guild(&state, id, uid, "channel.create", "channel", Some(c.id), &c.name, json!({ "kind": c.kind })).await;
     Ok((StatusCode::CREATED, Json(c)))
@@ -930,6 +942,9 @@ async fn create_invite(
 ) -> AppResult<(StatusCode, Json<Invite>)> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::CREATE_INVITE)?;
+    crate::routes::guests::deny(&state, uid, "Guests can't create invites. Claim your account first.").await?;
+    crate::abuse::rate_invite_create(uid)?;
+    crate::abuse::deny_new(&state.db, uid).await?;
     if let Some(raw) = req.vanity.as_deref() {
         perms::check(p, perms::MANAGE_GUILD)?;
         let code = vanity_code(raw)?;

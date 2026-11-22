@@ -56,7 +56,7 @@ async fn register(State(state): State<AppState>, headers: HeaderMap, Json(req): 
     if crate::routes::deletion::reserved_username(&username) {
         return Err(AppError::BadRequest("That username is reserved".into()));
     }
-    if crate::routes::deletion::email_blocked(&state, &email).await? {
+    if crate::routes::deletion::email_blocked(&state, &email).await? || crate::abuse::email_banned(&state, &email).await {
         return Err(AppError::BadRequest("This email can't be used to sign up right now".into()));
     }
     if req.password.len() < 8 {
@@ -96,6 +96,7 @@ async fn register(State(state): State<AppState>, headers: HeaderMap, Json(req): 
     .await?;
 
     send_verification(&state, user.id, &user.email).await;
+    crate::abuse::check_new_account(&state, user.id, &crate::ratelimit::client_ip(&headers)).await;
     let token = start_session(&state, user.id, &headers).await?;
     Ok(Json(json!({ "token": token, "user": user })))
 }
@@ -223,12 +224,13 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
         let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limit("login_fail"));
         return Err(AppError::BadRequest("Invalid credentials".into()));
     }
+    crate::abuse::settle_user(&state, id).await;
     let (suspended, mfa, bot): (bool, bool, bool) = sqlx::query_as("SELECT suspended_at IS NOT NULL, totp_secret IS NOT NULL, bot FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
     if bot {
         return Err(AppError::BadRequest("Bot accounts log in with their token, not a password.".into()));
     }
     if suspended {
-        return Err(AppError::BadRequest("This account has been suspended.".into()));
+        return Err(AppError::BadRequest(crate::abuse::suspended_message(&crate::abuse::suspension_reason(&state.db, id).await).into()));
     }
     if mfa {
         // Password is right but the account needs its second factor: hand back a ticket for /auth/mfa, not a session.
@@ -273,7 +275,7 @@ async fn login_mfa(State(state): State<AppState>, headers: HeaderMap, Json(req):
         return Err(AppError::BadRequest("Two-factor authentication is not enabled on this account".into()));
     };
     if suspended {
-        return Err(AppError::BadRequest("This account has been suspended.".into()));
+        return Err(AppError::BadRequest(crate::abuse::suspended_message(&crate::abuse::suspension_reason(&state.db, id).await).into()));
     }
     if !check_second_factor(&state, id, &secret, last_step, &req.code).await? {
         let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limit("login_fail"));

@@ -356,6 +356,9 @@ async fn respond(state: &AppState, l: &Live, interaction: Uuid, d: &ResponseData
     let embeds = match &d.embeds { Some(e) if e.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(crate::routes::webhooks::clean_embeds(e)?), _ => None };
     let components = match &d.components { Some(v) if v.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(clean_components(v)?), _ => None };
     if !deferred && content.trim().is_empty() && embeds.is_none() { return Err(AppError::BadRequest("A response needs content or an embed".into())) }
+    // Per app: an interaction token is good for 15 minutes of follow-ups, which must not be a way round the limits.
+    crate::abuse::rate("interaction_messages", l.app, 30.0, 60.0)?;
+    crate::routes::safety::check_links(state, &content).await?;
     let bot = bot_of(state, l.app).await?;
     let user = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(l.user).fetch_one(&state.db).await?;
     let m = meta(l, &user, deferred, interaction);

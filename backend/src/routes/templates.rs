@@ -194,7 +194,7 @@ async fn build_guild(state: &AppState, uid: Uuid, name: &str, icon_url: Option<S
         let id = Uuid::now_v7();
         let parent = if c.kind == "category" { None } else { c.parent.and_then(|p| chan_ids.get(p).copied().flatten()) };
         let p = pos.entry(if c.kind == "category" { Some(Uuid::nil()) } else { parent }).or_insert(0);
-        sqlx::query("INSERT INTO channels (id, guild_id, name, kind, topic, position, parent_id, nsfw, rate_limit_per_user, user_limit, audio_mode, forum_layout, forum_sort, forum_require_tag, news, media) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)")
+        sqlx::query("INSERT INTO channels (id, guild_id, name, kind, topic, position, parent_id, min_age, rate_limit_per_user, user_limit, audio_mode, forum_layout, forum_sort, forum_require_tag, news, media) VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8 THEN 18 END, $9, $10, $11, $12, $13, $14, $15, $16)")
             .bind(id).bind(gid).bind(c.name.chars().take(100).collect::<String>()).bind(&c.kind).bind(c.topic.chars().take(1024).collect::<String>()).bind(*p).bind(parent)
             .bind(c.nsfw).bind(c.rate_limit_per_user.clamp(0, 21600)).bind(c.user_limit.clamp(0, 99))
             .bind(if c.audio_mode == "music" { "music" } else { "voice" }).bind(if c.forum_layout == "list" { "list" } else { "gallery" }).bind(if c.forum_sort == "created" { "created" } else { "activity" }).bind(c.forum_require_tag).bind(c.news && c.kind == "text").bind(c.media && c.kind == "forum")

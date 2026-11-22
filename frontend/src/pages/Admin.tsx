@@ -2,6 +2,10 @@ import ThemesPane from './AdminThemes'
 import CropImg from '../components/CropImg'
 import BlockedLinksPane from './AdminBlockedLinks'
 import { MatchesPane, MatchingSetupPane } from './AdminMatching'
+import { AgeChecksPane } from './AdminAge'
+import { BansPane } from './AdminBans'
+import { ExplicitPane, LinkFeeds, PoliciesPane } from './AdminSafetyMore'
+import { AuthorityChecklist, NEEDS_AUTHORITY } from './AdminAuthority'
 import ReportEvidence, { REPORT_CATEGORIES } from './AdminEvidence'
 import AppsPane from './AdminApps'
 import UserDetailPane from './AdminUser'
@@ -25,7 +29,7 @@ import { useT, t as tr, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
 import { globalName } from '../lib/names'
 
-type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail' | 'matching' | 'matches'
+type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail' | 'matching' | 'matches' | 'age' | 'sanctions' | 'spam' | 'link-feeds' | 'explicit' | 'policies'
 
 /** Root console for Parley admins: stats, users, servers, instance settings. Shown in the settings window, one route per page. */
 export default function AdminPage() {
@@ -58,6 +62,7 @@ export default function AdminPage() {
       it('themes', 'Themes', <Palette size={18} />, can(a, 'instance_manage'), 'colours colors'),
       it('cosmetics', 'Cosmetics', <Sparkles size={18} />, can(a, 'instance_manage'), 'decorations nameplates effects frames'),
       it('apps', 'Apps', <Bot size={18} />, can(a, 'instance_manage'), 'bots oauth applications'),
+      it('policies', 'Policies & Contacts', <ScrollText size={18} />, can(a, 'instance_manage'), 'terms guidelines privacy safety contact legal law enforcement takedown'),
       it('mail', 'Mail', <Mail size={18} />, can(a, 'account_pii_reveal'), 'email smtp sent'),
     ]),
     group('Moderation', [
@@ -67,6 +72,9 @@ export default function AdminPage() {
       it('blocked-links', 'Blocked Links', <Ban size={18} />, can(a, 'instance_manage'), 'urls domains'),
       it('matches', 'Matched Uploads', <ShieldAlert size={18} />, can(a, 'safety_match_review'), 'csam abuse material quarantine child safety'),
       it('matching', 'Known-Material Matching', <ShieldCheck size={18} />, can(a, 'instance_manage'), 'csam hash photodna matching service child safety'),
+      it('sanctions', 'Bans & Limits', <Ban size={18} />, can(a, 'content_action'), 'ban suspend limit soft hard temporary spam review queue evasion silence'),
+      it('age', 'Age Checks', <ShieldCheck size={18} />, can(a, 'age_attest', 'instance_manage'), 'adult 18 verify attest minor age assurance'),
+      it('explicit', 'Explicit Image Checks', <ShieldCheck size={18} />, can(a, 'instance_manage'), 'nsfw nudity classifier pictures avatars emoji'),
       it('audit', 'Audit Log', <ScrollText size={18} />, can(a, 'audit_read_own', 'audit_read_team', 'audit_read_all'), 'history actions'),
     ]),
   ].filter((g) => g.items.length)
@@ -94,9 +102,13 @@ export default function AdminPage() {
             <Route path="reports" element={<ReportsPane />} />
             <Route path="cases" element={<CasesPane />} />
             <Route path="cases/:id" element={<CasePane />} />
-            <Route path="blocked-links" element={<BlockedLinksPane />} />
+            <Route path="blocked-links" element={<><BlockedLinksPane /><LinkFeeds /></>} />
             <Route path="matching" element={<MatchingSetupPane />} />
             <Route path="matches" element={<MatchesPane />} />
+            <Route path="age" element={<AgeChecksPane />} />
+            <Route path="sanctions" element={<BansPane />} />
+            <Route path="explicit" element={<ExplicitPane />} />
+            <Route path="policies" element={<PoliciesPane />} />
             <Route path="apps" element={<AppsPane />} />
             <Route path="messages" element={<MessagesPane />} />
             <Route path="users/:id" element={<UserDetailPane />} />
@@ -864,6 +876,7 @@ function ReportsPane() {
               </div>
             )}
             {r.note && <div className="mt-2 text-xs text-text-2">{t('Note:')} {r.note}</div>}
+            {NEEDS_AUTHORITY.includes(r.category) && <AuthorityChecklist reportId={r.id} onRecorded={() => { void load() }} />}
             <div className="mt-3 flex flex-wrap gap-2">
               {r.kind === 'message' && r.message_exists && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.delete(`/admin/messages/${r.message_id}`), t('Message deleted'))} data-report-delete-message>{t('Delete message')}</button>}
               {r.target_user_id && !r.target_suspended && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.patch(`/admin/users/${r.target_user_id}`, { suspended: true }), t('@{username} suspended', { username: r.target_username }))} data-report-suspend>{t('Suspend @{username}', { username: r.target_username })}</button>}

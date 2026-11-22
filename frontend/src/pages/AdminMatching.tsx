@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { formatTime } from '../lib/format'
 import { useT } from '../lib/i18n'
 import { useStore } from '../store'
+import { downloadJson } from './AdminAuthority'
 
 interface MatchingConfig {
   service_url: string; service_token_set: boolean; fail_closed: boolean
@@ -159,6 +160,7 @@ export function MatchesPane() {
                 {m.report_ref && <><dt className="text-text-2">{t('Report')}</dt><dd data-match-ref>{m.report_ref}{m.reported_at ? ` · ${formatTime(m.reported_at)}` : ''}</dd></>}
                 {m.note && <><dt className="text-text-2">{t('Note')}</dt><dd className="whitespace-pre-wrap">{m.note}</dd></>}
               </dl>
+              <button type="button" className="btn-ghost py-1 text-xs" data-match-export onClick={() => { void downloadJson(`/admin/safety/matches/${m.id}/export`, `match-${m.id}.json`).catch((e) => pushToast((e as Error).message, 'error')) }}>{t('Details for the report')}</button>
               {(m.status === 'open' || m.status === 'reported') && (
                 <div className="space-y-2 rounded-lg bg-bg-0/50 p-3">
                   {m.status === 'open' && <>

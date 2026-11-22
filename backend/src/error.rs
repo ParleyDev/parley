@@ -25,7 +25,8 @@ pub enum AppError {
     /// Something a guest account can't do until it is claimed (403, code "guest").
     #[error("{0}")]
     Guest(&'static str),
-    /// 18+ channel: no birth date on file yet (403, code "age_required") or under 18 (403, code "age_restricted").
+    /// A place with a minimum age: the account is not confirmed as meeting it (403, code "age_required"), or is
+    /// marked as under 18 (403, code "age_restricted").
     #[error("age gate")]
     AgeGate(bool),
     #[error("{0}")]
@@ -68,8 +69,8 @@ impl IntoResponse for AppError {
                 return (StatusCode::FORBIDDEN, Json(json!({ "error": m, "code": "automod" }))).into_response();
             }
             AppError::AgeGate(known) => {
-                return if *known { (StatusCode::FORBIDDEN, Json(json!({ "error": "You must be 18 or older to view this channel.", "code": "age_restricted" }))).into_response() }
-                else { (StatusCode::FORBIDDEN, Json(json!({ "error": "Confirm your birth date to view age-restricted channels.", "code": "age_required" }))).into_response() };
+                return if *known { (StatusCode::FORBIDDEN, Json(json!({ "error": "This is for people 18 or older, and your account is marked as under 18.", "code": "age_restricted" }))).into_response() }
+                else { (StatusCode::FORBIDDEN, Json(json!({ "error": "This is for people confirmed as 18 or older. You can ask to be confirmed in Settings, under My Account.", "code": "age_required" }))).into_response() };
             }
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::ServerUnavailable(reason) => {

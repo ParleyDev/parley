@@ -2,7 +2,7 @@
 title: Amis et messages privés
 section: Discuter
 summary: Ajoute des amis, discute en tête-à-tête ou en petits groupes, et gère les demandes de message.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Clique sur **Messages privés** en haut de la liste des serveurs pour voir tes amis et tes conversations privées.
@@ -46,6 +46,8 @@ Un MP de groupe est une petite discussion privée jusqu'à 10 personnes, sans av
 Les messages de personnes qui ne sont pas tes amies arrivent dans **Demandes de message**, pour que des inconnus ne débarquent pas directement dans tes MP. Pour chaque demande, choisis **Accepter**, **Ignorer** ou **Bloquer**.
 
 Les messages qui ressemblent à du spam sont mis à part sous **Spam**. Si l'un d'eux est correct, marque-le **Pas du spam**.
+
+Tant que tu n'es pas confirmé comme majeur, une demande n'affiche que son texte. Les images, fichiers et aperçus de liens restent masqués jusqu'à ce que tu cliques sur **Accepter**, et tu ne peux pas désactiver les demandes de message. Voir [Ton âge](settings#your-age).
 
 Choisis qui peut t'envoyer des messages dans **Paramètres utilisateur → Contenu et social**. Voir [Paramètres](settings#content-and-social).
 

@@ -2,7 +2,7 @@
 title: Moderación y seguridad
 section: Gestionar un servidor
 summary: Mantén un buen ambiente en tu servidor con AutoMod, aislamientos temporales, baneos, reportes, protección contra raids y el registro de auditoría.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Actuar con alguien
@@ -46,7 +46,8 @@ También puedes eximir roles o canales, como un canal en el que tus moderadores 
 - **Nivel de verificación**: lo que necesita un recién llegado antes de poder publicar. **Baja** exige un correo verificado. **Media** exige además una cuenta de Parley con más de 5 minutos de antigüedad. **Alta** exige además llevar 10 minutos en tu servidor. Los miembros con cualquier rol se lo saltan.
 - **Protección contra raids**: detecta una llegada repentina de cuentas nuevas y avisa a tus moderadores.
 - **Pausar invitaciones** y **Pausar los MD entre miembros**: frenos de emergencia durante una raid.
-- **Filtro de imágenes explícitas**: analiza las imágenes que se publican en el servidor.
+- **Servidor solo para adultos**: marca **Todo en este servidor es 18+** y solo los miembros confirmados como mayores de 18 años podrán leer o participar, en cualquier parte del servidor. Para restringir solo algunas zonas, usa mejor **Canal con restricción de edad** en un canal o una categoría. Consulta [Canales y categorías](server-settings#channels-and-categories).
+- **Filtro de imágenes explícitas**: analiza las imágenes que se publican en el servidor. La comprobación la hace la app de cada miembro, y también la instancia si sus administradores lo han configurado.
 - **Autenticación en dos pasos para moderadores**: los moderadores deben tener activada la verificación en dos pasos o haber añadido una clave de acceso, para que una contraseña robada no pueda usarse contra el servidor. Cualquiera de las dos vale, y necesitas una tú para activar esta opción.
 - **Resúmenes con IA**: activa o desactiva el botón de Resúmenes.
 

@@ -116,6 +116,7 @@ async fn send_request(
     Json(req): Json<SendRequest>,
 ) -> AppResult<(StatusCode, Json<Relationship>)> {
     crate::signup_guard::require_can_post(&state, uid).await?;
+    crate::abuse::rate_friend_request(uid)?;
     let target = match (req.user_id, req.username.as_deref().map(str::trim)) {
         (Some(id), _) => fetch_user(&state.db, id).await?,
         (None, Some(name)) if !name.is_empty() => {
@@ -153,6 +154,16 @@ async fn send_request(
     // Their "who can send you friend requests" setting (unless they already asked us).
     if mine.as_deref() != Some("incoming") && !accepts_friend_request(&state.db, target.id, uid).await? {
         return Err(AppError::BadRequest("That user isn't accepting friend requests from you.".into()));
+    }
+    // Accepting someone's request is not starting something new; asking is.
+    if mine.as_deref() != Some("incoming") {
+        crate::abuse::deny_new(&state.db, uid).await?;
+        // A confirmed spammer's request looks sent to them and reaches nobody.
+        if crate::abuse::is_quiet(&state.db, uid).await {
+            sqlx::query("INSERT INTO relationships (user_id, target_id, kind) VALUES ($1, $2, 'outgoing') ON CONFLICT (user_id, target_id) DO NOTHING").bind(uid).bind(target.id).execute(&state.db).await?;
+            return Ok((StatusCode::CREATED, Json(one(&state.db, uid, target.id).await?)));
+        }
+        crate::abuse::after_reach(state.clone(), uid, "friend_req", target.id);
     }
     let mut tx = state.db.begin().await?;
     let status = if mine.as_deref() == Some("incoming") {

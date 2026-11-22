@@ -65,6 +65,12 @@ pub mod relationships;
 pub mod reports;
 pub mod roles;
 pub mod safety;
+pub mod age;
+pub mod policies;
+pub mod link_feeds;
+pub mod explicit;
+pub mod authority;
+pub mod sanctions;
 pub mod matching;
 pub mod search;
 pub mod sessions;
@@ -127,6 +133,12 @@ pub fn api_router() -> Router<AppState> {
         .merge(automod::router())
         .merge(safety::router())
         .merge(matching::router())
+        .merge(age::router())
+        .merge(policies::router())
+        .merge(link_feeds::router())
+        .merge(explicit::router())
+        .merge(authority::router())
+        .merge(sanctions::router())
         .merge(highlights::router())
         .merge(customize::router())
         .merge(templates::router())

@@ -2,7 +2,7 @@
 title: Canali, thread e forum
 section: Conversare
 summary: I tipi di canale, i thread per le conversazioni a parte, i forum, le community e gli eventi.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Ogni server è diviso in **canali**, ognuno per un argomento o un'attività. I canali sono raggruppati in **categorie** che si possono comprimere.
@@ -24,7 +24,7 @@ Un piccolo lucchetto su un canale significa che è **privato**: lo possono veder
 
 Alcuni canali mostrano un avviso prima di entrare:
 
-- I canali **vietati ai minori** ti chiedono di confermare che hai almeno 18 anni.
+- I canali **vietati ai minori** sono solo per chi è stato confermato come maggiorenne (almeno 18 anni). Se lo sei, vedi un avviso una volta e poi entri. Se non lo sei, il canale mostra un lucchetto con i modi per ottenere la conferma. Vedi [La tua età](settings#your-age).
 - I canali **Spoiler** tengono nascosti immagini e video finché non ci fai clic.
 - I canali con lo **Slowmode** permettono a ciascuno di scrivere solo ogni tanto. La casella del messaggio ti dice quanto aspettare.
 

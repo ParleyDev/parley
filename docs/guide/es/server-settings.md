@@ -2,7 +2,7 @@
 title: Configurar un servidor
 section: Gestionar un servidor
 summary: Nombre, icono y banner, invitaciones, canales, emoji y stickers, bienvenida e incorporación, plantillas y más.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Abre el menú del servidor haciendo clic en su nombre y luego en **Ajustes del servidor**. Solo ves las páginas que tienes permiso para cambiar. El propietario lo ve todo. Se abre en la misma ventana que los Ajustes de usuario; escribe en el cuadro de búsqueda de arriba de la lista para encontrar una página.
@@ -46,7 +46,7 @@ Todas las invitaciones activas aparecen en la lista, con **Revocar** para cancel
 - Arrastra canales y categorías para reordenarlos.
 - Haz clic derecho en un canal y elige **Editar canal** para:
   - su tema y el **Modo lento**
-  - los ajustes de **Canal con restricción de edad** y **Spoiler**
+  - los ajustes de **Canal con restricción de edad** y **Spoiler**. Un canal con restricción de edad solo está abierto a los miembros confirmados como mayores de 18 años; los demás lo ven bloqueado. Actívalo en una categoría y todos sus canales quedan restringidos. Solo alguien que también esté confirmado puede volver a desactivarlo.
   - en los de voz: el **Límite de usuarios**, la calidad de vídeo y audio, y el **cifrado de extremo a extremo**
   - las **Etiquetas** del foro
   - **Permisos**: consulta [Roles y permisos](roles-and-permissions#channel-permissions)

@@ -266,7 +266,7 @@ async fn scrub(state: &AppState, tx: &mut Transaction<'_, Postgres>, uid: Uuid) 
             "UPDATE users SET username = $2, display_name = $3, email = NULL, email_verified_at = NULL, password_hash = NULL,
                 totp_secret = NULL, totp_pending = NULL, totp_enabled_at = NULL, totp_last_step = 0,
                 avatar_url = NULL, banner_url = NULL, avatar_history = '{}', bio = '', pronouns = '', custom_status = '', custom_activity = NULL,
-                birthdate = NULL, house = DEFAULT, theme_primary = NULL, theme_accent = NULL, name_primary = NULL, name_accent = NULL, name_style = DEFAULT,
+                birthday_month = NULL, birthday_day = NULL, declared_minor = false, house = DEFAULT, theme_primary = NULL, theme_accent = NULL, name_primary = NULL, name_accent = NULL, name_style = DEFAULT,
                 avatar_decoration = DEFAULT, clan_tag = '', clan_tag_guild = NULL, panels = DEFAULT, profile_frame = DEFAULT, nameplate = DEFAULT, profile_effect = DEFAULT,
                 entrance_sound = DEFAULT, notif_prefs = DEFAULT, client_settings = DEFAULT, guild_layout = DEFAULT, pinned_channels = '{}', ignored_users = '{}',
                 online_alerts = '{}', friend_request_from = DEFAULT, sensitive_media = DEFAULT, dm_privacy = DEFAULT, message_requests = DEFAULT,

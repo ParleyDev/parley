@@ -50,6 +50,8 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'CALL_ACTIVITY_STATE'; d: { id: string; state: unknown; user_id: string } }
   | { t: 'CALL_ACTIVITY_MESSAGE'; d: { id: string; data: unknown; user_id: string } }
   | { t: 'USER_UPDATE'; d: User }
+  | { t: 'AGE_UPDATE'; d: object }
+  | { t: 'STANDING_UPDATE'; d: object }
   | { t: 'USER_SETTINGS_UPDATE'; d: Partial<PrivateUser> }
   | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[]; roles: Role[]; communities?: CommunitySlim[]; community_follows?: string[] } }
   | { t: 'GUILD_MEMBER_UPDATE'; d: Member }
@@ -316,6 +318,7 @@ function handle(ev: Ev) {
     case 'CALL_ACTIVITY_STATE': dispatchSessionEvent({ t: 'state', id: ev.d.id, data: ev.d.state, user_id: ev.d.user_id }); break
     case 'CALL_ACTIVITY_MESSAGE': dispatchSessionEvent({ t: 'message', id: ev.d.id, data: ev.d.data, user_id: ev.d.user_id }); break
     case 'USER_SETTINGS_UPDATE': if (ev.d.client_settings) receiveSettings(ev.d.client_settings); if (s.user && s.token) s.setAuth(s.token, { ...s.user, ...ev.d } as PrivateUser); break
+    case 'AGE_UPDATE': case 'STANDING_UPDATE': s.bumpAge(); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     // A server we weren't in yet (joined from any device or link): its welcome screen is owed.
     case 'GUILD_CREATE': if (!s.guilds[ev.d.id] && ev.d.owner_id !== s.user?.id) markJoined(ev.d.id); s.upsertGuild(ev.d); break

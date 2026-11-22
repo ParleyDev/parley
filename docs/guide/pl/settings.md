@@ -2,7 +2,7 @@
 title: Ustawienia
 section: Ty
 summary: Bezpieczeństwo konta, prywatność, wygląd, ułatwienia dostępu, język i opcje aplikacji desktopowej.
-source: 34c162a49c91
+source: c3991172940f
 ---
 
 Otwórz **Ustawienia użytkownika** zębatką obok swojej nazwy w lewym dolnym rogu albo naciśnij <kbd>Ctrl</kbd>+<kbd>,</kbd>. Nie możesz czegoś znaleźć? Wpisz to w polu wyszukiwania na górze listy. Administratorzy instancji znajdą też na dole listy **Konsola administratora**.
@@ -16,11 +16,32 @@ Otwórz **Ustawienia użytkownika** zębatką obok swojej nazwy w lewym dolnym r
 - **Uwierzytelnianie dwuskładnikowe**: gorąco polecane. Kliknij **Włącz uwierzytelnianie dwuskładnikowe**, zeskanuj kod aplikacją uwierzytelniającą i wpisz 6-cyfrowy kod, aby je włączyć.
   - Zapisz **kody zapasowe** w bezpiecznym miejscu. Pozwolą ci się zalogować, jeśli zgubisz telefon.
 - **Klucze dostępu**: logowanie odciskiem palca, twarzą lub kodem PIN urządzenia. Kliknij **Dodaj klucz dostępu**. Klucz dostępu liczy się też jako uwierzytelnianie dwuskładnikowe na serwerach, które go wymagają od moderatorów.
-- **Stan konta**: czy ostatnio złamałeś jakieś zasady. Zwykle jest tam *Wszystko w porządku*.
+- **Stan konta**: czy ostatnio złamałeś jakieś zasady. Zwykle jest tam *Wszystko w porządku*. Jeśli osoby prowadzące twój Parley ograniczyły twoje konto, znajdziesz tu informację, do kiedy i czego w tym czasie nie możesz robić.
+- **Wiek**: zobacz [Twój wiek](#your-age).
 - **Bany serwera**: serwery, które cię zbanowały, z opcją **Odwołaj się od tego bana**, jeśli serwer na to pozwala.
 - **Pamięć**: ile miejsca na przesłane pliki już wykorzystałeś.
 - **Podsumowanie roku**: twój rok w Parley.
 - **Usunięcie konta**: wyłącz lub usuń konto. Zobacz [Pierwsze kroki](getting-started#taking-a-break-or-leaving).
+
+## Twój wiek
+
+Parley nie pyta o datę urodzenia. Dopóki twoja pełnoletność nie zostanie potwierdzona, traktuje twoje konto jak konto młodszej osoby:
+
+- Kanały z ograniczeniem wiekowym i serwery tylko dla dorosłych pozostają zamknięte.
+- Wiadomości od osób spoza listy znajomych przychodzą jako [prośby](direct-messages#message-requests), a obrazy, pliki i podglądy linków są ukryte, dopóki ich nie zaakceptujesz.
+
+**Ustawienia użytkownika → Moje konto → Wiek** pokazuje twój obecny status i sposoby potwierdzenia, które oferuje twój Parley:
+
+- **Zweryfikuj przez** usługę, jeśli jest skonfigurowana. Przekazuje ona Parley tylko informację, czy masz co najmniej 18 lat.
+- **Poproś zespół o potwierdzenie, że jestem osobą dorosłą**. Zespół może się z tobą skontaktować. Nie wysyłaj dokumentów tożsamości przez Parley.
+- **Mam co najmniej 18 lat**, jeśli twój Parley przyjmuje twoją deklarację.
+
+Jeśli żadna z tych opcji nie jest dostępna, twój Parley nie ma jeszcze sposobu na potwierdzanie wieku.
+
+- **Mam mniej niż 18 lat** oznacza twoje konto jako konto nastolatka. Pisać do ciebie mogą tylko znajomi, wrażliwe media są rozmywane lub blokowane i możesz korzystać z [Centrum rodzinnego](#family-center). Cofnąć to może tylko administrator.
+- **Urodziny (opcjonalnie)** zapisuje dzień i miesiąc, bez roku. Widzisz je tylko ty.
+
+> Note: nikt inny nie widzi statusu twojego wieku.
 
 ## Dane i prywatność
 
@@ -39,6 +60,8 @@ Otwórz **Ustawienia użytkownika** zębatką obok swojej nazwy w lewym dolnym r
 ## Centrum rodzinne
 
 Rodzice i nastolatki mogą połączyć konta. Rodzic widzi, do jakich serwerów nastolatek dołącza, kogo dodaje do znajomych i do kogo pisze, ale nigdy treści wiadomości. Nastolatek dostaje kod w sekcji **Połącz z rodzicem**, a rodzic wpisuje go w sekcji **Połącz z kontem nastolatka**. Każde z nich może wybrać **Rozłącz**.
+
+Kod pochodzi z konta oznaczonego jako poniżej 18 lat. Zobacz [Twój wiek](#your-age).
 
 ## Urządzenia i połączenia
 

@@ -9,7 +9,9 @@ import StorageSection from './StorageSection'
 import DeleteAccountSection from './DeleteAccountSection'
 import { AccountChanges, StandingCard } from './AccountChanges'
 import RecapModal from '../Recap'
-import { AgeSection, MyBans } from '../../AgeSafety'
+import { MyBans } from '../../AgeSafety'
+import { AgeSection, StandingNotice } from '../../AgeChecks'
+import { SafetyContact } from '../../../lib/policies'
 import { WindowRow, WindowSection, windowButton } from '../SettingsWindow'
 import { useT } from '../../../lib/i18n'
 
@@ -58,6 +60,8 @@ export default function AccountTab({ onDevices }: { onDevices: () => void }) {
       </WindowSection>
       <WindowSection id="status" title={titles.status}>
         <StandingCard />
+        <StandingNotice />
+        <SafetyContact />
         <AgeSection />
         <MyBans />
       </WindowSection>

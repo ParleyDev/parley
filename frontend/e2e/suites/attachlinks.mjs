@@ -5,7 +5,10 @@ import { execSync } from 'node:child_process'
 import { B, WEB, API_ORIGIN, S, reg, call, callS, ok, finish, openDms, PNG, testContainer } from '../lib.mjs'
 
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol')
-await openDms(a, b); const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
+await openDms(a, b)
+// Friends: between strangers a first message is a request, and its media is held back until it is accepted.
+await call(a.token, 'POST', '/users/@me/relationships', { user_id: b.user.id }); await call(b.token, 'PUT', `/users/@me/relationships/${a.user.id}`)
+const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
 const upload = async (t, ch, data, name, type = 'image/png') => { const f = new FormData(); f.append('file', new Blob([data], { type }), name); const r = await fetch(`${B}/channels/${ch}/attachments`, { method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: f }); return r.json() }
 const get = (path, token, headers = {}) => fetch(API_ORIGIN + path, { headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers } })
 const pic = await upload(a.token, dm.id, PNG, 'private.png')

@@ -2,7 +2,7 @@
 title: Moderação e segurança
 section: Administrando um servidor
 summary: Mantenha seu servidor amigável com AutoMod, castigos, banimentos, denúncias, proteção contra raids e o registro de auditoria.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Lidando com alguém
@@ -46,7 +46,8 @@ Você também pode isentar cargos ou canais, como um canal onde os moderadores d
 - **Nível de verificação**: o que alguém novo precisa antes de poder postar. **Baixo** exige um e-mail confirmado. **Médio** também exige uma conta no Parley com mais de 5 minutos. **Alto** também exige 10 minutos no seu servidor. Membros com qualquer cargo pulam isso.
 - **Proteção contra raids**: percebe uma chegada repentina de contas novas e alerta seus moderadores.
 - **Pausar convites** e **Pausar DMs entre membros**: freios de emergência durante uma raid.
-- **Filtro de imagens explícitas**: analisa as imagens postadas no servidor.
+- **Servidor só para adultos**: marque **Tudo neste servidor é 18+** e só membros confirmados como maiores de 18 anos podem ler ou participar, em qualquer lugar do servidor. Para restringir só algumas áreas, use **Restrição de idade** em um canal ou em uma categoria. Veja [Canais e categorias](server-settings#channels-and-categories).
+- **Filtro de imagens explícitas**: analisa as imagens postadas no servidor. A verificação é feita pelo app de cada membro, e também pela instância se os administradores dela tiverem configurado isso.
 - **Autenticação em duas etapas para moderadores**: os moderadores precisam ter a 2FA ativada ou uma chave de acesso adicionada, para que uma senha roubada não possa ser usada contra o servidor. Qualquer uma das duas vale, e você mesmo precisa de uma para ativar isso.
 - **Resumos com IA**: ative ou desative o botão Resumos.
 

@@ -79,7 +79,7 @@ Every active invite is listed, with **Revoke** to cancel one. Public servers lis
 - Drag channels and categories to reorder them.
 - Right-click a channel and choose **Edit Channel** for:
   - its topic and **Slowmode**
-  - **Age-Restricted** and **Spoiler** settings
+  - **Age-Restricted** and **Spoiler** settings. An age-restricted channel is open only to members confirmed as 18 or older; everyone else sees it locked. Turn it on for a category and every channel in it is restricted. Only someone who is confirmed themselves can turn it off again.
   - for voice: the **user limit**, video and audio quality, and **end-to-end encryption**
   - forum **Tags**
   - **Permissions**: see [Roles and permissions](roles-and-permissions#channel-permissions)

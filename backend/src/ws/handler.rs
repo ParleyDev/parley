@@ -217,7 +217,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
 
     let (communities, community_follows) = crate::routes::communities::connect_payload(&state.db, user_id, &guild_ids, &channels).await.unwrap_or_else(|e| { tracing::warn!(error = ?e, "communities connect payload failed"); Default::default() });
 
-    let mut all_channel_ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
+    // Channels listed with a lock (minimum age not met) count nothing: no unread mark, no mentions.
+    let locked = crate::age::blocked_among(&state.db, &channels.iter().map(|c| c.id).collect::<Vec<_>>(), user_id).await.unwrap_or_default();
+    let mut all_channel_ids: Vec<Uuid> = channels.iter().map(|c| c.id).filter(|c| !locked.contains(c)).collect();
     all_channel_ids.extend(dms.iter().map(|d| d.channel.id));
     // Unread messages that mention me (directly, via one of my roles, or @everyone) per channel. In accepted DMs every
     // message counts, as in Discord, so the server bar can badge each unread DM with its message count.

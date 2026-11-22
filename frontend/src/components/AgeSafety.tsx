@@ -1,45 +1,9 @@
-import { Cake, Gavel, ShieldAlert } from 'lucide-react'
+import { Gavel, ShieldAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import type { PrivateUser } from '../lib/types'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
 import { shownName } from '../lib/names'
-
-/** Enter your birth date (once). Under 18 turns on teen safety defaults; 18+ opens age-restricted channels. */
-export function BirthdateForm({ onDone }: { onDone?: (u: PrivateUser) => void }) {
-  const t = useT()
-  const setAuth = useStore((s) => s.setAuth)
-  const pushToast = useStore((s) => s.pushToast)
-  const [date, setDate] = useState('')
-  const [busy, setBusy] = useState(false)
-  const save = async () => {
-    setBusy(true)
-    try { const u = await api.put<PrivateUser>('/users/@me/birthdate', { birthdate: date }); const st = useStore.getState(); if (st.token) setAuth(st.token, { ...st.user, ...u } as PrivateUser); onDone?.(u) } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
-  }
-  return (
-    <div className="flex flex-wrap items-end gap-2" data-birthdate-form>
-      <label className="flex-1"><span className="label">{t('Date of birth')}</span><input type="date" className="input" value={date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDate(e.target.value)} data-birthdate-input /></label>
-      <button type="button" className="btn-primary" disabled={busy || !date} onClick={save} data-birthdate-save>{t('Confirm')}</button>
-      <p className="w-full text-xs text-text-2">{t("You can only set this once, so check it. It's never shown to anyone.")}</p>
-    </div>
-  )
-}
-
-/** User Settings › My Account: your birth date (set once) and what it means. */
-export function AgeSection() {
-  const t = useT()
-  const me = useStore((s) => s.user) as PrivateUser | null
-  if (!me) return null
-  return (
-    <section className="rounded-xl bg-bg-0/50 p-4 space-y-2" data-age-section={me.age_group ?? 'unknown'}>
-      <div className="flex items-center gap-2"><Cake size={18} className="text-text-2" /><h3 className="font-bold">{t('Date of Birth')}</h3>{me.birthdate && <span className="ml-auto text-sm text-text-1" data-birthdate>{new Date(`${me.birthdate}T00:00:00`).toLocaleDateString()}</span>}</div>
-      {me.birthdate ? (
-        <p className="text-sm text-text-2">{me.age_group === 'teen' ? t('Teen safety defaults are on: only friends can DM you, sensitive media is blurred, and age-restricted channels are closed.') : t('You can view age-restricted channels.')} {t("Ask an administrator if it's wrong.")}</p>
-      ) : <><p className="text-sm text-text-2">{t('Needed to view age-restricted (18+) channels.')}</p><BirthdateForm /></>}
-    </section>
-  )
-}
 
 interface MyBan { guild_id: string; name: string; icon_url: string | null; reason: string; banned_at: string; appeal: { status: 'pending' | 'accepted' | 'denied'; reason: string } | null }
 

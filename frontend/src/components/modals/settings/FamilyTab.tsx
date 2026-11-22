@@ -37,9 +37,8 @@ export default function FamilyTab() {
     <div className="space-y-6" data-family-tab data-family-role={o.role}>
       <h2 className="text-xl font-bold">{t('Family Center')}</h2>
       <p className="text-sm text-text-2">{t('A parent linked to a teen account sees which servers they joined, who they added as friends and who they messaged, and how often. Never what anyone said. The teen sees the same summary, and either of you can unlink at any time.')}</p>
-      {o.role === 'teen' ? <TeenSide o={o} onUnlink={unlink} /> : o.role === 'adult' ? <ParentSide o={o} onLinked={load} onUnlink={unlink} /> : (
-        <p className="text-sm text-text-2" data-family-needs-birthday>{t('Add your birthday in My Account to use Family Center.')}</p>
-      )}
+      {o.role === 'teen' ? <TeenSide o={o} onUnlink={unlink} /> : <ParentSide o={o} onLinked={load} onUnlink={unlink} />}
+      {o.role === 'unknown' && <p className="text-xs text-text-2" data-family-teen-hint>{t('Under 18 yourself? Mark your account as under 18 in My Account, and you can make a code for a parent here.')}</p>}
     </div>
   )
 }

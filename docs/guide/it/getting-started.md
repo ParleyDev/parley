@@ -2,7 +2,7 @@
 title: Per iniziare
 section: Per iniziare
 summary: Crea un account, accedi da qualsiasi dispositivo e scegli l'app di Parley più adatta a te.
-source: 9e3cf6b58c63
+source: a4675d9c72bd
 ---
 
 Parley è un posto dove parlare con amici e community: chat di testo, chiamate vocali e video, stage dal vivo e uno studio musicale. Tutto è gratis per tutti.
@@ -19,6 +19,10 @@ Un account ospite viene rimosso un'ora dopo che esci. Per tenerlo, fai clic su *
 2. Inserisci la tua email e scegli un **nome utente**: da 2 a 32 tra lettere, numeri, `_` o `.`. Le persone possono trovarti con questo nome.
 3. Se vuoi, aggiungi un **nome visualizzato**. È il nome che vedono gli altri e può contenere spazi e maiuscole.
 4. Scegli una password di almeno 8 caratteri, poi fai clic su **Continua**.
+
+Se il team che gestisce il tuo Parley pubblica i suoi **Termini** e le sue **Linee guida della community**, trovi i link sotto il modulo. Creando un account li accetti.
+
+Parley non ti chiede la data di nascita. Alcuni spazi sono aperti solo a chi è stato confermato come maggiorenne; vedi [La tua età](settings#your-age).
 
 Parley ti manda un'email con un link per verificare il tuo indirizzo. Finché non lo apri puoi chattare, ma non puoi creare server né usare Esplora. Se l'email non è arrivata, usa **Invia di nuovo** nel banner in cima all'app.
 

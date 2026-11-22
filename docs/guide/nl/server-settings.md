@@ -2,7 +2,7 @@
 title: Een server inrichten
 section: Een server runnen
 summary: Naam, pictogram en banner, uitnodigingen, kanalen, emoji en stickers, welkom en introductie, sjablonen en meer.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Open het servermenu door op de naam van de server te klikken en kies dan **Serverinstellingen**. Je ziet alleen de pagina's die je mag wijzigen. De eigenaar ziet alles. Het opent in hetzelfde venster als Gebruikersinstellingen; typ in het zoekvak bovenaan de lijst om een pagina te vinden.
@@ -46,7 +46,7 @@ Elke actieve uitnodiging staat in de lijst, met **Intrekken** om er een te annul
 - Sleep kanalen en categorieën om ze te herschikken.
 - Klik met rechts op een kanaal en kies **Kanaal bewerken** voor:
   - het onderwerp en **Langzame modus**
-  - de instellingen **Leeftijdsbeperking** en **Spoiler**
+  - de instellingen **Kanaal met leeftijdsbeperking** en **Spoiler**. Een kanaal met leeftijdsbeperking is alleen open voor leden van wie is bevestigd dat ze 18 jaar of ouder zijn; alle anderen zien het vergrendeld. Zet je het aan voor een categorie, dan is elk kanaal daarin beperkt. Alleen iemand die zelf is bevestigd, kan het weer uitzetten.
   - voor spraak: de **gebruikerslimiet**, video- en audiokwaliteit, en **end-to-end-versleuteling**
   - forum-**Tags**
   - **Machtigingen**: zie [Rollen en machtigingen](roles-and-permissions#channel-permissions)

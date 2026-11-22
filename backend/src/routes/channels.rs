@@ -45,14 +45,29 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/permissions-sync", post(sync_permissions))
 }
 
-/// Verify the user can access the channel. Returns the channel.
+/// Verify the user can read the channel: they can view it and meet its minimum age. Returns the channel.
 pub async fn require_channel(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> AppResult<Channel> {
     Ok(require_channel_perms(db, channel_id, user_id).await?.0)
 }
 
-/// Channel (with overwrites) plus the caller's effective permissions in it.
-/// Guild channels the caller cannot view are reported as not found. DMs grant everything to their members.
+/// Channel (with overwrites) plus the caller's effective permissions in it, for anything that reads or writes its
+/// content. Someone who can view the channel but does not meet its minimum age gets `AgeGate`.
 pub async fn require_channel_perms(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> AppResult<(Channel, u64)> {
+    let (c, p) = require_channel_perms_listed(db, channel_id, user_id).await?;
+    crate::age::check(db, &c, user_id).await?;
+    Ok((c, p))
+}
+
+/// The channel as it appears in the channel list, WITHOUT the age check. See `require_channel_perms_listed`.
+pub async fn require_channel_listed(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> AppResult<Channel> {
+    Ok(require_channel_perms_listed(db, channel_id, user_id).await?.0)
+}
+
+/// The channel as it appears in the channel list, and the caller's permissions in it, WITHOUT the age check.
+/// Only for what a person who is locked out of the content may still do: see that the channel exists, change its
+/// settings and permissions, mark it read. Never return messages, files or members' activity through this.
+/// Guild channels the caller cannot view are reported as not found. DMs grant everything to their members.
+pub async fn require_channel_perms_listed(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> AppResult<(Channel, u64)> {
     let mut c = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1"))
         .bind(channel_id)
         .fetch_optional(db)
@@ -85,6 +100,15 @@ pub async fn require_channel_perms(db: &PgPool, channel_id: Uuid, user_id: Uuid)
     }
 }
 
+/// Who has this channel in their list: for events about the channel itself, never its content.
+pub async fn listing_target_for(db: &PgPool, c: &Channel) -> AppResult<Target> {
+    match c.guild_id {
+        Some(_) => perms::channel_listing_audience(db, c).await,
+        None => target_for(db, c).await,
+    }
+}
+
+/// Who receives this channel's content (messages, reactions, typing): everyone who can view it and meets its age.
 pub async fn target_for(db: &PgPool, c: &Channel) -> AppResult<Target> {
     match c.guild_id {
         Some(_) => perms::channel_audience(db, c).await,
@@ -103,7 +127,7 @@ async fn get_channel(
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<Channel>> {
-    Ok(Json(require_channel(&state.db, id, uid).await?))
+    Ok(Json(require_channel_listed(&state.db, id, uid).await?))
 }
 
 #[derive(Deserialize)]
@@ -118,8 +142,10 @@ struct UpdateChannel {
     #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
     parent_id: Option<Option<Uuid>>,
     position: Option<i32>,
-    /// Guild text channels: age-restricted.
+    /// Age-restricted (18+). Kept for older clients; `min_age` says the same with a number.
     nsfw: Option<bool>,
+    /// The age people must meet to read this channel: 0 for none, or 13-21.
+    min_age: Option<i16>,
     /// Guild text channels: spoiler warning before viewing.
     spoiler: Option<bool>,
     /// Voice channels: 'auto' or 'full'.
@@ -159,7 +185,7 @@ async fn update_channel(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateChannel>,
 ) -> AppResult<Json<Channel>> {
-    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms_listed(&state.db, id, uid).await?;
     if c.guild_id.is_none() {
         // DM and group calls: any member may switch end-to-end encryption on or off.
         if let Some(on) = req.e2ee.filter(|on| *on != c.e2ee) {
@@ -257,10 +283,18 @@ async fn update_channel(
         Some(p) => Some(crate::routes::guilds::check_parent(&state.db, gid, &c.kind, p).await?),
         None => None,
     };
+    // `min_age` wins over the older `nsfw` switch when both are sent. Some(None) clears it.
+    let new_age: Option<Option<i16>> = match (req.min_age, req.nsfw) {
+        (Some(a), _) => Some(crate::age::setting(a)?),
+        (None, Some(true)) => Some(Some(c.min_age.unwrap_or(18))),
+        (None, Some(false)) => Some(None),
+        (None, None) => None,
+    };
+    if let Some(new) = new_age { crate::age::may_change(&state.db, uid, c.min_age, new).await?; }
     let before = if parent.is_some() { Some(perms::visibility(&state.db, gid).await?) } else { None };
     let mut updated = sqlx::query_as::<_, Channel>(&format!(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
-         parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
+         parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, min_age = CASE WHEN $7 THEN $22 ELSE min_age END,
          audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee),
          rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit), spoiler = COALESCE($14, spoiler), video_quality = COALESCE($15, video_quality),
          forum_layout = COALESCE($16, forum_layout), forum_sort = COALESCE($17, forum_sort), forum_require_tag = COALESCE($18, forum_require_tag), forum_default_reaction = COALESCE($19, forum_default_reaction),
@@ -273,7 +307,7 @@ async fn update_channel(
     .bind(req.position)
     .bind(parent.is_some())
     .bind(parent.flatten())
-    .bind(req.nsfw)
+    .bind(new_age.is_some())
     .bind(&req.audio_mode)
     .bind(req.audio_bitrate)
     .bind(req.audio_low_latency)
@@ -288,6 +322,7 @@ async fn update_channel(
     .bind(&reaction)
     .bind(req.news)
     .bind(req.media)
+    .bind(new_age.flatten())
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -297,7 +332,7 @@ async fn update_channel(
     if updated.e2ee != c.e2ee {
         call_e2ee_changed(&state, id, updated.e2ee);
     }
-    let target = perms::channel_audience(&state.db, &updated).await?;
+    let target = perms::channel_listing_audience(&state.db, &updated).await?;
     state.hub.emit(target, "CHANNEL_UPDATE", json!(updated));
     if let Some(gid) = updated.guild_id {
         let mut d = serde_json::Map::new();
@@ -306,6 +341,7 @@ async fn update_channel(
         if updated.news != c.news { d.insert("news".into(), json!(updated.news)); }
         if updated.media != c.media { d.insert("media".into(), json!(updated.media)); }
         if updated.spoiler != c.spoiler { d.insert("spoiler".into(), json!(updated.spoiler)); }
+        if updated.min_age != c.min_age { d.insert("min_age".into(), json!(updated.min_age)); }
         if updated.video_quality != c.video_quality { d.insert("video_quality".into(), json!(updated.video_quality)); }
         if updated.audio_mode != c.audio_mode { d.insert("audio_mode".into(), json!(updated.audio_mode)); }
         if updated.audio_bitrate != c.audio_bitrate { d.insert("audio_bitrate".into(), json!(updated.audio_bitrate)); }
@@ -339,7 +375,7 @@ async fn delete_channel(
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<StatusCode> {
-    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms_listed(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("Cannot delete DM channels".into()))?;
     perms::check(p, perms::MANAGE_CHANNELS)?;
     let (backs,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM communities WHERE category_id = $1)").bind(id).fetch_one(&state.db).await?;
@@ -397,7 +433,7 @@ pub async fn system_message(state: &AppState, c: &Channel, actor: Uuid, kind: &s
     let msg = fetch_message(&state.db, mid, actor).await?;
     crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let target = target_for(&state.db, c).await?;
-    state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    emit_message(&state, &c, target, "MESSAGE_CREATE", &msg).await;
     Ok(msg)
 }
 
@@ -424,7 +460,7 @@ pub async fn finish_call(state: &AppState, channel_id: Uuid, call: crate::ws::hu
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
     let msg = fetch_message(&state.db, call.message_id, call.starter).await?;
     let target = target_for(&state.db, &c).await?;
-    state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    emit_message(&state, &c, target, "MESSAGE_UPDATE", &msg).await;
     Ok(())
 }
 
@@ -442,20 +478,8 @@ pub async fn guild_system_message(state: &AppState, guild_id: Uuid, actor: Uuid,
 }
 
 /// `GET /channels/:id/messages/:mid`: one message (message link previews).
-/// 18+ channels (or threads under one): only people with a birth date on file who are 18 or older.
-pub async fn check_age(db: &PgPool, c: &Channel, uid: Uuid) -> AppResult<()> {
-    let nsfw = c.nsfw || (c.kind == "thread" && match c.parent_id {
-        Some(p) => sqlx::query_as::<_, (bool,)>("SELECT nsfw FROM channels WHERE id = $1").bind(p).fetch_optional(db).await?.map(|r| r.0).unwrap_or(false),
-        None => false,
-    });
-    if !nsfw { return Ok(()) }
-    let (adult, known): (bool, bool) = sqlx::query_as("SELECT COALESCE(birthdate <= (now() - interval '18 years')::date, false), birthdate IS NOT NULL FROM users WHERE id = $1").bind(uid).fetch_one(db).await?;
-    if adult { Ok(()) } else { Err(AppError::AgeGate(known)) }
-}
-
 async fn get_message(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, mid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Message>> {
-    let c = require_channel(&state.db, id, uid).await?;
-    check_age(&state.db, &c, uid).await?;
+    require_channel(&state.db, id, uid).await?;
     let m = fetch_message(&state.db, mid, uid).await?;
     if m.channel_id != id {
         return Err(AppError::NotFound("Message not found".into()));
@@ -479,7 +503,6 @@ async fn list_messages(
     Query(p): Query<Pagination>,
 ) -> AppResult<Json<Vec<Message>>> {
     let (c, perm) = require_channel_perms(&state.db, id, uid).await?;
-    check_age(&state.db, &c, uid).await?;
     // Without Read Message History you only see what arrives while you're looking.
     if c.guild_id.is_some() && !has(perm, perms::READ_MESSAGE_HISTORY) { return Ok(Json(Vec::new())) }
     let limit = p.limit.unwrap_or(50).clamp(1, 100);
@@ -561,7 +584,6 @@ pub(crate) async fn create_message(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
     crate::signup_guard::require_can_post(&state, uid).await?;
-    check_age(&state.db, &c, uid).await?;
     crate::routes::guests::check_post(&state, uid, c.guild_id).await?;
     if let Some(gid) = c.guild_id {
         crate::routes::guilds::check_rules(&state.db, gid, uid).await?;
@@ -708,8 +730,14 @@ pub(crate) async fn create_message(
     }
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
-    state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
-    crate::push::after_message(state.clone(), msg.clone(), c.clone());
+    // A confirmed spammer writing to someone who has not accepted them: kept for the sender, shown to nobody else.
+    if c.kind == "dm" && crate::abuse::quiet_dm(&state.db, uid, c.id).await {
+        state.hub.emit_users(vec![uid], "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    } else {
+        emit_message(&state, &c, target, "MESSAGE_CREATE", &msg).await;
+        crate::push::after_message(state.clone(), msg.clone(), c.clone());
+    }
+    crate::abuse::after_message(state.clone(), uid, c.id, msg.content.clone(), msg.mentions.len());
     if c.kind == "thread" {
         crate::routes::threads::on_thread_message(&state, c.id, uid).await?;
     }
@@ -765,7 +793,7 @@ async fn edit_message(
     let Some(content) = req.content else {
         let msg = fetch_message(&state.db, mid, uid).await?;
         let target = target_for(&state.db, &c).await?;
-        state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+        emit_message(&state, &c, target, "MESSAGE_UPDATE", &msg).await;
         return Ok(Json(msg));
     };
     let content = tidy_content(&content);
@@ -775,6 +803,10 @@ async fn edit_message(
     let (m_users, m_roles, m_everyone) = parse_mentions(&content);
     let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
     let m_roles = mentionable_roles(&state.db, c.guild_id, m_roles, has(p, perms::MENTION_EVERYONE)).await?;
+    // The same text checks as sending: otherwise a harmless message could be edited into what AutoMod or the
+    // blocked-links list would have refused.
+    crate::routes::automod::check_message(&state, &c, uid, p, &content, m_users.len() + m_roles.len() + usize::from(m_everyone)).await?;
+    crate::routes::safety::check_links(&state, &content).await?;
     let mut tx = state.db.begin().await?;
     // Keep what is being replaced (only when it actually changes) so readers can see the history.
     sqlx::query("INSERT INTO message_revisions (id, message_id, content) SELECT $1, id, content FROM messages WHERE id = $2 AND channel_id = $3 AND author_id = $4 AND content <> $5")
@@ -803,7 +835,7 @@ async fn edit_message(
     tx.commit().await?;
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
-    state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    emit_message(&state, &c, target, "MESSAGE_UPDATE", &msg).await;
     Ok(Json(msg))
 }
 
@@ -927,7 +959,7 @@ pub async fn set_voice_status_inner(state: &AppState, id: Uuid, status: &str) ->
         .bind(id).bind(status).fetch_optional(&state.db).await?;
     if let Some(mut c) = updated {
         perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
-        let target = perms::channel_audience(&state.db, &c).await?;
+        let target = perms::channel_listing_audience(&state.db, &c).await?;
         state.hub.emit(target, "CHANNEL_UPDATE", json!(c));
     }
     Ok(StatusCode::NO_CONTENT)
@@ -1056,6 +1088,7 @@ async fn add_reaction(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::ADD_REACTIONS)?;
     crate::signup_guard::require_can_post(&state, uid).await?;
+    crate::abuse::rate_reaction(uid)?;
     if !valid_emoji(&emoji) {
         return Err(AppError::BadRequest("Invalid emoji".into()));
     }
@@ -1176,7 +1209,7 @@ struct SetOverwrite {
 /// Create or replace a permission overwrite for a role or member on a guild channel.
 /// `POST /channels/:id/permissions-sync`: drop this channel's own overwrites so it follows its category again.
 async fn sync_permissions(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
-    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms_listed(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
     perms::check(p, perms::MANAGE_ROLES)?;
     if c.parent_id.is_none() { return Err(AppError::BadRequest("This channel isn't in a category".into())) }
@@ -1230,7 +1263,7 @@ async fn set_overwrite(
     Path((id, target)): Path<(Uuid, Uuid)>,
     Json(req): Json<SetOverwrite>,
 ) -> AppResult<StatusCode> {
-    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms_listed(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
     let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
     let allow = (req.allow as u64) & perms::ALL;
@@ -1259,7 +1292,7 @@ async fn delete_overwrite(
     AuthUser(uid): AuthUser,
     Path((id, target)): Path<(Uuid, Uuid)>,
 ) -> AppResult<StatusCode> {
-    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms_listed(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
     let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
     check_overwrite_edit(&ctx, uid, p, c.overwrites.iter().find(|o| o.target_id == target), "", target, None, false)?;
@@ -1285,7 +1318,7 @@ pub(crate) async fn mark_read(
     Path(id): Path<Uuid>,
     Json(req): Json<MarkRead>,
 ) -> AppResult<StatusCode> {
-    let c = require_channel(&state.db, id, uid).await?;
+    let c = require_channel_listed(&state.db, id, uid).await?;
     let prev: Option<(Option<Uuid>,)> = sqlx::query_as("SELECT last_read_msg FROM read_states WHERE user_id = $1 AND channel_id = $2").bind(uid).bind(id).fetch_optional(&state.db).await?;
     let (now,): (Uuid,) = sqlx::query_as(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)
@@ -1345,7 +1378,30 @@ pub async fn hydrate(db: &PgPool, rows: Vec<MessageRow>, me: Uuid, reverse: bool
         m.referenced = referenced.map(Box::new);
         m
     });
-    Ok(if reverse { it.rev().collect() } else { it.collect() })
+    let mut out: Vec<Message> = if reverse { it.rev().collect() } else { it.collect() };
+    // Message requests the viewer has not accepted: no media for someone not verified as an adult.
+    let mut chans: Vec<Uuid> = out.iter().map(|m| m.channel_id).collect();
+    chans.sort(); chans.dedup();
+    let locked = crate::routes::dms::locked_for(db, &chans, me).await?;
+    if !locked.is_empty() { for m in out.iter_mut().filter(|m| locked.contains(&m.channel_id)) { crate::routes::dms::lock_media(m); } }
+    Ok(out)
+}
+
+/// Send a message event to everyone who receives the channel's content. In a DM that is still a message request
+/// to someone not verified as an adult, that person gets a copy without the media.
+pub async fn emit_message(state: &AppState, c: &Channel, target: Target, event: &str, msg: &Message) {
+    if c.kind == "dm" {
+        let locked = crate::routes::dms::locked_members(&state.db, c.id).await.unwrap_or_default();
+        if let (false, Target::Users(us)) = (locked.is_empty(), &target) {
+            let (theirs, rest): (Vec<Uuid>, Vec<Uuid>) = us.iter().copied().partition(|u| locked.contains(u));
+            state.hub.emit_users(rest, event, json!({ "message": msg, "guild_id": c.guild_id }));
+            let mut copy = msg.clone();
+            crate::routes::dms::lock_media(&mut copy);
+            state.hub.emit_users(theirs, event, json!({ "message": copy, "guild_id": c.guild_id }));
+            return;
+        }
+    }
+    state.hub.emit(target, event, json!({ "message": msg, "guild_id": c.guild_id }));
 }
 
 /// Previews of the messages these rows reply to, keyed by the original's id (missing when deleted).
@@ -1403,7 +1459,7 @@ async fn set_pinned(state: &AppState, id: Uuid, mid: Uuid, uid: Uuid, pinned: bo
     }
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
-    state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    emit_message(&state, &c, target, "MESSAGE_UPDATE", &msg).await;
     if pinned && res.rows_affected() > 0 {
         system_message(state, &c, uid, "pins_add", "pinned a message to this channel.", vec![], Some(mid), None).await?;
     }
@@ -1455,6 +1511,13 @@ async fn forward_message(
     }
     let (target_ch, p) = require_channel_perms(&state.db, req.channel_id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
+    // Forwarding is sending: the same guards as a new message in the place it lands.
+    crate::signup_guard::require_can_post(&state, uid).await?;
+    crate::routes::guests::check_post(&state, uid, target_ch.guild_id).await?;
+    crate::abuse::rate("forward", uid, 20.0, 60.0)?;
+    if let Some(gid) = target_ch.guild_id { check_verification(&state.db, gid, uid).await?; }
+    crate::routes::automod::check_message(&state, &target_ch, uid, p, &src.content, 0).await?;
+    crate::routes::safety::check_links(&state, &src.content).await?;
     if !src.attachments.is_empty() && target_ch.guild_id.is_some() {
         perms::check(p, perms::ATTACH_FILES)?;
     }
@@ -1510,7 +1573,12 @@ async fn forward_message(
     .await?;
     let msg = fetch_message(&state.db, new_id, uid).await?;
     let target = target_for(&state.db, &target_ch).await?;
-    state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": target_ch.guild_id }));
+    if target_ch.kind == "dm" && crate::abuse::quiet_dm(&state.db, uid, target_ch.id).await {
+        state.hub.emit_users(vec![uid], "MESSAGE_CREATE", json!({ "message": msg, "guild_id": target_ch.guild_id }));
+    } else {
+        emit_message(&state, &target_ch, target, "MESSAGE_CREATE", &msg).await;
+    }
+    crate::abuse::after_message(state.clone(), uid, target_ch.id, src.content.clone(), 0);
     Ok((StatusCode::CREATED, Json(msg)))
 }
 

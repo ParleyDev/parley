@@ -18,7 +18,7 @@ async fn highlights(State(state): State<AppState>, AuthUser(uid): AuthUser) -> A
          ORDER BY m.joined_at LIMIT 50").bind(uid).fetch_all(&state.db).await?;
     let mut chans: HashMap<Uuid, (Uuid, String, String)> = HashMap::new();
     for (gid, gname) in &guilds {
-        for c in perms::visible_channels(&state.db, *gid, uid).await? {
+        for c in perms::readable_channels(&state.db, *gid, uid).await? {
             if c.kind == "text" || c.kind == "thread" { chans.insert(c.id, (*gid, gname.clone(), c.name.clone())); }
         }
     }

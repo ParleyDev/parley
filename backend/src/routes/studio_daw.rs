@@ -234,7 +234,7 @@ async fn create_project(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     sqlx::query("INSERT INTO studio_engineers (channel_id, user_id, role) VALUES ($1, $2, 'engineer')").bind(room).bind(uid).execute(&mut *tx).await?;
     tx.commit().await?;
     let c = channel_json(&state, room).await?;
-    let target = perms::channel_audience(&state.db, &c).await?;
+    let target = perms::channel_listing_audience(&state.db, &c).await?;
     state.hub.emit(target, "CHANNEL_CREATE", json!(c));
     broadcast(&state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": id })).await?;
     crate::audit::guild(&state, gid, uid, "studio.project_create", "channel", Some(room), &name, json!({ "project": pid, "studio": id })).await;
@@ -973,7 +973,14 @@ async fn import_audio(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
         Ok(())
     }.await;
     if let Err(e) = res { let _ = tokio::fs::remove_file(&path).await; return Err(e); }
+    // Scanned before it is recorded, like any upload: antivirus and the known-material check (when set up).
     let name = clean_name(&q.name, "Audio");
+    let scanned: AppResult<()> = async {
+        let bytes = tokio::fs::read(&path).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+        crate::av::check(&state, &bytes, "attachment").await?;
+        crate::routes::matching::check(&state, &bytes, crate::routes::matching::Ctx { user_id: uid, surface: "sound", channel_id: Some(id), filename: &name, content_type: &ct }).await
+    }.await;
+    if let Err(e) = scanned { let _ = tokio::fs::remove_file(&path).await; return Err(e); }
     sqlx::query("INSERT INTO studio_tracks (id, session_id, channel_id, user_id, content_type, size, duration_ms, done, kind, name) VALUES ($1, NULL, $2, $3, $4, $5, $6, true, 'import', $7)")
         .bind(tid).bind(id).bind(uid).bind(&ct).bind(size as i64).bind(q.duration_ms.map(|d| d.clamp(0, MAX_MS))).bind(&name).execute(&state.db).await?;
     let mut t = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?;

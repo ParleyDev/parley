@@ -2,7 +2,7 @@
 title: Amigos y mensajes directos
 section: Conversar
 summary: Añade amigos, chatea a solas o en grupos pequeños y gestiona las solicitudes de mensaje.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Haz clic en **Mensajes directos**, arriba de la lista de servidores, para ver a tus amigos y tus conversaciones privadas.
@@ -46,6 +46,8 @@ Un MD grupal es un chat privado pequeño para hasta 10 personas, sin necesidad d
 Los mensajes de personas que no son tus amigos van a **Solicitudes de mensaje**, para que los desconocidos no lleguen directamente a tus MD. Para cada solicitud, elige **Aceptar**, **Ignorar** o **Bloquear**.
 
 Los mensajes que parecen spam se guardan aparte, en **Spam**. Si uno está bien, márcalo como **No es spam**.
+
+Hasta que se confirme que eres mayor de edad, una solicitud solo muestra su texto. Las imágenes, los archivos y las vistas previas de enlaces siguen ocultos hasta que pulses **Aceptar**, y no puedes desactivar las solicitudes de mensaje. Consulta [Tu edad](settings#your-age).
 
 Elige quién puede escribirte en **Ajustes de usuario → Contenido y social**. Consulta [Ajustes](settings#content-and-social).
 

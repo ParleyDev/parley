@@ -2,7 +2,7 @@
 title: Ayarlar
 section: Sen
 summary: Hesap güvenliği, gizlilik, görünüm, erişilebilirlik, dil ve masaüstü uygulamasının seçenekleri.
-source: 34c162a49c91
+source: c3991172940f
 ---
 
 **Kullanıcı Ayarları**'nı sol alt köşede adının yanındaki çark simgesiyle aç ya da <kbd>Ctrl</kbd>+<kbd>,</kbd> tuşlarına bas. Bir şeyi bulamıyor musun? Listenin üstündeki arama kutusuna yaz. Sunucu yöneticileri listenin en altında **Yönetici Konsolu**'nu da bulur.
@@ -16,11 +16,32 @@ source: 34c162a49c91
 - **İki Faktörlü Kimlik Doğrulama**: şiddetle tavsiye edilir. **İki Faktörlü Kimlik Doğrulamayı Etkinleştir**'e tıkla, kodu bir doğrulama uygulamasıyla tara ve açmak için 6 haneli kodu yaz.
   - **Yedek kodlarını** güvenli bir yere kaydet. Telefonunu kaybedersen seni içeri alırlar.
 - **Geçiş anahtarları**: parmak izin, yüzün veya cihaz PIN'inle giriş yap. **Geçiş anahtarı ekle**'ye tıkla. Geçiş anahtarı, moderatörlerden bunu isteyen sunucular için iki faktörlü doğrulama yerine de geçer.
-- **Hesap Durumu**: son zamanlarda herhangi bir kuralı çiğneyip çiğnemediğin. Normalde *Her şey yolunda* yazar.
+- **Hesap Durumu**: son zamanlarda herhangi bir kuralı çiğneyip çiğnemediğin. Normalde *Her şey yolunda* yazar. Parley sunucunu işletenler hesabını sınırladıysa buradaki bir not bunun ne zamana kadar süreceğini ve bu sırada neleri yapamayacağını söyler.
+- **Yaş**: bkz. [Yaşın](#your-age).
 - **Sunucu Yasakları**: seni yasaklamış sunucular; sunucunun izin verdiği yerlerde **Bu yasağa itiraz et** seçeneğiyle.
 - **Depolama**: yükleme alanının ne kadarını kullandığın.
 - **Yıllık Özet**: Parley'deki yılın.
 - **Hesap Kaldırma**: hesabını devre dışı bırak veya sil. Bkz. [Başlarken](getting-started#taking-a-break-or-leaving).
+
+## Yaşın
+
+Parley doğum tarihini sormaz. Yetişkin olduğun onaylanana kadar hesabına daha genç birinin hesabıymış gibi davranır:
+
+- Yaş sınırlı kanallar ve yalnızca yetişkinlere açık sunucular kapalı kalır.
+- Eklemediğin kişilerden gelen mesajlar [istek](direct-messages#message-requests) olarak ulaşır; resimler, dosyalar ve bağlantı önizlemeleri sen kabul edene kadar gizlenir.
+
+**Kullanıcı Ayarları → Hesabım → Yaş**, durumunu ve Parley sunucunun seni onaylamak için sunduğu yolları gösterir:
+
+- Kuruluysa bir hizmet **ile doğrula**. Hizmet Parley'ye yalnızca 18 yaşında veya daha büyük olup olmadığını söyler.
+- **Ekipten yetişkin olduğumu onaylamasını iste**. Seninle iletişime geçebilirler. Parley üzerinden kimlik belgesi gönderme.
+- **18 yaşında veya daha büyüğüm**: Parley sunucunun senin sözünü yeterli saydığı durumlarda.
+
+Bunların hiçbiri sunulmuyorsa Parley sunucunun henüz yaşı onaylamak için bir yolu yok.
+
+- **18 yaşından küçüğüm**, hesabını bir gencin hesabı olarak işaretler. Sana yalnızca arkadaşların mesaj atabilir, hassas medya bulanıklaştırılır ya da engellenir ve [Aile Merkezi](#family-center)'ni kullanabilirsin. Bunu yalnızca bir yönetici geri alabilir.
+- **Doğum günü (isteğe bağlı)** yıl olmadan bir gün ve ay kaydeder. Yalnızca sen görebilirsin.
+
+> Note: yaş durumunu senden başka kimse göremez.
 
 ## Veri ve gizlilik
 
@@ -39,6 +60,8 @@ source: 34c162a49c91
 ## Aile Merkezi
 
 Ebeveynler ve gençler hesaplarını bağlayabilir. Ebeveyn, gencin hangi sunuculara katıldığını, kimleri arkadaş olarak eklediğini ve kimlerle mesajlaştığını görür, ama mesajlarda ne yazdığını asla görmez. Genç **Ebeveyn bağla** altında bir kod alır, ebeveyn de onu **Genç hesabı bağla** altına girer. İkisi de **Bağlantıyı kaldır** diyebilir.
+
+Kod, 18 yaşından küçük olarak işaretlenmiş bir hesaptan alınır. Bkz. [Yaşın](#your-age).
 
 ## Cihazlar ve bağlantılar
 

@@ -2,15 +2,14 @@
 // joined, friends added, who they messaged and how often — no message content); the teen sees the same; strangers
 // see nothing; either side unlinks. Codes only come from teens, and only adults can use them.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, raw, ok, finish, makeAdult } from '../lib.mjs'
 const teen = await reg('teen'), parent = await reg('parent'), stranger = await reg('stranger'), unknown = await reg('unknown'), pal = await reg('pal')
-const ago = (y) => { const d = new Date(); d.setFullYear(d.getFullYear() - y); return d.toISOString().slice(0, 10) }
-await call(teen.token, 'PUT', '/users/@me/birthdate', { birthdate: ago(15) })
-for (const u of [parent, stranger, pal]) await call(u.token, 'PUT', '/users/@me/birthdate', { birthdate: ago(40) })
+await call(teen.token, 'POST', '/users/@me/age/declare', { adult: false })
+await makeAdult(stranger, pal) // the parent is deliberately not confirmed: holding the teen's code is what links them
 
 console.log('-- codes')
 ok('adults do not make codes', (await raw(parent.token, 'POST', '/family/code', {})).status === 400)
-ok('without a birthday it says to add one', /birthday/.test(JSON.stringify(await (await raw(unknown.token, 'POST', '/family/code', {})).json())))
+ok('an account not marked under 18 is told who makes codes', /under 18/.test(JSON.stringify(await (await raw(unknown.token, 'POST', '/family/code', {})).json())))
 ok('a wrong code is refused', (await raw(parent.token, 'POST', '/family/links', { code: 'NOPE2345' })).status === 400)
 
 console.log("-- the teen's week")
@@ -39,7 +38,7 @@ ok('teens cannot link to someone', (await raw(teen.token, 'POST', '/family/links
 console.log('-- the parent')
 // Scanning the QR opens Family Center with the code filled in.
 const pp = await mk(parent, `/channels/@me?family=${code}`)
-await pp.waitForSelector('[data-family-role="adult"]')
+await pp.waitForSelector('[data-family-role="unknown"]')
 ok('the QR link opens Family Center with the code', await pp.inputValue('[data-family-code-input]') === code)
 await pp.click('[data-family-link]')
 await pp.waitForSelector(`[data-family-teen="${teen.user.id}"] [data-family-summary]`)

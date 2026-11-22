@@ -2,7 +2,7 @@
 title: Amigos e mensagens diretas
 section: Conversando
 summary: Adicione amigos, converse a dois ou em pequenos grupos e cuide das solicitações de mensagem.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Clique em **Mensagens diretas** no topo da lista de servidores para ver seus amigos e suas conversas privadas.
@@ -46,6 +46,8 @@ Uma DM em grupo é um chat privado pequeno para até 10 pessoas, sem precisar de
 Mensagens de quem não é seu amigo vão para **Solicitações de mensagem**, para que desconhecidos não caiam direto nas suas DMs. Para cada solicitação, escolha **Aceitar**, **Ignorar** ou **Bloquear**.
 
 Mensagens que parecem spam ficam separadas em **Spam**. Se alguma estiver tudo bem, marque como **Não é spam**.
+
+Até sua maioridade ser confirmada, uma solicitação mostra só o texto. Imagens, arquivos e prévias de links ficam ocultos até você clicar em **Aceitar**, e não dá para desativar as solicitações de mensagem. Veja [Sua idade](settings#your-age).
 
 Escolha quem pode enviar mensagens para você em **Configurações de usuário → Conteúdo e social**. Veja [Configurações](settings#content-and-social).
 

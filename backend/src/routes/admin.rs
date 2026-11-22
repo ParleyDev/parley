@@ -592,9 +592,6 @@ struct PatchUser {
     /// Largest single upload for this user in bytes; null restores the instance default.
     #[serde(default, deserialize_with = "deserialize_nullable_i64")]
     max_upload_bytes: Option<Option<i64>>,
-    /// Only `true` is meaningful: clears a birth date entered by mistake so the user can set it again.
-    #[serde(default)]
-    reset_birthdate: bool,
 }
 
 fn deserialize_nullable_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
@@ -609,7 +606,7 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     let need = |p: Perm| if a.has(p) { Ok(()) } else { Err(AppError::Forbidden) };
     if req.is_admin == Some(false) && id == uid { return Err(AppError::BadRequest("You cannot remove your own admin rights".into())); }
     if req.is_admin.is_some() { need(Perm::AdminRolesManage)? }
-    if req.suspended.is_some() || req.mfa.is_some() || req.reset_birthdate { need(Perm::ContentAction)? }
+    if req.suspended.is_some() || req.mfa.is_some() { need(Perm::ContentAction)? }
     if req.max_upload_bytes.is_some() || req.upload_quota_bytes.is_some() { need(Perm::InstanceManage)? }
     let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     if exists.is_none() {
@@ -648,10 +645,6 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
         if q.map(|v| v < 0).unwrap_or(false) { return Err(AppError::BadRequest("Quota cannot be negative".into())); }
         sqlx::query("UPDATE users SET upload_quota_bytes = $2 WHERE id = $1").bind(id).bind(q).execute(&state.db).await?;
         audit::record(&state, uid, "user.quota", "user", Some(id), &audit::username(&state, id).await, json!({ "upload_quota_bytes": q })).await;
-    }
-    if req.reset_birthdate {
-        sqlx::query("UPDATE users SET birthdate = NULL WHERE id = $1").bind(id).execute(&state.db).await?;
-        audit::record(&state, uid, "user.reset_birthdate", "user", Some(id), &audit::username(&state, id).await, json!({})).await;
     }
     match req.mfa {
         Some(false) => {

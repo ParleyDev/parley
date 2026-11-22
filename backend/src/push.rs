@@ -234,7 +234,15 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
         let candidates: Vec<Uuid> = if channel.guild_id.is_none() {
             sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM channel_members WHERE channel_id = $1 AND user_id <> $2").bind(channel.id).bind(msg.author.id).fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0).collect()
         } else {
-            msg.mentions.iter().copied().filter(|u| *u != msg.author.id).collect()
+            // Only people who can read the channel. A mention of someone who cannot view it, or who does not meet
+            // its minimum age, must not hand them the message in a notification.
+            let mut ch = [channel.clone()];
+            let _ = crate::perms::attach_overwrites(&state.db, &mut ch).await;
+            let readers: std::collections::HashSet<Uuid> = match crate::routes::channels::target_for(&state.db, &ch[0]).await {
+                Ok(crate::ws::hub::Target::Users(v)) => v.into_iter().collect(),
+                _ => Default::default(),
+            };
+            msg.mentions.iter().copied().filter(|u| *u != msg.author.id && readers.contains(u)).collect()
         };
         let mut targets: Vec<Uuid> = Vec::new();   // push: offline, or online but idle past their timeout
         let mut mail_to: Vec<Uuid> = Vec::new();   // email: offline, opted in, not mailed in the last hour

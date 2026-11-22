@@ -2,7 +2,7 @@
 title: Ajustes
 section: Tú
 summary: Seguridad de la cuenta, privacidad, apariencia, accesibilidad, idioma y las opciones de la app de escritorio.
-source: 34c162a49c91
+source: c3991172940f
 ---
 
 Abre los **Ajustes de usuario** con el engranaje junto a tu nombre, en la esquina inferior izquierda, o pulsa <kbd>Ctrl</kbd>+<kbd>,</kbd>. ¿No encuentras algo? Escribe en el cuadro de búsqueda de arriba de la lista. Los administradores de la instancia también tienen la **Consola de administración** al final de la lista.
@@ -16,11 +16,32 @@ Abre los **Ajustes de usuario** con el engranaje junto a tu nombre, en la esquin
 - **Autenticación en dos pasos**: muy recomendable. Haz clic en **Activar autenticación en dos pasos**, escanea el código con una app de autenticación y escribe el código de 6 dígitos para activarla.
   - Guarda tus **códigos de respaldo** en un lugar seguro. Te permiten entrar si pierdes el móvil.
 - **Claves de acceso**: inicia sesión con tu huella, tu cara o el PIN del dispositivo. Haz clic en **Añadir una clave de acceso**. Una clave de acceso también cuenta como autenticación en dos pasos en los servidores que la exigen a los moderadores.
-- **Estado de la cuenta**: si has incumplido alguna regla últimamente. Normalmente dice *Todo bien*.
+- **Estado de la cuenta**: si has incumplido alguna regla últimamente. Normalmente dice *Todo bien*. Si el equipo que gestiona tu Parley ha limitado tu cuenta, un aviso indica aquí hasta cuándo y qué no puedes hacer mientras tanto.
+- **Edad**: consulta [Tu edad](#your-age).
 - **Baneos del servidor**: los servidores que te han baneado, con **Apelar este baneo** cuando el servidor lo permite.
 - **Almacenamiento**: cuánto espacio de subida has usado.
 - **Resumen del año**: tu año en Parley.
 - **Eliminación de cuenta**: deshabilita o elimina tu cuenta. Consulta [Primeros pasos](getting-started#taking-a-break-or-leaving).
+
+## Tu edad
+
+Parley no te pide tu fecha de nacimiento. Hasta que se confirme que eres mayor de edad, trata tu cuenta como la de una persona más joven:
+
+- Los canales con restricción de edad y los servidores solo para adultos siguen cerrados.
+- Los mensajes de personas que no has añadido llegan como [solicitudes](direct-messages#message-requests), con las imágenes, los archivos y las vistas previas de enlaces ocultos hasta que aceptes.
+
+**Ajustes de usuario → Mi cuenta → Edad** muestra cuál es tu situación y las formas que ofrece tu Parley para confirmarte:
+
+- **Verificar con** un servicio, si hay alguno configurado. Solo le dice a Parley si tienes 18 años o más.
+- **Pedir al equipo que confirme que soy mayor de edad**. Puede que se pongan en contacto contigo. No envíes documentos de identidad a través de Parley.
+- **Tengo 18 años o más**, si a tu Parley le basta con tu palabra.
+
+Si no se ofrece ninguna de estas opciones, tu Parley aún no tiene forma de confirmar edades.
+
+- **Tengo menos de 18 años** marca tu cuenta como la de un adolescente. Solo tus amigos pueden escribirte, el contenido multimedia sensible se difumina o se bloquea, y puedes usar el [Centro familiar](#family-center). Solo un administrador puede deshacerlo.
+- **Cumpleaños (opcional)** guarda un día y un mes, sin el año. Solo tú puedes verlo.
+
+> Note: nadie más puede ver el estado de tu edad.
 
 ## Datos y privacidad
 
@@ -39,6 +60,8 @@ Abre los **Ajustes de usuario** con el engranaje junto a tu nombre, en la esquin
 ## Centro familiar
 
 Padres, madres y adolescentes pueden vincular sus cuentas. El padre o la madre ve a qué servidores se une el adolescente, a quién añade como amigo y a quién escribe, pero nunca lo que dicen los mensajes. El adolescente obtiene un código en **Vincular a un padre o madre**, y el padre o la madre lo introduce en **Vincular una cuenta de adolescente**. Cualquiera de los dos puede **Desvincular**.
+
+El código sale de una cuenta marcada como menor de 18 años. Consulta [Tu edad](#your-age).
 
 ## Dispositivos y conexiones
 

@@ -63,7 +63,7 @@ async fn overview(State(state): State<AppState>, AuthUser(uid): AuthUser, header
         "SELECT username, display_name, avatar_url, email, created_at, account_state, deletion_scheduled_for, suspended_at, is_admin, bot, guest, guest_seen_at,
                 totp_secret IS NOT NULL, status,
                 email_verified_at,
-                CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END
+                CASE WHEN declared_minor THEN 'teen' WHEN age_meets(users.id, 18) THEN 'adult' ELSE 'unknown' END
          FROM users WHERE id = $1",
     ).bind(id).fetch_optional(&state.db).await?;
     let Some((username, display_name, avatar_url, email, created_at, account_state, deletion_scheduled_for, suspended_at, is_admin, bot, guest, guest_seen_at, mfa, status, email_verified_at, age_group)) = row

@@ -162,7 +162,7 @@ async fn manage_in_category(state: &AppState, channel_id: Uuid, uid: Uuid) -> Ap
 /// Who may see the community: the category's channel audience, as for ordinary channel events.
 async fn audience(state: &AppState, category: &mut Channel) -> AppResult<crate::ws::hub::Target> {
     perms::attach_overwrites(&state.db, std::slice::from_mut(category)).await?;
-    perms::channel_audience(&state.db, category).await
+    perms::channel_listing_audience(&state.db, category).await
 }
 
 async fn by_slug(state: &AppState, gid: Uuid, slug: &str) -> AppResult<Community> {
