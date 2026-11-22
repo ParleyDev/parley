@@ -1,6 +1,7 @@
 import { loadThemes, setThemes, type ColorTheme } from './colorThemes'
 import { loadCosmetics, setCosmetics, type CosmeticRow } from './cosmetics'
 import { folderChanged } from './assetCatalog'
+import { loadCustomBadges, setCustomBadges, type CustomBadge } from './customBadges'
 import { desktop, desktopBridge, isOverlay } from './desktop'
 import { pushCaption } from './captions'
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
@@ -65,6 +66,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'INSTANCE_UPDATE'; d: { registration_enabled: boolean; announcement: string } }
   | { t: 'THEMES_UPDATE'; d: { themes: ColorTheme[] } }
   | { t: 'COSMETICS_UPDATE'; d: { cosmetics: CosmeticRow[] } }
+  | { t: 'BADGES_UPDATE'; d: { badges: CustomBadge[] } }
   | { t: 'SESSION_REVOKED'; d: { reason: string } }
   | { t: 'NOTIFICATION_SETTINGS_UPDATE'; d: NotifSetting & { deleted?: boolean } }
   | { t: 'GUILD_STICKERS_UPDATE'; d: { guild_id: string; stickers: Sticker[] } }
@@ -244,7 +246,7 @@ function studioReconnect() {
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void loadThemes(); void loadCosmetics(); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); void useScheduled.getState().load(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); studioReconnect(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void loadThemes(); void loadCosmetics(); void loadCustomBadges(); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); void useScheduled.getState().load(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); studioReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
     case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); retryDawSync(); break
     case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break
@@ -327,6 +329,7 @@ function handle(ev: Ev) {
     case 'INSTANCE_UPDATE': s.setInstance(ev.d); break
     case 'THEMES_UPDATE': setThemes(ev.d.themes); break
     case 'COSMETICS_UPDATE': setCosmetics(ev.d.cosmetics); folderChanged(); break
+    case 'BADGES_UPDATE': setCustomBadges(ev.d.badges); break
     case 'SESSION_REVOKED': s.pushToast(ev.d.reason, 'error'); s.logout(); break
     case 'NOTIFICATION_SETTINGS_UPDATE': s.setNotifSetting(ev.d); break
     case 'GUILD_STICKERS_UPDATE': s.setGuildStickers(ev.d.guild_id, ev.d.stickers); break

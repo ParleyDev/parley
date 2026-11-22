@@ -1,6 +1,7 @@
 pub mod account;
 pub mod themes;
 pub mod cosmetics;
+pub mod custom_badges;
 pub mod guests;
 pub mod admin_user;
 pub mod admin_network;
@@ -171,6 +172,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(deletion::router())
         .merge(asset_layers::router())
         .merge(crate::notify::router())
+        .merge(custom_badges::router())
         .merge(expressions::router())
         .merge(gifs::router())
         .merge(discovery::router())

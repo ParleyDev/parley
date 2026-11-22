@@ -2,7 +2,7 @@
 title: Il tuo profilo
 section: Tu
 summary: La tua immagine, il banner, lo stile del nome, la targhetta, le decorazioni e gli effetti, lo stato e un aspetto diverso per ogni server.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Il tuo profilo è quello che vedono le persone quando fanno clic sul tuo nome. Apri l'editor dalla tua immagine nell'angolo in basso a sinistra, poi scegli **Modifica profilo**.
@@ -56,6 +56,7 @@ La griglia continua a caricarsi mentre scorri, così vedi tutto. Le opzioni **In
 - **Tag del clan**: da 2 a 4 lettere o numeri mostrati accanto al tuo nome ovunque.
 - **Tag del server**: mostra il tag di un server in cui sei, se ne ha uno.
 - **Badge della casa**: unisciti alla Casa della Brace, della Marea o del Bosco. Fai di nuovo clic sulla tua casa per uscirne.
+- **I badge** compaiono accanto al tuo nome sulla scheda del profilo: **Admin dell'istanza** per chi gestisce questo server Parley, **Fondatore** per i suoi primi dieci account, **Veterano** dopo un anno qui, la tua casa, e badge che gli admin di questo server hanno creato e dato alle persone per qualcosa di speciale. Passa il puntatore su un badge per vedere cosa significa.
 
 ## Il tuo stato
 

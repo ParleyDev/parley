@@ -2,7 +2,7 @@
 title: Profilin
 section: Sen
 summary: Resmin, banner'ın, ad stilin, ad plakan, süslemelerin ve efektlerin, durumun ve her sunucu için farklı bir görünüm.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Profilin, insanların adına tıkladığında gördükleri şeydir. Düzenleyiciyi sol alt köşedeki resminden, ardından **Profili Düzenle** ile aç.
@@ -56,6 +56,7 @@ Izgara sen kaydırdıkça yüklenmeye devam eder, böylece her şeyi görürsün
 - **Klan etiketi**: her yerde adının yanında gösterilen 2 ila 4 harf veya rakam.
 - **Sunucu etiketi**: içinde olduğun bir sunucunun etiketi varsa onu taşı.
 - **Ev rozeti**: House of Ember, Tide veya Grove'a katıl. Ayrılmak için evine tekrar tıkla.
+- **Rozetler** profil kartında adının yanında görünür: bu Parley sunucusunu yönetenler için **Sunucu yöneticisi**, ilk on hesap için **Kurucu**, burada bir yılı dolduranlar için **Kıdemli**, evin ve bu sunucunun yöneticilerinin oluşturup özel bir şey için kişilere verdiği rozetler. Ne anlama geldiğini görmek için imleci bir rozetin üzerine getir.
 
 ## Durumun
 

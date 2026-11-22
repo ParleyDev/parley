@@ -2,7 +2,7 @@
 title: Ton profil
 section: Toi
 summary: Ta photo, ta bannière, le style de ton nom, ta plaque de nom, tes décorations et effets, ton statut, et un look différent par serveur.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Ton profil, c'est ce que les gens voient quand ils cliquent sur ton nom. Ouvre l'éditeur depuis ta photo en bas à gauche, puis **Modifier le profil**.
@@ -56,6 +56,7 @@ La grille continue de se charger quand tu fais défiler, donc tu verras tout. Le
 - **Tag de clan** : de 2 à 4 lettres ou chiffres affichés partout à côté de ton nom.
 - **Tag du serveur** : porte le tag d'un serveur dont tu fais partie, s'il en a un.
 - **Badge de maison** : rejoins la Maison Ember, Tide ou Grove. Clique à nouveau sur ta maison pour la quitter.
+- **Les badges** s'affichent à côté de ton nom sur ta carte de profil : **Admin de l'instance** pour les personnes qui gèrent ce serveur Parley, **Fondateur** pour ses dix premiers comptes, **Vétéran** après un an ici, ta maison, et des badges que les admins de ce serveur ont créés et donnés pour quelque chose de spécial. Survole un badge pour voir ce qu'il veut dire.
 
 ## Ton statut
 

@@ -1,9 +1,10 @@
-import { Award, BadgeCheck, Flame, Server, ShieldCheck, Sparkles, Sprout, UserRound, Waves, Zap } from 'lucide-react'
+import { Award, ShieldCheck, Sparkles, Sprout, UserRound, Waves, Zap } from 'lucide-react'
 import { useState, type HTMLAttributes, type ReactNode } from 'react'
 import ServerTagCard from './ServerTagCard'
 import { useStore } from '../store'
 import Tooltip from './Tooltip'
 import { useT } from '../lib/i18n'
+import { customBadgeId, customBadgeTip, useCustomBadges, type CustomBadge } from '../lib/customBadges'
 
 /** A tag chip: the badge, then the tag, tinted with the server's tag colour if it has one. */
 export function TagPill({ tag, badge, color, className = '', ...rest }: { tag: string; badge?: string | null; color?: string | null; className?: string } & Omit<HTMLAttributes<HTMLSpanElement>, 'color'>) {
@@ -41,9 +42,6 @@ const BADGES: Record<string, { label: string; icon: ReactNode; color: string }> 
   admin: { label: 'Instance admin', icon: <ShieldCheck size={14} />, color: '#f0506e' },
   founder: { label: 'Founder: one of the first ten accounts', icon: <Sparkles size={14} />, color: '#f6b53d' },
   veteran: { label: 'Veteran: here for over a year', icon: <Award size={14} />, color: '#a78bfa' },
-  host: { label: 'Host: owns a server', icon: <Server size={14} />, color: '#38bdf8' },
-  verified: { label: 'Verified email', icon: <BadgeCheck size={14} />, color: '#3ccf7d' },
-  secure: { label: 'Two-factor authentication on', icon: <Flame size={14} />, color: '#fb923c' },
   house_ember: { label: 'House of Ember', icon: <Zap size={14} />, color: '#f97316' },
   house_tide: { label: 'House of Tide', icon: <Waves size={14} />, color: '#22d3ee' },
   house_grove: { label: 'House of Grove', icon: <Sprout size={14} />, color: '#4ade80' },
@@ -57,13 +55,29 @@ export const HOUSES = [
 export const badgeIcon = (b: string) => BADGES[b] ? <span className="flex h-5 w-5 items-center justify-center rounded-md bg-black/25" style={{ color: BADGES[b].color }}>{BADGES[b].icon}</span> : null
 
 /** Row of profile badges with tooltips; nothing when the list is empty. */
+/** A custom badge's look: its picture or emoji on a tile tinted with its colour. */
+export function CustomBadgeIcon({ badge, size = 20 }: { badge: Pick<CustomBadge, 'emoji' | 'icon_url' | 'color'>; size?: number }) {
+  return (
+    <span className="flex shrink-0 items-center justify-center rounded-md" style={{ width: size, height: size, background: `color-mix(in srgb, ${badge.color} 30%, rgb(0 0 0 / 0.25))`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${badge.color} 60%, transparent)` }}>
+      {badge.icon_url ? <img src={badge.icon_url} alt="" className="rounded-sm object-contain" style={{ width: size * 0.75, height: size * 0.75 }} draggable={false} /> : <span className="leading-none" style={{ fontSize: size * 0.62 }}>{badge.emoji}</span>}
+    </span>
+  )
+}
+
 export function Badges({ badges, className = '' }: { badges?: string[]; className?: string }) {
   const t = useT()
-  const list = (badges ?? []).filter((b) => BADGES[b])
+  const custom = useCustomBadges()
+  // Built-in ones by name; custom ones (custom:<id>) from the instance's catalog. Anything unknown (a badge Parley no
+  // longer shows, or one deleted a moment ago) is skipped.
+  const list = (badges ?? []).flatMap((b) => {
+    if (BADGES[b]) return [{ key: b, tip: t(BADGES[b].label), el: <span className="flex h-5 w-5 items-center justify-center rounded-md bg-black/25" style={{ color: BADGES[b].color }}>{BADGES[b].icon}</span> }]
+    const id = customBadgeId(b); const c = id ? custom.find((x) => x.id === id) : undefined
+    return c ? [{ key: b, tip: customBadgeTip(c), el: <CustomBadgeIcon badge={c} /> }] : []
+  })
   if (!list.length) return null
   return (
-    <span className={`inline-flex items-center gap-1 ${className}`} data-badges={list.join(',')}>
-      {list.map((b) => <Tooltip key={b} tip={t(BADGES[b].label)}><span className="flex h-5 w-5 items-center justify-center rounded-md bg-black/25" style={{ color: BADGES[b].color }} data-badge={b}>{BADGES[b].icon}</span></Tooltip>)}
+    <span className={`inline-flex items-center gap-1 ${className}`} data-badges={list.map((b) => b.key).join(',')}>
+      {list.map((b) => <Tooltip key={b.key} tip={b.tip}><span className="flex" data-badge={b.key}>{b.el}</span></Tooltip>)}
     </span>
   )
 }

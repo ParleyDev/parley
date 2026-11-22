@@ -79,6 +79,7 @@ The grid keeps loading as you scroll, so you'll see everything. **Built in** opt
 - **Clan tag**: 2 to 4 letters or numbers shown beside your name everywhere.
 - **Server tag**: wear the tag of a server you're in, if it has one.
 - **House badge**: join House of Ember, Tide or Grove. Click your house again to leave.
+- **Badges** show beside your name on your profile card: **Instance admin** for the people who run this Parley server, **Founder** for its first ten accounts, **Veteran** after a year here, your house, and badges this server's admins made and gave people for something special. Point at a badge to see what it means.
 
 ## Your status
 

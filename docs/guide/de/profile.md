@@ -2,7 +2,7 @@
 title: Dein Profil
 section: Du
 summary: Dein Bild, Banner, Namensstil, Namensschild, Dekorationen und Effekte, dein Status und ein eigener Look pro Server.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Dein Profil ist das, was andere sehen, wenn sie auf deinen Namen klicken. Öffne den Editor über dein Bild in der Ecke unten links und dann **Profil bearbeiten**.
@@ -56,6 +56,7 @@ Das Raster lädt beim Scrollen weiter, du siehst also alles. **Integriert**-Opti
 - **Clan-Tag**: 2 bis 4 Buchstaben oder Ziffern, die überall neben deinem Namen stehen.
 - **Server-Tag**: Trag den Tag eines Servers, auf dem du bist, falls er einen hat.
 - **Haus-Abzeichen**: Tritt dem Haus der Glut, der Gezeiten oder des Hains bei. Klicke noch einmal auf dein Haus, um es zu verlassen.
+- **Abzeichen** stehen neben deinem Namen auf deiner Profilkarte: **Instanz-Admin** für die Leute, die diesen Parley-Server betreiben, **Gründer** für seine ersten zehn Konten, **Veteran** nach einem Jahr hier, dein Haus und Abzeichen, die die Admins dieses Servers erstellt und für etwas Besonderes vergeben haben. Zeig auf ein Abzeichen, um zu sehen, was es bedeutet.
 
 ## Dein Status
 

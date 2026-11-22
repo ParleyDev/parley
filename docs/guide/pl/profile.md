@@ -2,7 +2,7 @@
 title: Twój profil
 section: Ty
 summary: Zdjęcie, baner, styl nazwy, tabliczka, dekoracje i efekty, status oraz inny wygląd na każdym serwerze.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Profil to to, co ludzie widzą po kliknięciu twojej nazwy. Otwórz edytor, klikając swoje zdjęcie w lewym dolnym rogu, a potem **Edytuj profil**.
@@ -56,6 +56,7 @@ Siatka doczytuje się podczas przewijania, więc zobaczysz wszystko. Opcje **Wbu
 - **Tag klanu**: od 2 do 4 liter lub cyfr wyświetlanych obok twojej nazwy wszędzie.
 - **Tag serwera**: noś tag serwera, na którym jesteś, jeśli go ma.
 - **Odznaka domu**: dołącz do domu Ember, Tide lub Grove. Kliknij swój dom ponownie, aby go opuścić.
+- **Odznaki** są obok twojej nazwy na karcie profilu: **Administrator instancji** dla osób, które prowadzą ten serwer Parley, **Założyciel** dla pierwszych dziesięciu kont, **Weteran** po roku tutaj, twój dom oraz odznaki, które administratorzy tego serwera utworzyli i przyznali ludziom za coś wyjątkowego. Najedź na odznakę, aby zobaczyć, co oznacza.
 
 ## Twój status
 

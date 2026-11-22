@@ -2,6 +2,7 @@ import ThemesPane from './AdminThemes'
 import CropImg from '../components/CropImg'
 import BlockedLinksPane from './AdminBlockedLinks'
 import NotificationsPane from './AdminNotifications'
+import BadgesPane from './AdminBadges'
 import { MatchesPane, MatchingSetupPane } from './AdminMatching'
 import { AgeChecksPane } from './AdminAge'
 import { BansPane } from './AdminBans'
@@ -14,7 +15,7 @@ import NetworkPane from './AdminNetwork'
 import ServerDetailPane from './AdminServer'
 import CosmeticsPane from './AdminCosmetics'
 import ReviewQueue from './AdminDiscovery'
-import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, Share2, ShieldAlert, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles, Bell } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, Share2, ShieldAlert, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles, Bell, Medal } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
@@ -30,7 +31,7 @@ import { useT, t as tr, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
 import { globalName } from '../lib/names'
 
-type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail' | 'matching' | 'matches' | 'age' | 'sanctions' | 'spam' | 'link-feeds' | 'explicit' | 'policies' | 'notifications'
+type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail' | 'matching' | 'matches' | 'age' | 'sanctions' | 'spam' | 'link-feeds' | 'explicit' | 'policies' | 'notifications' | 'badges'
 
 /** Root console for Parley admins: stats, users, servers, instance settings. Shown in the settings window, one route per page. */
 export default function AdminPage() {
@@ -61,6 +62,7 @@ export default function AdminPage() {
     group('Instance', [
       it('settings', 'Instance Settings', <Megaphone size={18} />, can(a, 'instance_manage'), 'announcement rate limits registration verification'),
       it('themes', 'Themes', <Palette size={18} />, can(a, 'instance_manage'), 'colours colors'),
+      it('badges', 'Badges', <Medal size={18} />, can(a, 'instance_manage'), 'profile awards custom'),
       it('cosmetics', 'Cosmetics', <Sparkles size={18} />, can(a, 'instance_manage'), 'decorations nameplates effects frames'),
       it('apps', 'Apps', <Bot size={18} />, can(a, 'instance_manage'), 'bots oauth applications'),
       it('notifications', 'Notifications', <Bell size={18} />, can(a, 'instance_manage'), 'alerts events webhooks discord slack channel signups reports audit'),
@@ -112,6 +114,7 @@ export default function AdminPage() {
             <Route path="explicit" element={<ExplicitPane />} />
             <Route path="policies" element={<PoliciesPane />} />
             <Route path="notifications" element={<NotificationsPane />} />
+            <Route path="badges" element={<BadgesPane />} />
             <Route path="apps" element={<AppsPane />} />
             <Route path="messages" element={<MessagesPane />} />
             <Route path="users/:id" element={<UserDetailPane />} />

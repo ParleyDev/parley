@@ -2,7 +2,7 @@
 title: Je profiel
 section: Jij
 summary: Je profielfoto, banner, naamstijl, naamplaatje, decoraties en effecten, status, en een andere look per server.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Je profiel is wat mensen zien als ze op je naam klikken. Open de editor via je profielfoto in de hoek linksonder en dan **Profiel bewerken**.
@@ -56,6 +56,7 @@ Het raster blijft laden terwijl je scrolt, dus je ziet alles. Opties onder **Ing
 - **Clantag**: 2 tot 4 letters of cijfers die overal naast je naam staan.
 - **Servertag**: draag de tag van een server waarin je zit, als die er een heeft.
 - **Huisbadge**: sluit je aan bij House of Ember, Tide of Grove. Klik nog eens op je huis om het te verlaten.
+- **Badges** staan naast je naam op je profielkaart: **Instancebeheerder** voor de mensen die deze Parley-server beheren, **Oprichter** voor de eerste tien accounts, **Veteraan** na een jaar hier, je huis, en badges die de beheerders van deze server hebben gemaakt en aan mensen gegeven voor iets bijzonders. Wijs een badge aan om te zien wat hij betekent.
 
 ## Je status
 

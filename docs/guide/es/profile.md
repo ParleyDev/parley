@@ -2,7 +2,7 @@
 title: Tu perfil
 section: Tú
 summary: Tu foto, tu banner, el estilo de tu nombre, la placa de nombre, las decoraciones y los efectos, tu estado y un aspecto distinto en cada servidor.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Tu perfil es lo que ve la gente cuando hace clic en tu nombre. Abre el editor desde tu foto en la esquina inferior izquierda y luego **Editar perfil**.
@@ -56,6 +56,7 @@ La cuadrícula sigue cargando mientras te desplazas, así que lo verás todo. La
 - **Etiqueta de clan**: de 2 a 4 letras o números que se muestran junto a tu nombre en todas partes.
 - **Etiqueta de servidor**: lleva la etiqueta de un servidor en el que estés, si tiene una.
 - **Insignia de casa**: únete a la Casa Ember, Tide o Grove. Vuelve a hacer clic en tu casa para salir.
+- **Las insignias** aparecen junto a tu nombre en tu tarjeta de perfil: **Admin de la instancia** para quienes gestionan este servidor de Parley, **Fundador** para sus diez primeras cuentas, **Veterano** tras un año aquí, tu casa, e insignias que los admins de este servidor crearon y dieron a personas por algo especial. Pasa el puntero sobre una insignia para ver qué significa.
 
 ## Tu estado
 

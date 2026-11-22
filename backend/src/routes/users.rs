@@ -838,32 +838,29 @@ async fn put_note(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(i
     Ok(Json(row))
 }
 
-/// Profile badges, computed: admin (instance admin), founder (one of the first ten accounts), veteran (over a year),
-/// host (owns a server), verified (email confirmed), secure (2FA on), and the house the user picked (house_*).
-pub async fn badges_for(db: &sqlx::PgPool, id: Uuid) -> AppResult<Vec<&'static str>> {
-    let row: Option<(bool, bool, bool, bool, bool, bool, String, bool)> = sqlx::query_as(
+/// Profile badges, for things that are rare or worth knowing: guest (no account yet), admin (instance admin), founder
+/// (one of the first ten accounts), veteran (over a year), the house the user picked (house_*), then the custom badges
+/// the instance's admins gave them (`custom:<id>`, routes/custom_badges.rs). Account security (a verified email, 2FA)
+/// is never shown: it would point out the accounts without it.
+pub async fn badges_for(db: &sqlx::PgPool, id: Uuid) -> AppResult<Vec<String>> {
+    let row: Option<(bool, bool, bool, String, bool)> = sqlx::query_as(
         "SELECT u.is_admin,
                 (SELECT COUNT(*) FROM users o WHERE o.created_at < u.created_at) < 10,
                 u.created_at < now() - interval '1 year',
-                EXISTS (SELECT 1 FROM guilds g WHERE g.owner_id = u.id),
-                u.email_verified_at IS NOT NULL,
-                u.totp_secret IS NOT NULL,
                 u.house, u.guest
          FROM users u WHERE u.id = $1",
     )
     .bind(id)
     .fetch_optional(db)
     .await?;
-    let Some((admin, founder, veteran, host, verified, secure, house, guest)) = row else { return Ok(vec![]) };
-    let mut out = Vec::new();
-    if guest { out.push("guest"); }
-    if admin { out.push("admin"); }
-    if founder { out.push("founder"); }
-    if veteran { out.push("veteran"); }
-    if host { out.push("host"); }
-    if verified { out.push("verified"); }
-    if secure { out.push("secure"); }
-    match house.as_str() { "ember" => out.push("house_ember"), "tide" => out.push("house_tide"), "grove" => out.push("house_grove"), _ => {} }
+    let Some((admin, founder, veteran, house, guest)) = row else { return Ok(vec![]) };
+    let mut out: Vec<String> = Vec::new();
+    if guest { out.push("guest".into()); }
+    if admin { out.push("admin".into()); }
+    if founder { out.push("founder".into()); }
+    if veteran { out.push("veteran".into()); }
+    match house.as_str() { "ember" => out.push("house_ember".into()), "tide" => out.push("house_tide".into()), "grove" => out.push("house_grove".into()), _ => {} }
+    out.extend(crate::routes::custom_badges::for_user(db, id).await);
     Ok(out)
 }
 

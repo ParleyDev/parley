@@ -129,7 +129,7 @@ CREATE INDEX users_deletion_due ON users (deletion_scheduled_for) WHERE account_
   `mfa_backup_codes`, `email_tokens`, `push_tokens`, `web_push_subs`;
 - linked accounts: `connections`, `user_role_connections`, `user_app_installs`;
 - personal state: `data_exports` (and its files), `notification_settings`, `read_states`, `bookmarks`,
-  `user_notes` (both written by and about them), `relationships` (both directions), `user_reviews` (by and
+  `user_notes` (both written by and about them), `user_badges` (badges admins gave them), `relationships` (both directions), `user_reviews` (by and
   about them), `activities`, `presence`, `listen_along`, `stream_previews`;
 - family: `family_links`, `family_codes`;
 - membership: `guild_members`, `thread_members`, group-DM `channel_members` (a group they own passes to a

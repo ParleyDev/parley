@@ -389,6 +389,11 @@ fn console_action(action: &str) -> (&'static str, &'static [&'static str]) {
         "settings.update" => ("changed the instance settings", &[]),
         "notifications.update" => ("changed where notifications go", &[]),
         "announce.post" => ("posted an announcement in", &[]),
+        "badge.award" => ("gave a badge to", &["users"]),
+        "badge.revoke" => ("took a badge back from", &["users"]),
+        "badge.create" => ("made the badge", &[]),
+        "badge.update" => ("changed the badge", &[]),
+        "badge.delete" => ("deleted the badge", &[]),
         a if a.starts_with("discovery.") => ("changed the discovery listing of", &["servers"]),
         a if a.starts_with("report.") => ("updated the report on", &["safety"]),
         a if a.starts_with("safety.match.") => ("acted on a matched upload by", &["safety"]),
@@ -409,6 +414,7 @@ fn console_page(action: &str, kind: &str, id: Option<Uuid>) -> Option<(&'static 
     let section = action.split('.').next().unwrap_or_default();
     Some(match (section, kind) {
         (_, "theme") => ("Themes", "/admin/themes".into()),
+        (_, "badge") => ("Badges", "/admin/badges".into()),
         (_, "cosmetic") => ("Cosmetics", "/admin/cosmetics".into()),
         (_, "mail") => ("Mail", "/admin/mail".into()),
         (_, "domain") => ("Blocked links", "/admin/blocked-links".into()),

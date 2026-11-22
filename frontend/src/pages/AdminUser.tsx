@@ -12,6 +12,7 @@ import { globalName } from '../lib/names'
 import { NetAvatar, networkLink } from './AdminNetwork'
 import { UserAgeCard } from './AdminAge'
 import { UserSanctionsCard } from './AdminBans'
+import { UserBadgesCard } from './AdminBadges'
 
 const MIN_WHY = 10
 
@@ -192,6 +193,8 @@ export default function UserDetailPane() {
             <Stat label={t('profile and emoji images')} value={o.storage.images} sub={formatBytes(o.storage.image_bytes)} />
           </div>
         </Card>
+
+        {can(a, 'instance_manage') && !u.bot && !u.guest && <UserBadgesCard userId={u.id} />}
       </div>
 
       <section className="rounded-xl border border-line bg-bg-1 p-4" data-admin-signals>

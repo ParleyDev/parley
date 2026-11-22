@@ -2,7 +2,7 @@
 title: Seu perfil
 section: Você
 summary: Sua foto, banner, estilo do nome, placa de identificação, decorações e efeitos, status e um visual diferente em cada servidor.
-source: a1e67c648470
+source: 5fbc51dc9fa1
 ---
 
 Seu perfil é o que as pessoas veem quando clicam no seu nome. Abra o editor pela sua foto no canto inferior esquerdo e depois em **Editar perfil**.
@@ -56,6 +56,7 @@ A grade continua carregando enquanto você rola, então você vê tudo. As opç�
 - **Tag de clã**: de 2 a 4 letras ou números mostrados ao lado do seu nome em todo lugar.
 - **Tag do servidor**: use a tag de um servidor em que você está, se ele tiver uma.
 - **Insígnia de casa**: entre na Casa da Brasa, da Maré ou do Bosque. Clique na sua casa de novo para sair.
+- **Insígnias** aparecem ao lado do seu nome no cartão de perfil: **Admin da instância** para quem administra este servidor Parley, **Fundador** para as dez primeiras contas, **Veterano** depois de um ano aqui, a sua casa e insígnias que os admins deste servidor criaram e deram a pessoas por algo especial. Passe o cursor sobre uma insígnia para ver o que ela significa.
 
 ## Seu status
 
