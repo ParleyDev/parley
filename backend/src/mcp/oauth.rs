@@ -33,7 +33,7 @@ pub const SCOPES: [(&str, &str); 6] = [
     ("cosmetics.manage", "Add and edit the instance's profile cosmetics (only if you can manage the instance)"),
 ];
 /// Scopes offered only to a client that asks for them by name: tools, not assistants.
-const ASK_ONLY: [&str; 1] = ["cosmetics.manage"];
+pub const ASK_ONLY: [&str; 1] = ["cosmetics.manage"];
 
 /// The scopes the consent page offers for a request: what was asked for when it asks for a tool's scope, otherwise
 /// every assistant scope (the user may tick more than the client asked for).

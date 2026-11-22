@@ -50,6 +50,9 @@ pub struct Layered {
     pub id: String,
     pub name: String,
     pub description: String,
+    /// From `metadata.json`, cleaned (`assets::clean_tags`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     /// Effects: `[{file, start_ms, duration_ms, loop, loop_delay_ms, z_index, random_variants?}]`;
     /// frames: `[{file, order, type, anchor, responsive}]`; each with its `width` and `height` in pixels.
     pub layers: Vec<Value>,
@@ -158,7 +161,7 @@ pub fn scan_layered(dir: &std::path::Path) -> LayerIndex {
         let pick = |f: &str| files.contains(f).then(|| f.to_string());
         idx.by_id.insert(id.clone(), idx.list.len());
         idx.list.push(Layered {
-            id, name, description: m["description"].as_str().unwrap_or_default().trim().to_string(), layers, layout: m["layout"].clone(),
+            id, name, description: m["description"].as_str().unwrap_or_default().trim().to_string(), tags: super::assets::entry_tags(&m), layers, layout: m["layout"].clone(),
             still: pick("static.png"), reduced_motion: pick("reduced_motion.png"), thumbnail: pick("thumbnail.png"), tag: format!("{newest:x}-{total:x}"), dir: path, files,
         });
     }
@@ -292,7 +295,7 @@ mod tests {
         std::fs::write(dir.join("good/notes.txt"), "x").unwrap();
         png(&dir.join("no_meta/layer_01.png"), 4, 4);
         std::fs::write(dir.join("metadata.json"), serde_json::json!({ "items": [
-            { "folder": "good", "name": "Good One", "description": "d", "layers": [{ "file": "layer_01.png", "start_ms": 0, "duration_ms": 100, "loop": true, "loop_delay_ms": 0, "z_index": 100, "random_variants": ["gone.png"] }] },
+            { "folder": "good", "name": "Good One", "description": "d", "tags": ["Winter", "snow"], "layers": [{ "file": "layer_01.png", "start_ms": 0, "duration_ms": 100, "loop": true, "loop_delay_ms": 0, "z_index": 100, "random_variants": ["gone.png"] }] },
             { "folder": "missing_layer", "name": "x", "layers": [{ "file": "layer_01.png" }] },
             { "folder": "../escape", "name": "x", "layers": [{ "file": "layer_01.png" }] },
         ] }).to_string()).unwrap();
@@ -300,6 +303,7 @@ mod tests {
         assert_eq!(idx.list.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), ["good"]);
         let g = idx.get("good").unwrap();
         assert_eq!((g.name.as_str(), g.still.as_deref()), ("Good One", Some("static.png")));
+        assert_eq!(g.tags, ["winter", "snow"]);
         assert_eq!((g.layers[0]["width"].as_u64(), g.layers[0]["height"].as_u64()), (Some(45), Some(88)));
         assert_eq!(g.layers[0]["random_variants"], serde_json::json!([]));
         assert!(!g.files.contains("notes.txt"));

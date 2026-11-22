@@ -205,6 +205,9 @@ pub async fn flag(state: &AppState, uid: Uuid, kind: &str, details: Value, sanct
     let recent: Option<(bool,)> = sqlx::query_as("SELECT true FROM abuse_flags WHERE user_id = $1 AND kind = $2 AND created_at > now() - interval '1 hour' LIMIT 1").bind(uid).bind(kind).fetch_optional(&state.db).await.ok().flatten();
     if recent.is_some() { return }
     let _ = sqlx::query("INSERT INTO abuse_flags (id, user_id, kind, details, sanction_id) VALUES ($1, $2, $3, $4, $5)").bind(Uuid::now_v7()).bind(uid).bind(kind).bind(details).bind(sanction).execute(&state.db).await;
+    let who = crate::notify::name(&crate::audit::username(state, uid).await);
+    let text = format!("The spam checks flagged **{who}** ({}){}", kind.replace('_', " "), if sanction.is_some() { " and limited the account" } else { "" });
+    crate::notify::send(state, crate::notify::Event::new("safety", "abuse.flag", text).user(uid).link("Review queue", "/admin/sanctions"));
 }
 
 /// A detector fired: limit the account for a few days (unless it already is, or automatic actions are off) and

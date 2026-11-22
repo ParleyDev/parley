@@ -31,6 +31,7 @@ import { usePhone } from '../lib/swipe'
 import { usePaneDrag } from '../lib/paneDrag'
 import { useKeybinds } from '../lib/keybinds'
 import { dismissKeyboard, isDesktop, setNativeNavigator } from '../lib/native'
+import { setAppNavigator } from '../lib/appNav'
 import { voice } from '../lib/voice'
 import { initBadge } from '../lib/badge'
 import { installLinkGuard } from '../lib/links'
@@ -266,7 +267,7 @@ function MissingGuild({ guildId }: { guildId: string }) {
 /** The rebindable keyboard shortcuts. Renders nothing. */
 function Shortcuts() {
   const nav = useNavigate()
-  useEffect(() => { setNativeNavigator((p) => nav(p)) }, [nav])
+  useEffect(() => { setNativeNavigator((p) => nav(p)); setAppNavigator((p) => nav(p)); return () => setAppNavigator(null) }, [nav])
   // AppShell is mounted at /channels/*, so read the ids from the path rather than useParams.
   const { pathname } = useLocation()
   const [, guildId, channelId] = /^\/channels\/([^/]+)(?:\/([^/]+))?/.exec(pathname) ?? []

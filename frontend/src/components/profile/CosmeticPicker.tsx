@@ -15,10 +15,37 @@ import ProfileCard from '../ProfileCard'
 import ProfileEffect from '../ProfileEffect'
 
 /** One choice in a picker: a built-in (or admin-made) one, or one from the instance's assets folder. */
-export interface CosmeticOption { value: string; name: string; description?: string; group: 'builtin' | 'folder'; glyph?: string; thumb?: string; still?: string }
+export interface CosmeticOption { value: string; name: string; description?: string; tags?: string[]; group: 'builtin' | 'folder'; glyph?: string; thumb?: string; still?: string }
+
+/** Every tag the items carry, most used first, with how many have it. */
+export function tagCounts(items: { tags?: string[] | null }[]): [string, number][] {
+  const n = new Map<string, number>()
+  for (const it of items) for (const tag of it.tags ?? []) n.set(tag, (n.get(tag) ?? 0) + 1)
+  return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+}
+
+/** Does a search match this item's name, description or one of its tags? (`needle` is lower case.) */
+export const matchesSearch = (needle: string, fields: (string | null | undefined)[], tags?: string[] | null) =>
+  !needle || fields.some((f) => f?.toLowerCase().includes(needle)) || !!tags?.some((tag) => tag.includes(needle.replace(/^#/, '')))
+
+/** A row of tags to filter by: click one to show only items with it, again to show all. */
+export function TagFilter({ tags, active, onPick }: { tags: [string, number][]; active: string | null; onPick: (tag: string | null) => void }) {
+  const t = useT()
+  if (!tags.length) return null
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label={t('Tags')} data-cosmetic-tags>
+      {tags.map(([tag, n]) => (
+        <button key={tag} type="button" onClick={() => onPick(active === tag ? null : tag)} aria-pressed={active === tag}
+          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${active === tag ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-cosmetic-tag={tag}>
+          #{tag} <span className={active === tag ? 'text-white/70' : 'text-text-2'}>{n}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
 
 const layered = (kind: 'effect' | 'frame', x: LayeredItem): CosmeticOption => ({
-  value: `asset:${x.id}`, name: x.name, description: x.description || undefined, group: 'folder',
+  value: `asset:${x.id}`, name: x.name, description: x.description || undefined, tags: x.tags, group: 'folder',
   thumb: layeredThumb(kind === 'effect' ? 'profile-effects' : 'profile-frames', x) ?? undefined,
   still: kind === 'effect' && x.still ? assetFile('profile-effects', x.id, x.still) : undefined,
 })
@@ -38,8 +65,8 @@ export function useCosmeticOptions(kind: CosmeticKind): { builtin: CosmeticOptio
       description: 'description' in o && typeof o.description === 'string' ? o.description : undefined,
       glyph: 'data' in o ? o.data.glyph : 'glyph' in o ? (o.glyph as string) : undefined,
     }))
-    const folder = kind === 'decoration' ? folderDecos?.map((d): CosmeticOption => ({ value: ASSET_PREFIX + d.id, name: d.name, description: d.description, group: 'folder' })) ?? null
-      : kind === 'nameplate' ? folderPlates?.map((n): CosmeticOption => ({ value: `asset:${n.id}`, name: n.name, description: n.description, group: 'folder' })) ?? null
+    const folder = kind === 'decoration' ? folderDecos?.map((d): CosmeticOption => ({ value: ASSET_PREFIX + d.id, name: d.name, description: d.description, tags: d.tags, group: 'folder' })) ?? null
+      : kind === 'nameplate' ? folderPlates?.map((n): CosmeticOption => ({ value: `asset:${n.id}`, name: n.name, description: n.description, tags: n.tags, group: 'folder' })) ?? null
         : kind === 'effect' ? folderEffects?.map((x) => layered('effect', x)) ?? null
           : folderFrames?.map((x) => layered('frame', x)) ?? null
     return { builtin, folder }
@@ -136,14 +163,17 @@ export default function CosmeticPicker({ kind, value, user, onApply, onClose, se
   const [picked, setPicked] = useState(value)
   const [hover, setHover] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [tag, setTag] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const needle = q.trim().toLowerCase()
-  const match = (o: CosmeticOption) => !needle || o.name.toLowerCase().includes(needle) || !!o.description?.toLowerCase().includes(needle)
+  const filtering = !!needle || tag !== null
+  const match = (o: CosmeticOption) => (tag === null || !!o.tags?.includes(tag)) && matchesSearch(needle, [o.name, o.description], o.tags)
   const shownBuiltin = builtin.filter(match)
-  const shownFolder = useMemo(() => (folder ?? []).filter(match), [folder, needle]) // eslint-disable-line react-hooks/exhaustive-deps
+  const shownFolder = useMemo(() => (folder ?? []).filter(match), [folder, needle, tag]) // eslint-disable-line react-hooks/exhaustive-deps
+  const tags = useMemo(() => tagCounts(folder ?? []), [folder])
   // Draw far enough to show the one already picked, so opening the picker can scroll to it.
-  const at = needle ? 0 : shownFolder.findIndex((o) => o.value === value) + 1
-  const { visible, more, sentinel } = useLazySlice(shownFolder, { step: kind === 'nameplate' ? 30 : 48, key: needle, root: scroller, atLeast: at })
+  const at = filtering ? 0 : shownFolder.findIndex((o) => o.value === value) + 1
+  const { visible, more, sentinel } = useLazySlice(shownFolder, { step: kind === 'nameplate' ? 30 : 48, key: `${needle}|${tag}`, root: scroller, atLeast: at })
   useEffect(() => { scroller.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'center' }) }, [folder === null]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose() } }
@@ -168,21 +198,22 @@ export default function CosmeticPicker({ kind, value, user, onApply, onClose, se
         </div>
         <div className="flex min-h-0 flex-1 gap-5 px-5 pb-4 phone:flex-col-reverse phone:gap-3 phone:px-3">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="relative mb-3">
+            <div className="relative mb-2">
               <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" aria-hidden />
               <input className="input pl-8" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search {n}', { n: total })} aria-label={t('Search')} data-cosmetic-search />
             </div>
+            <div className="mb-2"><TagFilter tags={tags} active={tag} onPick={setTag} /></div>
             {/* The scroll box wraps the grid: a grid that scrolls itself squeezes its rows once they overflow. */}
             <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2 pr-1" data-cosmetic-scroll>
             <div className={`grid auto-rows-max content-start gap-2 ${cols}`} onMouseLeave={() => setHover(null)} data-cosmetic-grid>
-              {!needle && tile(null)}
+              {!filtering && tile(null)}
               {shownBuiltin.length > 0 && heading(t('Built in'), shownBuiltin.length)}
               {shownBuiltin.map(tile)}
               {folder === null && <p className="col-span-full py-3 text-sm text-text-2">{t('Loading…')}</p>}
               {shownFolder.length > 0 && heading(t('From this server'), shownFolder.length)}
               {visible.map(tile)}
               {more && <div ref={sentinel} className="col-span-full h-10" aria-hidden data-cosmetic-more />}
-              {folder !== null && needle && !shownBuiltin.length && !shownFolder.length && <p className="col-span-full py-6 text-center text-sm text-text-2" data-cosmetic-nothing>{t('Nothing matches “{q}”.', { q })}</p>}
+              {folder !== null && filtering && !shownBuiltin.length && !shownFolder.length && <p className="col-span-full py-6 text-center text-sm text-text-2" data-cosmetic-nothing>{needle ? t('Nothing matches “{q}”.', { q }) : t('Nothing has that tag.')}</p>}
             </div>
             </div>
           </div>
@@ -197,6 +228,11 @@ export default function CosmeticPicker({ kind, value, user, onApply, onClose, se
                 {shown === value && <span className="shrink-0 rounded bg-accent/20 px-1.5 text-[10px] font-bold uppercase text-accent">{t('Current')}</span>}
               </div>
               <p className="mt-1 text-xs text-text-2">{info ? info.description || (info.group === 'folder' ? t('From this server\'s collection.') : t('Built into Parley.')) : t('Nothing on your profile.')}</p>
+              {!!info?.tags?.length && (
+                <div className="mt-2 flex flex-wrap gap-1" data-cosmetic-info-tags>
+                  {info.tags.map((x) => <button key={x} type="button" onClick={() => setTag(x)} className="rounded-full bg-bg-3 px-2 py-0.5 text-[11px] font-semibold text-text-1 hover:text-text-0" title={t('Show everything tagged #{tag}', { tag: x })}>#{x}</button>)}
+                </div>
+              )}
             </div>
           </aside>
         </div>

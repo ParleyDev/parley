@@ -2,7 +2,7 @@
 title: Ton profil
 section: Toi
 summary: Ta photo, ta bannière, le style de ton nom, ta plaque de nom, tes décorations et effets, ton statut, et un look différent par serveur.
-source: 45c7a2e66457
+source: a1e67c648470
 ---
 
 Ton profil, c'est ce que les gens voient quand ils cliquent sur ton nom. Ouvre l'éditeur depuis ta photo en bas à gauche, puis **Modifier le profil**.
@@ -37,7 +37,7 @@ Clique sur l'une de ces vignettes dans l'éditeur pour ouvrir son sélecteur :
 
 ![Choix d'une décoration d'avatar, prévisualisée à toutes les tailles](shot:cosmetic-picker)
 
-1. Parcours la grille, ou cherche par nom. **Aucun** retire celui que tu as.
+1. Parcours la grille, ou cherche par nom ou par tag. Les tags sous la recherche n’affichent que les options qui l’ont : clique à nouveau dessus pour tout revoir. **Aucun** retire celui que tu as.
 2. Survole ou clique sur une option pour la voir dans l'aperçu, exactement là où les gens la verront. Les décorations s'affichent à toutes les tailles, les plaques de nom dans une liste de membres, et les effets et cadres sur toute ta carte.
 3. Clique sur **Appliquer**, ou double-clique sur une option. Puis sur **Enregistrer** pour la garder.
 

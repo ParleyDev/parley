@@ -163,6 +163,7 @@ async fn use_template(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     let (snap,): (Value,) = sqlx::query_as("SELECT snapshot FROM guild_templates WHERE code = $1").bind(&code).fetch_optional(&state.db).await?.ok_or(AppError::NotFound("Template not found".into()))?;
     let snap: Snapshot = serde_json::from_value(snap).map_err(|_| AppError::BadRequest("This template is damaged".into()))?;
     let payload = build_guild(&state, uid, &name, req.icon_url, &snap).await?;
+    if let Some(gid) = payload["id"].as_str().and_then(|s| Uuid::parse_str(s).ok()) { crate::notify::server_created(&state, uid, gid, &name).await; }
     sqlx::query("UPDATE guild_templates SET usage_count = usage_count + 1 WHERE code = $1").bind(&code).execute(&state.db).await?;
     Ok((StatusCode::CREATED, Json(payload)))
 }

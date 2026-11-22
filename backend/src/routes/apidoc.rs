@@ -64,6 +64,20 @@ const ENDPOINTS: &[(&str, &str, &str, &str, &str)] = &[
     ("GET", "/oauth2/authorize", "OAuth2", "Consent screen data (client_id, scope, redirect_uri, permissions)", "user"),
     ("POST", "/oauth2/token", "OAuth2", "authorization_code or client_credentials grant (form)", "none"),
     ("GET", "/oauth2/@me", "OAuth2", "What a token is: app, user, scopes", "user|bot"),
+    ("GET", "/assets/avatar-decorations", "Cosmetics", "The instance's avatar decorations from its assets folder: id, name, description, tags (from metadata.json, lower case), animated", "none"),
+    ("GET", "/assets/nameplates", "Cosmetics", "The instance's nameplates: id, name, description, tags, animated", "none"),
+    ("GET", "/assets/profile-effects", "Cosmetics", "The instance's profile effects: id, name, description, tags, layers, stills", "none"),
+    ("GET", "/assets/profile-frames", "Cosmetics", "The instance's profile frames: id, name, description, tags, layers, layout", "none"),
+    ("GET", "/admin/cosmetics-folder", "Cosmetics", "Whether the assets folder is writable (needs Manage Instance)", "user|scope:cosmetics.manage"),
+    ("GET", "/admin/cosmetics/{kind}", "Cosmetics", "Every item of a kind (decoration, nameplate, effect, frame): value, source, name, description, tags, enabled, data, users (needs Manage Instance)", "user|scope:cosmetics.manage"),
+    ("POST", "/admin/cosmetics/{kind}/folder", "Cosmetics", "Add an item to the assets folder (multipart: meta as JSON with name, description, tags and, for effects and frames, layers and layout; then its files)", "user"),
+    ("PATCH", "/admin/cosmetics/{kind}/folder/{id}", "Cosmetics", "Edit a folder item (multipart: meta as JSON, any of name, description, tags, layers, layout; files to add or replace). tags is a list of text, stored lower case without '#' (up to 20 of 32 characters); [] removes them", "user|scope:cosmetics.manage"),
+    ("POST", "/admin/cosmetics/{kind}/import/check", "Cosmetics", "Which of keys (file or folder names) are missing, present or clash here", "user|scope:cosmetics.manage"),
+    ("POST", "/admin/cosmetics/{kind}/import", "Cosmetics", "Import one item (multipart: entry, its metadata.json entry kept as it is, tags included; then its files); 409 unless it is missing", "user|scope:cosmetics.manage"),
+    ("GET", "/admin/event-routes", "Event notifications", "Where each category (users, servers, safety, console) posts: channel, webhook host, last failure (needs Manage Instance)", "user"),
+    ("PUT", "/admin/event-routes", "Event notifications", "Change some categories: {<category>: {channel_id (a server text channel, or null), webhook_url (http(s); \"\" removes it)}}; fields left out stay as they are", "user"),
+    ("GET", "/admin/event-routes/channels", "Event notifications", "Text channels on the instance whose name or server's name matches q", "user"),
+    ("POST", "/admin/event-routes/{category}/test", "Event notifications", "Post a test to the category's channel and webhook now; says how each went", "user"),
 ];
 
 /// Turn the list into an OpenAPI document.
@@ -73,7 +87,12 @@ async fn spec() -> Json<Value> {
         let security: Vec<Value> = auth.split('|').filter_map(|a| match a {
             "user" => Some(json!({ "session": [] })),
             "bot" => Some(json!({ "bot": [] })),
-            a if a.starts_with("scope:") => Some(json!({ "oauth2": [a.trim_start_matches("scope:")] })),
+            // Tool scopes (Profile Studio's cosmetics.manage) come from the MCP sign-in, not an app's OAuth2.
+            a if a.starts_with("scope:") => {
+                let s = a.trim_start_matches("scope:");
+                let scheme = if crate::mcp::oauth::ASK_ONLY.contains(&s) { "tools" } else { "oauth2" };
+                Some(json!({ scheme: [s] }))
+            }
             _ => None,
         }).collect();
         let params: Vec<Value> = path.split('/').filter(|s| s.starts_with('{')).map(|s| json!({ "name": s.trim_matches(|c| c == '{' || c == '}'), "in": "path", "required": true, "schema": { "type": "string" } })).collect();
@@ -88,7 +107,25 @@ async fn spec() -> Json<Value> {
             "session": { "type": "http", "scheme": "bearer", "description": "A signed-in user's session" },
             "bot": { "type": "apiKey", "in": "header", "name": "Authorization", "description": "Bot <token>" },
             "oauth2": { "type": "oauth2", "flows": { "authorizationCode": { "authorizationUrl": "/oauth2/authorize", "tokenUrl": "/api/v1/oauth2/token", "scopes": crate::routes::applications::SCOPES.iter().map(|(k, v)| (k.to_string(), json!(v))).collect::<Map<_, _>>() } } },
+            "tools": { "type": "oauth2", "description": "Tools that act for an admin, such as Profile Studio: the MCP sign-in (dynamic registration, PKCE), asking for the scope by name", "flows": { "authorizationCode": { "authorizationUrl": "/oauth/authorize", "tokenUrl": "/oauth/token", "scopes": crate::mcp::oauth::SCOPES.iter().filter(|(k, _)| crate::mcp::oauth::ASK_ONLY.contains(k)).map(|(k, v)| (k.to_string(), json!(v))).collect::<Map<_, _>>() } } },
         } },
         "paths": paths,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cosmetics_calls_are_listed_with_their_tool_scope() {
+        let Json(s) = spec().await;
+        let edit = &s["paths"]["/admin/cosmetics/{kind}/folder/{id}"]["patch"];
+        assert!(edit["summary"].as_str().unwrap().contains("tags"));
+        assert_eq!(edit["security"], json!([{ "session": [] }, { "tools": ["cosmetics.manage"] }]));
+        assert!(s["components"]["securitySchemes"]["tools"]["flows"]["authorizationCode"]["scopes"]["cosmetics.manage"].is_string());
+        // App scopes stay on the app OAuth2 scheme.
+        assert_eq!(s["paths"]["/users/@me/connections"]["get"]["security"][1], json!({ "oauth2": ["connections"] }));
+        assert!(s["paths"]["/assets/profile-frames"]["get"]["summary"].as_str().unwrap().contains("tags"));
+    }
 }

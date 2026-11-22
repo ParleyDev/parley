@@ -2,7 +2,7 @@
 title: Profilin
 section: Sen
 summary: Resmin, banner'ın, ad stilin, ad plakan, süslemelerin ve efektlerin, durumun ve her sunucu için farklı bir görünüm.
-source: 45c7a2e66457
+source: a1e67c648470
 ---
 
 Profilin, insanların adına tıkladığında gördükleri şeydir. Düzenleyiciyi sol alt köşedeki resminden, ardından **Profili Düzenle** ile aç.
@@ -37,7 +37,7 @@ Seçicisini açmak için düzenleyicide bu kutucuklardan herhangi birine tıkla:
 
 ![Her boyutta önizlenen bir avatar süsü seçmek](shot:cosmetic-picker)
 
-1. Izgaraya göz at ya da ada göre ara. **Hiçbiri** sahip olduğunu kaldırır.
+1. Izgaraya göz at ya da ada veya etikete göre ara. Arama kutusunun altındaki etiketler yalnızca o etikete sahip seçenekleri gösterir: her şeyi görmek için tekrar tıkla. **Hiçbiri** sahip olduğunu kaldırır.
 2. Önizlemede tam olarak insanların göreceği yerde görmek için bir seçeneğin üzerine gel veya tıkla. Süslemeler her boyutta, ad plakaları bir üye listesinde, efektler ve çerçeveler de kartının tamamında gösterilir.
 3. **Uygula**'ya tıkla ya da bir seçeneğe çift tıkla. Sonra korumak için **Değişiklikleri Kaydet**.
 

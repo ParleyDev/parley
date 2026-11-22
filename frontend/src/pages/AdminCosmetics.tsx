@@ -14,7 +14,7 @@ import { decorationUrl } from '../lib/decorations'
 import type { EffectItem, FrameItem } from '../lib/assetCatalog'
 import { globalName } from '../lib/names'
 import CosmeticsImport from './AdminCosmeticsImport'
-import { CosmeticPreview } from '../components/profile/CosmeticPicker'
+import { CosmeticPreview, TagFilter, matchesSearch, tagCounts } from '../components/profile/CosmeticPicker'
 import { useLazySlice } from '../lib/useLazySlice'
 
 type Source = 'builtin' | 'folder' | 'custom'
@@ -22,7 +22,7 @@ interface EffectLayer { file: string; start_ms: number; duration_ms: number; loo
 interface FrameLayer { file: string; order: 'front' | 'back'; type: 'staple' | 'rail' | 'border'; anchor: 'top' | 'bottom' | 'center'; responsive: boolean }
 interface Layout { inner_width: number; overflow_top: number; overflow_bottom: number; overflow_horizontal: number }
 interface FolderData { file?: string; layers?: (EffectLayer | FrameLayer)[]; layout?: Layout; still?: string; thumbnail?: string }
-interface Item { value: string; source: Source; name: string | null; description: string | null; enabled: boolean; deleted: boolean; data: CosmeticRow['data'] & FolderData; users: number }
+interface Item { value: string; source: Source; name: string | null; description: string | null; tags?: string[]; enabled: boolean; deleted: boolean; data: CosmeticRow['data'] & FolderData; users: number }
 
 const BUILTIN_LABELS: Record<CosmeticKind, Record<string, string>> = {
   decoration: Object.fromEntries(DECORATIONS.map((d) => [d.id, d.label])),
@@ -67,9 +67,10 @@ export default function CosmeticsPane() {
   const [writable, setWritable] = useState<boolean | null>(null)
   const [importing, setImporting] = useState(false)
   const [q, setQ] = useState('')
+  const [tag, setTag] = useState<string | null>(null)
   const [previewing, setPreviewing] = useState<Item | null>(null)
   const load = (k = kind) => api.get<Item[]>(`/admin/cosmetics/${k}`).then((items) => setLoaded({ kind: k, items })).catch((e) => pushToast((e as Error).message, 'error'))
-  useEffect(() => { setEditing(null); setQ(''); void load(kind) }, [kind]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setEditing(null); setQ(''); setTag(null); void load(kind) }, [kind]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api.get<{ writable: boolean }>('/admin/cosmetics-folder').then((r) => setWritable(r.writable)).catch(() => setWritable(null)) }, [])
   const act = async (fn: () => Promise<unknown>, done?: string) => { try { await fn(); await load(); if (done) pushToast(done); return true } catch (e) { pushToast((e as Error).message, 'error'); return false } }
   const KINDS: [CosmeticKind, string][] = [['decoration', t('Avatar decorations')], ['nameplate', t('Nameplates')], ['effect', t('Profile effects')], ['frame', t('Profile frames')]]
@@ -85,9 +86,11 @@ export default function CosmeticsPane() {
   }
   const deleted = list?.filter((it) => it.deleted).length ?? 0
   const needle = q.trim().toLowerCase()
-  const shown = useMemo(() => list?.filter((it) => (showDeleted || !it.deleted) && (!needle || [it.name, it.description, it.value, BUILTIN_LABELS[kind][it.value]].some((f) => f?.toLowerCase().includes(needle)))), [list, showDeleted, needle, kind])
+  const shown = useMemo(() => list?.filter((it) => (showDeleted || !it.deleted) && (tag === null || !!it.tags?.includes(tag)) && matchesSearch(needle, [it.name, it.description, it.value, BUILTIN_LABELS[kind][it.value]], it.tags)), [list, showDeleted, needle, tag, kind])
+  const tags = useMemo(() => tagCounts((list ?? []).filter((it) => showDeleted || !it.deleted)), [list, showDeleted])
+  const filtering = !!needle || tag !== null
   // Hundreds of folder items are drawn a page at a time as the list scrolls.
-  const { visible, more, sentinel } = useLazySlice(shown ?? [], { step: 40, key: `${kind}|${needle}|${showDeleted}` })
+  const { visible, more, sentinel } = useLazySlice(shown ?? [], { step: 40, key: `${kind}|${needle}|${tag}|${showDeleted}` })
   const saved = async () => { setEditing(null); await load() }
 
   return (
@@ -109,12 +112,13 @@ export default function CosmeticsPane() {
         </div>
         {deleted > 0 && <label className="flex items-center gap-1.5 text-xs text-text-2"><input type="checkbox" className="h-4 w-4 accent-accent" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} data-cosmetic-show-deleted />{t('Show deleted ({n})', { n: deleted })}</label>}
       </div>
+      <TagFilter tags={tags} active={tag} onPick={setTag} />
       {editing?.mode === 'parley' && <ParleyEditor kind={kind} item={editing.item} onDone={() => void saved()} onCancel={() => setEditing(null)} />}
       {importing && <CosmeticsImport onClose={() => setImporting(false)} onImported={() => void load()} />}
       {editing?.mode === 'folder' && <FolderEditor kind={kind} item={editing.item} onDone={() => void saved()} onCancel={() => setEditing(null)} />}
-      {!shown ? <p className="text-text-2">{t('Loading…')}</p> : shown.length === 0 ? <p className="text-text-2" data-cosmetic-empty>{needle ? t('Nothing matches “{q}”.', { q }) : t('None yet.')}</p> : (
+      {!shown ? <p className="text-text-2">{t('Loading…')}</p> : shown.length === 0 ? <p className="text-text-2" data-cosmetic-empty>{needle ? t('Nothing matches “{q}”.', { q }) : tag !== null ? t('Nothing has that tag.') : t('None yet.')}</p> : (
         <>
-        {needle && <p className="text-xs text-text-2" data-cosmetic-matches>{t('{n} of {total}', { n: shown.length, total: list?.length ?? 0 })}</p>}
+        {filtering && <p className="text-xs text-text-2" data-cosmetic-matches>{t('{n} of {total}', { n: shown.length, total: list?.length ?? 0 })}</p>}
         <ul className="space-y-2" data-cosmetic-list={kind}>
           {visible.map((it) => (
             <li key={it.value} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-bg-1 p-3 ${it.enabled && !it.deleted ? '' : 'opacity-60'}`} data-cosmetic-row={it.value} data-cosmetic-enabled={it.enabled ? '1' : '0'} data-cosmetic-deleted={it.deleted ? '1' : '0'}>
@@ -128,6 +132,7 @@ export default function CosmeticsPane() {
                   <span className="rounded bg-bg-3 px-1.5 text-[10px] font-bold uppercase text-text-2" data-cosmetic-source={it.source}>{{ builtin: t('Built-in'), folder: t('Assets folder'), custom: t('Parley') }[it.source]}</span>
                   {it.deleted && <span className="rounded bg-danger/20 px-1.5 text-[10px] font-bold uppercase text-danger">{t('Deleted')}</span>}
                 </div>
+                {!!it.tags?.length && <div className="mt-0.5 flex flex-wrap gap-1" data-cosmetic-row-tags>{it.tags.map((x) => <button key={x} type="button" onClick={() => setTag(x)} className={`rounded-full px-1.5 text-[11px] font-semibold ${tag === x ? 'bg-accent text-white' : 'bg-bg-3 text-text-2 hover:text-text-0'}`}>#{x}</button>)}</div>}
                 <div className="truncate text-xs text-text-2">{[it.description, it.users === 1 ? t('1 person uses it') : it.users ? t('{n} people use it', { n: it.users }) : ''].filter(Boolean).join(' · ')}</div>
               </div>
               {it.deleted ? (
@@ -162,6 +167,7 @@ function PreviewDialog({ kind, item, name, onClose, onEdit }: { kind: CosmeticKi
       <div className="space-y-2 text-sm">
         <p className="text-lg font-bold">{name}</p>
         {item.description && <p className="text-text-1">{item.description}</p>}
+        {!!item.tags?.length && <p className="text-text-2">{item.tags.map((x) => `#${x}`).join(' ')}</p>}
         <p className="text-text-2">{[{ builtin: t('Built-in'), folder: t('Assets folder'), custom: t('Parley') }[item.source], !item.enabled ? t('Off') : '', item.deleted ? t('Deleted') : '', item.users === 1 ? t('1 person uses it') : item.users ? t('{n} people use it', { n: item.users }) : t('Nobody uses it yet')].filter(Boolean).join(' · ')}</p>
         <p className="text-xs text-text-2">{t('Shown on your own profile; it is not saved.')}</p>
       </div>
@@ -369,6 +375,8 @@ function FilePick({ label, accept, onPick, testid }: { label: string; accept: st
 }
 
 const IMAGES = 'image/png,image/apng,image/gif,image/webp'
+/** "Christmas, winter,, #snow" → ["christmas", "winter", "snow"] (the server cleans them the same way). */
+const splitTags = (text: string) => [...new Set(text.split(',').map((x) => x.trim().replace(/^#+/, '').replace(/\s+/g, ' ').toLowerCase()).filter(Boolean))]
 const num = (v: string) => Math.max(0, Math.round(Number(v) || 0))
 const isVideo = (name: string) => /\.(webm|mp4)$/i.test(name)
 
@@ -382,6 +390,7 @@ function FolderEditor({ kind, item, onDone, onCancel }: { kind: CosmeticKind; it
   const layered = kind === 'effect' || kind === 'frame'
   const [name, setName] = useState(item?.name ?? '')
   const [description, setDescription] = useState(item?.description ?? '')
+  const [tagText, setTagText] = useState((item?.tags ?? []).join(', '))
   const [files, setFiles] = useState<Record<string, File>>({})
   const [single, setSingle] = useState<File | null>(null)
   const freshLayer = (): EffectLayer | FrameLayer => (kind === 'effect' ? { file: '', start_ms: 0, duration_ms: 3000, loop: true, loop_delay_ms: 0, z_index: 100 } : { file: '', order: 'front', type: 'staple', anchor: 'top', responsive: false })
@@ -391,7 +400,7 @@ function FolderEditor({ kind, item, onDone, onCancel }: { kind: CosmeticKind; it
   const addFile = (f: File) => { const n = safeName(f.name); setFiles((m) => ({ ...m, [n]: f })); return n }
   const setLayer = (i: number, l: Partial<EffectLayer & FrameLayer>) => setLayers((ls) => ls.map((x, j) => (j === i ? ({ ...x, ...l } as EffectLayer | FrameLayer) : x)))
   const save = async () => {
-    const meta: Record<string, unknown> = { name, description }
+    const meta: Record<string, unknown> = { name, description, tags: splitTags(tagText) }
     if (layered) meta.layers = layers
     if (kind === 'frame') meta.layout = layout
     const upload: [string, File][] = layered ? Object.entries(files) : single ? [[safeName(single.name), single]] : []
@@ -440,6 +449,11 @@ function FolderEditor({ kind, item, onDone, onCancel }: { kind: CosmeticKind; it
     <Sheet title={item ? t('Edit {name}', { name: label }) : t('Add to assets folder')} onClose={onCancel} preview={preview} footer={footer} data-cosmetic-folder-draft={item?.value ?? 'new'}>
       <p className="text-xs text-text-2">{t('Saved in the assets folder ({folder}) and its metadata.json.', { folder: FOLDER[kind] })}</p>
       <NameFields name={name} description={description} onName={setName} onDescription={setDescription} />
+      <label className="block text-sm">
+        <span className="mb-1 block text-xs font-bold uppercase text-text-2">{t('Tags')}</span>
+        <input className="input" value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder={t('christmas, winter')} data-cosmetic-tags-input />
+        <span className="mt-1 block text-xs text-text-2">{t('Separated by commas. People can search for them and filter by them in the picker.')}</span>
+      </label>
       {!layered && (
         <div className="flex flex-wrap items-center gap-3">
           <FilePick label={item ? t('Replace file') : t('Choose file')} accept={kind === 'nameplate' ? `${IMAGES},video/webm,video/mp4` : IMAGES} onPick={setSingle} testid="single" />

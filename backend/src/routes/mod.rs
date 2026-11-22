@@ -170,6 +170,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(assets::router())
         .merge(deletion::router())
         .merge(asset_layers::router())
+        .merge(crate::notify::router())
         .merge(expressions::router())
         .merge(gifs::router())
         .merge(discovery::router())

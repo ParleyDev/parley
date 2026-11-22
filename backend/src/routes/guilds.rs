@@ -177,6 +177,7 @@ async fn create_guild(
     let roles = perms::list_roles(&state.db, gid).await?;
     let payload = crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles, "communities": [], "community_follows": [] }));
     state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
+    crate::notify::server_created(&state, uid, gid, &name).await;
     Ok((StatusCode::CREATED, Json(payload)))
 }
 
@@ -901,6 +902,11 @@ async fn transfer_ownership(
     state.hub.emit_guild(id, "GUILD_UPDATE", json!(g));
     perms::resync_visibility(&state, id, &before).await?;
     crate::audit::guild(&state, id, uid, "guild.transfer", "user", Some(req.user_id), &crate::audit::username(&state, req.user_id).await, json!({})).await;
+    {
+        use crate::notify::{name, Event};
+        let (from, to) = (name(&crate::audit::username(&state, uid).await), name(&crate::audit::username(&state, req.user_id).await));
+        crate::notify::send(&state, Event::new("servers", "guild.transfer", format!("**{from}** handed the server **{}** to **{to}**", name(&g.name))).server(id).link("New owner", format!("/admin/users/{}", req.user_id)));
+    }
     Ok(Json(g))
 }
 

@@ -33,7 +33,7 @@ export function NameplateVideo({ value, hoverRoot, always = false }: { value?: s
   return <video key={value} ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
 }
 
-export interface AssetNameplate { id: string; name: string; description?: string }
+export interface AssetNameplate { id: string; name: string; description?: string; tags?: string[] }
 
 let plates: { at: number; p: Promise<AssetNameplate[]> } | null = null
 /** The instance's nameplates (assets folder), fetched once per page load and again after a change. */

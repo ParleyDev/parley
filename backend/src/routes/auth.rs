@@ -96,6 +96,7 @@ async fn register(State(state): State<AppState>, headers: HeaderMap, Json(req): 
     .await?;
 
     send_verification(&state, user.id, &user.email).await;
+    crate::notify::send(&state, crate::notify::Event::new("users", "user.signup", format!("New account: **{}**", crate::notify::name(&user.username))).user(user.id));
     crate::abuse::check_new_account(&state, user.id, &crate::ratelimit::client_ip(&headers)).await;
     let token = start_session(&state, user.id, &headers).await?;
     Ok(Json(json!({ "token": token, "user": user })))

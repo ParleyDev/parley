@@ -16,6 +16,7 @@ mod routes;
 mod signup_guard;
 mod state;
 mod mcp;
+mod notify;
 mod abuse;
 mod age;
 mod media_sign;

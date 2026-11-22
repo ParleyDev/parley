@@ -2,7 +2,7 @@
 title: Seu perfil
 section: Você
 summary: Sua foto, banner, estilo do nome, placa de identificação, decorações e efeitos, status e um visual diferente em cada servidor.
-source: 45c7a2e66457
+source: a1e67c648470
 ---
 
 Seu perfil é o que as pessoas veem quando clicam no seu nome. Abra o editor pela sua foto no canto inferior esquerdo e depois em **Editar perfil**.
@@ -37,7 +37,7 @@ Clique em qualquer um desses blocos no editor para abrir o seletor:
 
 ![Escolhendo uma decoração de avatar, com prévia em todos os tamanhos](shot:cosmetic-picker)
 
-1. Navegue pela grade ou busque pelo nome. **Nenhum** remove o que você está usando.
+1. Navegue pela grade ou busque pelo nome ou pela tag. As tags abaixo da busca mostram só as opções que a têm: clique de novo para ver tudo. **Nenhum** remove o que você está usando.
 2. Passe o mouse ou clique em uma opção para vê-la na prévia, exatamente onde as pessoas vão vê-la. As decorações aparecem em todos os tamanhos, as placas de identificação em uma lista de membros, e os efeitos e molduras no cartão inteiro.
 3. Clique em **Aplicar**, ou clique duas vezes em uma opção. Depois em **Salvar alterações** para manter.
 

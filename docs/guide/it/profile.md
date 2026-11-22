@@ -2,7 +2,7 @@
 title: Il tuo profilo
 section: Tu
 summary: La tua immagine, il banner, lo stile del nome, la targhetta, le decorazioni e gli effetti, lo stato e un aspetto diverso per ogni server.
-source: 45c7a2e66457
+source: a1e67c648470
 ---
 
 Il tuo profilo è quello che vedono le persone quando fanno clic sul tuo nome. Apri l'editor dalla tua immagine nell'angolo in basso a sinistra, poi scegli **Modifica profilo**.
@@ -37,7 +37,7 @@ Fai clic su uno di questi riquadri nell'editor per aprire il relativo selettore:
 
 ![La scelta di una decorazione avatar, con l'anteprima in ogni dimensione](shot:cosmetic-picker)
 
-1. Sfoglia la griglia o cerca per nome. **Nessuno** rimuove quella che hai.
+1. Sfoglia la griglia o cerca per nome o tag. I tag sotto la ricerca mostrano solo le opzioni che lo hanno: cliccalo di nuovo per vedere tutto. **Nessuno** rimuove quella che hai.
 2. Passa il mouse o fai clic su un'opzione per vederla nell'anteprima, esattamente dove la vedranno gli altri. Le decorazioni compaiono in ogni dimensione, le targhette in un elenco dei membri, effetti e cornici su tutta la scheda.
 3. Fai clic su **Applica** o doppio clic su un'opzione. Poi **Salva modifiche** per tenerla.
 

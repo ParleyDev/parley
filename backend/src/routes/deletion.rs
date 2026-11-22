@@ -121,6 +121,8 @@ pub async fn request_deletion(state: &AppState, uid: Uuid) -> AppResult<DateTime
     crate::auth::revoke_sessions(state, uid, None, None, "Your account is scheduled for deletion.").await?;
     state.hub.voice_evict(|v| v.user_id == uid);
     state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": uid, "status": "offline" }));
+    let who = crate::notify::name(&crate::audit::username(state, uid).await);
+    crate::notify::send(state, crate::notify::Event::new("users", "user.deletion_requested", format!("**{who}** asked to delete their account (deleted on {})", at.format("%Y-%m-%d"))).user(uid));
     Ok(at)
 }
 
@@ -192,9 +194,11 @@ pub async fn finalize_now(state: &AppState, uid: Uuid) -> AppResult<bool> {
         Some((s,)) if s == "deleted" => return Ok(false),
         _ => {}
     }
+    let was = crate::audit::username(state, uid).await;
     let done = scrub(state, &mut tx, uid).await?;
     tx.commit().await?;
     after(state, uid, done).await;
+    crate::notify::send(state, crate::notify::Event::new("users", "user.deleted", format!("The account **{}** was deleted", crate::notify::name(&was))).user(uid));
     Ok(true)
 }
 

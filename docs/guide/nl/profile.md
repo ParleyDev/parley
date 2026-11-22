@@ -2,7 +2,7 @@
 title: Je profiel
 section: Jij
 summary: Je profielfoto, banner, naamstijl, naamplaatje, decoraties en effecten, status, en een andere look per server.
-source: 45c7a2e66457
+source: a1e67c648470
 ---
 
 Je profiel is wat mensen zien als ze op je naam klikken. Open de editor via je profielfoto in de hoek linksonder en dan **Profiel bewerken**.
@@ -37,7 +37,7 @@ Klik in de editor op een van deze tegels om de kiezer te openen:
 
 ![Een avatardecoratie kiezen, met een voorbeeld in elk formaat](shot:cosmetic-picker)
 
-1. Blader door het raster, of zoek op naam. **Geen** verwijdert wat je nu hebt.
+1. Blader door het raster, of zoek op naam of tag. De tags onder het zoekveld tonen alleen de opties met die tag: klik er nog eens op om alles te zien. **Geen** verwijdert wat je nu hebt.
 2. Ga met de muis over een optie of klik erop om hem in het voorbeeld te zien, precies waar mensen hem zullen zien. Decoraties zie je in elk formaat, naamplaatjes in een ledenlijst, en effecten en frames op je hele kaart.
 3. Klik op **Toepassen**, of dubbelklik op een optie. Daarna **Wijzigingen opslaan** om het te houden.
 

@@ -1,6 +1,7 @@
 import ThemesPane from './AdminThemes'
 import CropImg from '../components/CropImg'
 import BlockedLinksPane from './AdminBlockedLinks'
+import NotificationsPane from './AdminNotifications'
 import { MatchesPane, MatchingSetupPane } from './AdminMatching'
 import { AgeChecksPane } from './AdminAge'
 import { BansPane } from './AdminBans'
@@ -13,7 +14,7 @@ import NetworkPane from './AdminNetwork'
 import ServerDetailPane from './AdminServer'
 import CosmeticsPane from './AdminCosmetics'
 import ReviewQueue from './AdminDiscovery'
-import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, Share2, ShieldAlert, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, Share2, ShieldAlert, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles, Bell } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
@@ -29,7 +30,7 @@ import { useT, t as tr, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
 import { globalName } from '../lib/names'
 
-type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail' | 'matching' | 'matches' | 'age' | 'sanctions' | 'spam' | 'link-feeds' | 'explicit' | 'policies'
+type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail' | 'matching' | 'matches' | 'age' | 'sanctions' | 'spam' | 'link-feeds' | 'explicit' | 'policies' | 'notifications'
 
 /** Root console for Parley admins: stats, users, servers, instance settings. Shown in the settings window, one route per page. */
 export default function AdminPage() {
@@ -62,6 +63,7 @@ export default function AdminPage() {
       it('themes', 'Themes', <Palette size={18} />, can(a, 'instance_manage'), 'colours colors'),
       it('cosmetics', 'Cosmetics', <Sparkles size={18} />, can(a, 'instance_manage'), 'decorations nameplates effects frames'),
       it('apps', 'Apps', <Bot size={18} />, can(a, 'instance_manage'), 'bots oauth applications'),
+      it('notifications', 'Notifications', <Bell size={18} />, can(a, 'instance_manage'), 'alerts events webhooks discord slack channel signups reports audit'),
       it('policies', 'Policies & Contacts', <ScrollText size={18} />, can(a, 'instance_manage'), 'terms guidelines privacy safety contact legal law enforcement takedown'),
       it('mail', 'Mail', <Mail size={18} />, can(a, 'account_pii_reveal'), 'email smtp sent'),
     ]),
@@ -109,6 +111,7 @@ export default function AdminPage() {
             <Route path="sanctions" element={<BansPane />} />
             <Route path="explicit" element={<ExplicitPane />} />
             <Route path="policies" element={<PoliciesPane />} />
+            <Route path="notifications" element={<NotificationsPane />} />
             <Route path="apps" element={<AppsPane />} />
             <Route path="messages" element={<MessagesPane />} />
             <Route path="users/:id" element={<UserDetailPane />} />
@@ -836,9 +839,13 @@ function ReportsPane() {
   // A legal hold is for trust-and-safety leads and legal to set.
   const canHold = !!a?.roles.some((r) => r === 'TS_LEAD' || r === 'LEGAL')
   const [evidenceOf, setEvidenceOf] = useState<string | null>(null)
-  const [status, setStatus] = useState<'open' | 'resolved' | 'dismissed' | 'all'>('open')
+  // ?report=<id> (links in event notifications): every status, scrolled to that report and marked.
+  const [params] = useSearchParams()
+  const focus = params.get('report')
+  const [status, setStatus] = useState<'open' | 'resolved' | 'dismissed' | 'all'>(focus ? 'all' : 'open')
   const [rows, setRows] = useState<Report[] | null>(null)
   const pushToast = useStore((s) => s.pushToast)
+  useEffect(() => { if (focus && rows) document.querySelector(`[data-admin-report="${CSS.escape(focus)}"]`)?.scrollIntoView({ block: 'center' }) }, [focus, rows])
   const load = async () => { try { setRows(await api.get<Report[]>(`/admin/reports?status=${status}`)) } catch (e) { pushToast((e as Error).message, 'error') } }
   useEffect(() => { setRows(null); load() }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (fn: () => Promise<unknown>, done: string) => { try { await fn(); pushToast(done); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
@@ -858,7 +865,7 @@ function ReportsPane() {
         {rows === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
         {rows?.length === 0 && <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2" data-admin-reports-empty>{status === 'all' ? t('No reports.') : t('No {status} reports.', { status: statusLabel[status] })}</div>}
         {rows?.map((r) => (
-          <div key={r.id} className={`rounded-xl border bg-bg-1 p-4 ${r.urgent && r.status === 'open' ? 'border-danger/60' : 'border-line'}`} data-admin-report={r.id} data-report-status={r.status} data-report-kind={r.kind} data-report-category={r.category} data-report-urgent={r.urgent ? '1' : '0'} data-report-hold={r.legal_hold ? '1' : '0'}>
+          <div key={r.id} className={`rounded-xl border bg-bg-1 p-4 ${r.urgent && r.status === 'open' ? 'border-danger/60' : 'border-line'} ${r.id === focus ? 'ring-2 ring-accent' : ''}`} data-admin-report={r.id} data-report-focused={r.id === focus ? '1' : undefined} data-report-status={r.status} data-report-kind={r.kind} data-report-category={r.category} data-report-urgent={r.urgent ? '1' : '0'} data-report-hold={r.legal_hold ? '1' : '0'}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${r.status === 'open' ? 'bg-warn/20 text-warn' : r.status === 'resolved' ? 'bg-success/20 text-success' : 'bg-bg-3 text-text-2'}`}>{statusLabel[r.status]}</span>
               {r.urgent && <span className="rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-danger" data-report-urgent-badge>{t('Urgent')}</span>}

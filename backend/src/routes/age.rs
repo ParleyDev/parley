@@ -307,6 +307,8 @@ async fn ask(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): 
     let note: String = req.note.trim().chars().take(500).collect();
     let made = sqlx::query("INSERT INTO age_requests (id, user_id, note) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING").bind(Uuid::now_v7()).bind(uid).bind(&note).execute(&state.db).await?.rows_affected();
     if made == 0 { return Err(AppError::Conflict("You already have a request waiting.".into())) }
+    let who = crate::notify::name(&crate::audit::username(&state, uid).await);
+    crate::notify::send(&state, crate::notify::Event::new("safety", "age.request", format!("**{who}** asked for an age check")).link("Age checks", "/admin/age").user(uid));
     Ok(Json(status(&state.db, uid).await?))
 }
 

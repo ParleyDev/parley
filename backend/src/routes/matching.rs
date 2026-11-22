@@ -178,6 +178,9 @@ async fn record_match(state: &AppState, bytes: &[u8], sha: &str, ctx: &Ctx<'_>, 
         state.hub.voice_evict(|v| v.user_id == ctx.user_id);
     }
     crate::metrics::METRICS.media_matched.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let text = format!("🚨 An upload by **{}** matched known abuse material ({}). It was quarantined{}.", crate::notify::name(&username), ctx.surface,
+        if suspended { " and the account suspended" } else if is_admin { "; the account is an admin's and was not suspended" } else { "" });
+    crate::notify::send(state, crate::notify::Event::new("safety", "safety.match", text).link("Matched uploads", "/admin/matches").user(ctx.user_id));
     tracing::warn!(match_id = %id, surface = ctx.surface, source = %hit.source, "upload matched known abuse material: quarantined");
 }
 

@@ -89,6 +89,7 @@ pub async fn request(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
         .bind(gid).bind(at).execute(&state.db).await?;
     go_dark(&state, gid, "deleted", &name).await?;
     crate::audit::guild(&state, gid, uid, "guild.deletion_requested", "guild", Some(gid), &name, json!({ "scheduled_for": at })).await;
+    crate::notify::send(&state, crate::notify::Event::new("servers", "guild.deletion_requested", format!("The owner is deleting the server **{}** (gone on {})", crate::notify::name(&name), at.format("%Y-%m-%d"))).server(gid).user(uid));
     Ok(Json(json!({ "id": gid, "state": "pending_deletion", "scheduled_for": at })))
 }
 
@@ -112,6 +113,7 @@ async fn restore(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gi
         state.hub.emit_users(vec![m], "GUILD_CREATE", crate::routes::guilds::guild_payload(&guild, extra));
     }
     crate::audit::guild(&state, gid, uid, "guild.restored", "guild", Some(gid), "", json!({})).await;
+    crate::notify::send(&state, crate::notify::Event::new("servers", "guild.restored", format!("The owner restored the server **{}**", crate::notify::name(&guild.name))).server(gid).user(uid));
     Ok(Json(json!({ "id": gid, "state": "active" })))
 }
 
@@ -146,8 +148,8 @@ async fn takedown(State(state): State<AppState>, AuthUser(uid): AuthUser, header
 /// Open cases that reach into it get a snapshot of their in-scope content first.
 pub async fn finalize(state: &AppState, gid: Uuid, kind: &str) -> AppResult<bool> {
     let mut tx = state.db.begin().await?;
-    let row: Option<(Option<String>,)> = sqlx::query_as("SELECT deletion_type FROM guilds WHERE id = $1 FOR UPDATE SKIP LOCKED").bind(gid).fetch_optional(&mut *tx).await?;
-    let Some((dtype,)) = row else { return Ok(false) };
+    let row: Option<(Option<String>, String)> = sqlx::query_as("SELECT deletion_type, name FROM guilds WHERE id = $1 FOR UPDATE SKIP LOCKED").bind(gid).fetch_optional(&mut *tx).await?;
+    let Some((dtype, gname)) = row else { return Ok(false) };
     let kind = dtype.as_deref().unwrap_or(kind).to_string();
     let channels: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT id FROM channels WHERE guild_id = $1").bind(gid).fetch_all(&mut *tx).await?.into_iter().map(|r| r.0).collect();
 
@@ -197,6 +199,8 @@ pub async fn finalize(state: &AppState, gid: Uuid, kind: &str) -> AppResult<bool
         let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
         let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.viz"))).await;
     }
+    let how = match kind.as_str() { "takedown" => " (taken down)", "admin" => " (by an admin)", _ => "" };
+    crate::notify::send(state, crate::notify::Event::new("servers", "guild.deleted", format!("The server **{}** was deleted{how}", crate::notify::name(&gname))));
     Ok(true)
 }
 

@@ -52,6 +52,9 @@ pub struct Decoration {
     /// From the folder's `metadata.json` when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// From `metadata.json` (`"tags": ["christmas", "winter"]`), cleaned by `clean_tags`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     pub animated: bool,
     #[serde(skip)]
     path: PathBuf,
@@ -155,6 +158,28 @@ pub fn read_metadata(dir: &FsPath) -> HashMap<String, serde_json::Value> {
     }).collect()).unwrap_or_default()
 }
 
+/// At most this many tags per item, each at most `MAX_TAG` characters.
+pub const MAX_TAGS: usize = 20;
+pub const MAX_TAG: usize = 32;
+
+/// Tags as people search them: trimmed, lower case, inner spaces collapsed, without '#', empty ones and repeats
+/// dropped, in the order given. Anything that isn't a string is skipped.
+pub fn clean_tags<'a>(tags: impl IntoIterator<Item = &'a serde_json::Value>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for t in tags.into_iter().filter_map(serde_json::Value::as_str) {
+        let t = t.trim().trim_start_matches('#').split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+        let t: String = t.chars().take(MAX_TAG).collect::<String>().trim().to_string();
+        if !t.is_empty() && !out.contains(&t) { out.push(t) }
+        if out.len() == MAX_TAGS { break }
+    }
+    out
+}
+
+/// An entry's `tags`, cleaned (none when it has no list).
+pub fn entry_tags(entry: &serde_json::Value) -> Vec<String> {
+    entry["tags"].as_array().map(|a| clean_tags(a)).unwrap_or_default()
+}
+
 /// Index a kind's folder; `video` also takes WebM / MP4 loops. Names and descriptions come from `metadata.json`
 /// when the folder has one, else from the file name.
 pub fn scan_kind(dir: &FsPath, video: bool) -> Index {
@@ -177,7 +202,8 @@ pub fn scan_kind(dir: &FsPath, video: bool) -> Index {
         let m = meta_by_file.get(&name);
         let title = m.and_then(|m| m["name"].as_str()).map(str::trim).filter(|n| !n.is_empty()).map(|n| { let mut c = n.chars(); c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default() });
         let description = m.and_then(|m| m["description"].as_str()).map(str::trim).filter(|d| !d.is_empty()).map(str::to_string);
-        let d = Decoration { animated: is_animated(&path, ct), name: title.unwrap_or_else(|| display_name(&stem)), description, tag: format!("{mtime:x}-{:x}", meta.len()), id: id.clone(), path, content_type: ct };
+        let tags = m.map(entry_tags).unwrap_or_default();
+        let d = Decoration { animated: is_animated(&path, ct), name: title.unwrap_or_else(|| display_name(&stem)), description, tags, tag: format!("{mtime:x}-{:x}", meta.len()), id: id.clone(), path, content_type: ct };
         idx.by_id.insert(id, idx.list.len());
         idx.list.push(d);
     }
@@ -368,6 +394,28 @@ mod tests {
         assert!(!idx.get("still_one").unwrap().animated);
         assert_eq!(idx.get("still_one").unwrap().name, "Still One");
         assert!(scan(&dir.join("missing")).list.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tags_come_from_metadata_cleaned() {
+        let dir = std::env::temp_dir().join(format!("parley-assets-tags-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x06\0\0\0";
+        std::fs::write(dir.join("holly_wreath.png"), png).unwrap();
+        std::fs::write(dir.join("plain.png"), png).unwrap();
+        std::fs::write(dir.join("metadata.json"), serde_json::json!({ "items": [
+            { "file": "holly_wreath.png", "name": "Holly Wreath", "tags": [" Christmas ", "#winter", "christmas", "", 7, "New  Year"] },
+            { "file": "plain.png", "name": "Plain", "tags": "not a list" },
+        ] }).to_string()).unwrap();
+        let idx = scan(&dir);
+        assert_eq!(idx.get("holly_wreath").unwrap().tags, ["christmas", "winter", "new year"]);
+        assert!(idx.get("plain").unwrap().tags.is_empty());
+        let long: Vec<serde_json::Value> = (0..30).map(|i| format!("t{i}-{}", "x".repeat(40)).into()).collect();
+        let tags = clean_tags(&long);
+        assert_eq!(tags.len(), MAX_TAGS);
+        assert!(tags.iter().all(|t| t.chars().count() <= MAX_TAG));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

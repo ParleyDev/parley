@@ -2,7 +2,7 @@
 title: Twój profil
 section: Ty
 summary: Zdjęcie, baner, styl nazwy, tabliczka, dekoracje i efekty, status oraz inny wygląd na każdym serwerze.
-source: 45c7a2e66457
+source: a1e67c648470
 ---
 
 Profil to to, co ludzie widzą po kliknięciu twojej nazwy. Otwórz edytor, klikając swoje zdjęcie w lewym dolnym rogu, a potem **Edytuj profil**.
@@ -37,7 +37,7 @@ Kliknij dowolny z tych kafelków w edytorze, aby otworzyć jego selektor:
 
 ![Wybieranie dekoracji awatara, z podglądem w każdym rozmiarze](shot:cosmetic-picker)
 
-1. Przeglądaj siatkę albo szukaj po nazwie. **Brak** usuwa obecny element.
+1. Przeglądaj siatkę albo szukaj po nazwie lub tagu. Tagi pod polem wyszukiwania pokazują tylko opcje, które go mają: kliknij ponownie, aby zobaczyć wszystko. **Brak** usuwa obecny element.
 2. Najedź na opcję lub ją kliknij, aby zobaczyć ją w podglądzie dokładnie tam, gdzie zobaczą ją inni. Dekoracje są pokazywane w każdym rozmiarze, tabliczki na liście członków, a efekty i ramki na całej karcie.
 3. Kliknij **Zastosuj** albo kliknij opcję dwukrotnie. Potem **Zapisz zmiany**, aby ją zachować.
 

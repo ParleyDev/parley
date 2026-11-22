@@ -152,6 +152,8 @@ struct AdminItem {
     /// Built-ins: the admin's name, or null for their own; folder items: from metadata.json.
     name: Option<String>,
     description: Option<String>,
+    /// Folder items: their tags from metadata.json.
+    tags: Vec<String>,
     enabled: bool,
     deleted: bool,
     /// Custom ones' look; folder effects and frames: their layers, layout and stills, as metadata.json has them.
@@ -168,12 +170,13 @@ async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     let counts: HashMap<String, i64> = sqlx::query_as::<_, (String, i64)>(&format!("SELECT {c}, COUNT(*) FROM users WHERE {c} <> '' GROUP BY 1", c = column(&kind)))
         .fetch_all(&state.db).await?.into_iter().collect();
     let mut out = Vec::new();
-    let mut push = |value: String, source: &'static str, name: Option<String>, description: Option<String>, data: Value| {
+    let mut push = |value: String, source: &'static str, name: Option<String>, description: Option<String>, tags: Vec<String>, data: Value| {
         let r = rows.get(&value);
         let own = source != "folder";
         out.push(AdminItem {
             name: if own { r.and_then(|r| r.name.clone()) } else { name },
             description: if own { r.and_then(|r| r.description.clone()) } else { description },
+            tags,
             enabled: r.map(|r| r.enabled).unwrap_or(true),
             deleted: r.map(|r| r.deleted).unwrap_or(false),
             data: if source == "custom" { r.map(|r| r.data.clone()).unwrap_or(json!({})) } else { data },
@@ -181,16 +184,16 @@ async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             value, source,
         });
     };
-    for b in builtins(&kind) { push(b.to_string(), "builtin", None, None, json!({})) }
+    for b in builtins(&kind) { push(b.to_string(), "builtin", None, None, vec![], json!({})) }
     let p = assets::ASSET_PREFIX;
     let some = |s: &str| Some(s.to_string()).filter(|s| !s.is_empty());
     match kind.as_str() {
-        "decoration" => for d in &assets::decorations(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), json!({ "file": d.file_name() })) },
-        "nameplate" => for d in &assets::nameplates(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), json!({ "file": d.file_name() })) },
-        "effect" => for d in &asset_layers::effects(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), json!({ "layers": d.layers, "still": d.still, "thumbnail": d.thumbnail, "reduced_motion": d.reduced_motion })) },
-        _ => for d in &asset_layers::frames(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), json!({ "layers": d.layers, "layout": d.layout })) },
+        "decoration" => for d in &assets::decorations(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), d.tags.clone(), json!({ "file": d.file_name() })) },
+        "nameplate" => for d in &assets::nameplates(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), d.tags.clone(), json!({ "file": d.file_name() })) },
+        "effect" => for d in &asset_layers::effects(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), d.tags.clone(), json!({ "layers": d.layers, "still": d.still, "thumbnail": d.thumbnail, "reduced_motion": d.reduced_motion })) },
+        _ => for d in &asset_layers::frames(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), d.tags.clone(), json!({ "layers": d.layers, "layout": d.layout })) },
     }
-    for r in rows.values().filter(|r| r.custom) { push(r.value.clone(), "custom", None, None, json!({})) }
+    for r in rows.values().filter(|r| r.custom) { push(r.value.clone(), "custom", None, None, vec![], json!({})) }
     Ok(Json(out))
 }
 

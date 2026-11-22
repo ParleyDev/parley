@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode, useRef } from 'react'
+import { Fragment, useEffect, useState, type ReactNode, type MouseEvent as ReactMouseEvent, useRef } from 'react'
 import { getPrefs } from './prefs'
 import FrozenGif from '../components/FrozenGif'
 import { Check, Copy } from 'lucide-react'
@@ -25,6 +25,7 @@ import yaml from 'highlight.js/lib/languages/yaml'
 import markdown from 'highlight.js/lib/languages/markdown'
 import diff from 'highlight.js/lib/languages/diff'
 import { useT } from './i18n'
+import { goInApp, inAppPath } from './appNav'
 
 /** A single text-default symbol below the emoji blocks (©, ®, ™, ‼, arrows, ▶) without FE0F asking for the emoji look. */
 const TEXT_SYMBOL_RE = /^(?![\p{Emoji_Presentation}])[\u0000-\u25FF]$/u
@@ -261,7 +262,10 @@ export function renderInline(text: string, opts: { noLinks?: boolean } = {}): Re
     else if (t.startsWith('*') || t.startsWith('_')) nodes.push(<em key={k}>{renderInline(t.slice(1, -1))}</em>)
     else if (t.startsWith('[')) {
       const mm = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(t)!
-      nodes.push(<a key={k} href={mm[2]} title={mm[2]} target="_blank" rel="noopener noreferrer">{renderInline(mm[1], { noLinks: true })}</a>)
+      const inApp = inAppPath(mm[2])
+      // Links into this app's admin console (event notifications) open in place; a modified click still opens a tab.
+      const follow = inApp ? { onClick: (e: ReactMouseEvent) => { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; if (goInApp(inApp)) e.preventDefault() } } : { target: '_blank', rel: 'noopener noreferrer' }
+      nodes.push(<a key={k} href={mm[2]} title={mm[2]} {...follow} data-in-app={inApp ? '' : undefined}>{renderInline(mm[1], { noLinks: true })}</a>)
     } else if (t.startsWith('<')) {
       const url = t.slice(1, -1)
       nodes.push(<a key={k} href={url} target="_blank" rel="noopener noreferrer">{url}</a>)

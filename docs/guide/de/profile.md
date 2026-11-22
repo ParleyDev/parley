@@ -2,7 +2,7 @@
 title: Dein Profil
 section: Du
 summary: Dein Bild, Banner, Namensstil, Namensschild, Dekorationen und Effekte, dein Status und ein eigener Look pro Server.
-source: 45c7a2e66457
+source: a1e67c648470
 ---
 
 Dein Profil ist das, was andere sehen, wenn sie auf deinen Namen klicken. Öffne den Editor über dein Bild in der Ecke unten links und dann **Profil bearbeiten**.
@@ -37,7 +37,7 @@ Klicke im Editor auf eine dieser Kacheln, um ihre Auswahl zu öffnen:
 
 ![Auswahl einer Avatar-Dekoration, in jeder Größe in der Vorschau](shot:cosmetic-picker)
 
-1. Stöbere im Raster oder suche nach Namen. **Keine** entfernt die aktuelle.
+1. Stöbere im Raster oder suche nach Namen oder Tag. Die Tags unter dem Suchfeld zeigen nur die Optionen mit diesem Tag: Klicke ihn noch einmal, um wieder alles zu sehen. **Keine** entfernt die aktuelle.
 2. Fahr mit der Maus über eine Option oder klicke sie an, um sie in der Vorschau zu sehen, genau dort, wo andere sie sehen werden. Dekorationen erscheinen in jeder Größe, Namensschilder in einer Mitgliederliste und Effekte und Rahmen auf deiner ganzen Karte.
 3. Klicke auf **Anwenden** oder doppelklicke eine Option. Dann **Änderungen speichern**, um sie zu behalten.
 

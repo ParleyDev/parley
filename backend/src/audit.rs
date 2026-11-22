@@ -31,9 +31,9 @@ pub fn request_reason() -> Option<String> {
 }
 
 /// Record a console `action` by `actor` on an optional target, in the append-only access log with the actor's roles,
-/// IP and user agent. `_target_name` is not stored: names are resolved when the log is read. Never fails the calling
-/// request: a logging error is traced.
-pub async fn record(state: &AppState, actor: Uuid, action: &str, target_kind: &str, target_id: Option<Uuid>, _target_name: &str, details: Value) {
+/// IP and user agent. `target_name` is not stored: names are resolved when the log is read (it only names the target
+/// in the event notification, see notify.rs). Never fails the calling request: a logging error is traced.
+pub async fn record(state: &AppState, actor: Uuid, action: &str, target_kind: &str, target_id: Option<Uuid>, target_name: &str, details: Value) {
     let roles = crate::routes::admin_access::access(state, actor).await.map(|a| a.roles).unwrap_or_default();
     let (ip, ua) = CLIENT.try_with(|c| c.clone()).unwrap_or_default();
     let justification = details.get("note").and_then(|v| v.as_str()).unwrap_or_default().to_string();
@@ -47,6 +47,8 @@ pub async fn record(state: &AppState, actor: Uuid, action: &str, target_kind: &s
     {
         tracing::error!(error = %e, action, "failed to write admin audit row");
     }
+    let (st, action, kind, name) = (state.clone(), action.to_string(), target_kind.to_string(), target_name.to_string());
+    tokio::spawn(async move { crate::notify::console(&st, actor, &action, &kind, target_id, &name).await });
 }
 
 /// Daily: drop console audit entries older than `AUDIT_RETENTION_DAYS` through the database's prune function (which

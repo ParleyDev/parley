@@ -60,7 +60,7 @@ Click any of these tiles in the editor to open its picker:
 
 ![Choosing an avatar decoration, previewed at every size](shot:cosmetic-picker)
 
-1. Browse the grid, or search by name. **None** removes the one you have.
+1. Browse the grid, or search by name or tag. The tags under the search box show only the options that have one: click it again to see everything. **None** removes the one you have.
 2. Hover or click an option to see it in the preview, exactly where people will see it. Decorations show at every size, nameplates in a member list, and effects and frames on your whole card.
 3. Click **Apply**, or double-click an option. Then **Save Changes** to keep it.
 

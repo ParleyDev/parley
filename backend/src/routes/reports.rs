@@ -188,7 +188,26 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req
     if let Ok(Some((Some(target),))) = sqlx::query_as::<_, (Option<Uuid>,)>("SELECT target_user_id FROM reports WHERE id = $1 AND kind <> 'guild'").bind(id).fetch_optional(&state.db).await {
         crate::abuse::after_report(state.clone(), target);
     }
+    notify_report(&state, id, uid, category, urgent).await;
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
+}
+
+/// A new report, for the safety category: what kind, about whom, with its links (never its reason or content).
+async fn notify_report(state: &AppState, id: Uuid, reporter: Uuid, category: &str, urgent: bool) {
+    use crate::notify::{name, Event};
+    let Ok(Some((kind, target, target_name, gid, gname))) = sqlx::query_as::<_, (String, Option<Uuid>, String, Option<Uuid>, String)>(
+        "SELECT kind, target_user_id, target_username, guild_id, guild_name FROM reports WHERE id = $1").bind(id).fetch_optional(&state.db).await else { return };
+    let about = match kind.as_str() {
+        "guild" => format!("the server **{}**", name(&gname)),
+        "message" => format!("a message by **{}**", name(&target_name)),
+        _ => format!("**{}**", name(&target_name)),
+    };
+    let what = category.replace('_', " ");
+    let text = format!("{}report ({what}) on {about}, from **{}**", if urgent { "🚨 Urgent " } else { "New " }, name(&crate::audit::username(state, reporter).await));
+    let mut ev = Event::new("safety", "report.create", text).link("Report", format!("/admin/reports?report={id}"));
+    if let Some(t) = target.filter(|_| kind != "guild") { ev = ev.user(t) }
+    if let Some(g) = gid { ev = ev.server(g) }
+    crate::notify::send(state, ev);
 }
 
 #[derive(Deserialize)]

@@ -125,6 +125,24 @@ docker compose start backend
 
 `pg_restore --clean` replaces everything currently in the database.
 
+### Event notifications
+
+**Admin Console → Notifications** sends what happens on the instance to a text channel, a webhook, or both, so your team doesn't have to keep the console open. Events come in four groups, and each group has its own channel and webhook (several groups can share one):
+
+| Group | What it posts |
+|---|---|
+| Users | New accounts, account deletions being asked for and carried out, and admins suspending, deleting, promoting or demoting people |
+| Servers | Servers created, handed to a new owner, being deleted, restored or deleted, taken down, invites paused, discovery changes |
+| Safety | New reports (urgent ones marked 🚨), uploads matching known abuse material, spam-check flags, age check requests, restrictions, and case activity |
+| Console activity | Every entry in the console's audit log: which admin did what, and to whom |
+
+Each post names who was involved and links to the matching console page: the user, the server, the report, the case, or the settings page that changed. Posts never include a report's reason, a message's content, search terms or anything else from the audit log's details.
+
+- **Channel**: any text channel on the instance. The Parley account posts there, and anyone who can see the channel sees the posts, so use one only your admins can read. Links to the console open in place in the app.
+- **Webhook**: a Discord or Slack incoming webhook gets posts in its own format (with mentions turned off). Any other `https://` address gets a JSON `POST` with `content` and `text` versions of the post plus an `event` object: `category`, `kind` (such as `user.signup` or `report.create`), `summary`, `at` and `links` (`label` and absolute `url`; the links use `APP_URL`). Only the webhook's host is shown in the console afterwards; the address itself stays secret.
+
+**Send a test** posts to a group's channel and webhook at once and says if either failed. Each group posts at most 30 times a minute; anything past that is counted in its next post. If a post fails (the channel was deleted, the webhook stopped answering), the group shows the error until a post succeeds or you change its settings.
+
 ## Avatar decorations
 
 Besides the built-in frames, people can pick image decorations that you provide. Put the files in `avatar-decorations/` inside the assets folder (`data/assets/avatar-decorations/` by default, or set `ASSETS_PATH` to any folder, for example a NAS share):
@@ -135,6 +153,23 @@ Besides the built-in frames, people can pick image decorations that you provide.
 - **Changes:** adding or removing files needs no restart; the list refreshes within 30 seconds. A removed decoration simply stops showing.
 
 The folder is mounted read-only. Still frames are cached under `uploads/asset-cache/`, which is safe to delete.
+
+**Names, descriptions and tags.** Each kind's folder can have a `metadata.json` (nameplates, profile effects and profile frames use the same format; effects and frames name a `folder` of layers instead of a `file`):
+
+```json
+{
+ "items": [
+  {
+   "file": "holly_wreath.png",
+   "name": "Holly Wreath",
+   "description": "A ring of holly and berries.",
+   "tags": ["christmas", "winter"]
+  }
+ ]
+}
+```
+
+`name` and `description` replace the ones taken from the file name. `tags` group items: people can search for a tag in the profile editor's pickers or click it to see only the items that have it, and the admin console's Cosmetics list filters by them the same way. Tags are shown in lower case without a leading `#`; an item keeps at most 20, each up to 32 characters, and repeats are dropped. Adding or editing an item in the admin console writes its tags here too.
 
 **Importing from another folder.** With the assets folder mounted read-write, Admin Console → Cosmetics → **Import from folder** takes a folder laid out the same way (`avatar-decorations/`, `nameplates/`, `profile-effects/`, `profile-frames/`, each with its `metadata.json`), picked in the browser. It lists, per kind, how many items that folder has, how many this server already has (matched by file or folder name) and how many are new, then adds only the new ones: their files, and their `metadata.json` entries copied as they are. Items whose id clashes with one already here, whose names have characters other than letters, digits, `.`, `_` and `-`, whose files are missing, or with a file over 8 MB are listed and skipped. Nothing already in the folder is changed.
 
@@ -156,7 +191,7 @@ Voice channels (Channel Settings → End-to-end encryption) and DM or group call
 
 When you run an instance for people you don't know, you are the provider of that service, with the duties your country puts on one. These are worth doing first:
 
-- **Reports**: members can report messages and people, and the reports wait under **Admin Console → Reports**. Child-safety, threat, self-harm and intimate-image reports are marked urgent and sorted first. Make sure someone looks.
+- **Reports**: members can report messages and people, and the reports wait under **Admin Console → Reports**. Child-safety, threat, self-harm and intimate-image reports are marked urgent and sorted first. Make sure someone looks: [event notifications](#event-notifications) can post new ones to your team's channel or chat.
 - **Known abuse material**: Parley can check every upload against known child sexual abuse material, hold a match in quarantine and suspend the account. It ships the plumbing and no lists, so it does nothing until you connect a source you are entitled to. See [Matching uploads against known abuse material](media-matching.md).
 - **Reporting to the authorities**: register with the body you would report to before you need it, and read [what Parley does and does not do for you](reporting-to-authorities.md). A child-safety report cannot be closed until the report you made, or the decision that none was needed, is on record.
 - **Ages**: Parley asks nobody for a date of birth and treats every account as a possible minor until it is confirmed as an adult. Decide [what counts as confirmed](age-assurance.md) on your instance: your staff's word, or a verification service you connect.

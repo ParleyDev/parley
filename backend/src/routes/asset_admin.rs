@@ -1,7 +1,7 @@
 //! Adding and editing the instance's assets-folder cosmetics from the admin console. The folder and its
 //! `metadata.json` files belong to whoever set the instance up (Parley only reads their format, and keeps it as it
 //! is): an admin's new item becomes its files plus an entry in its kind's `metadata.json`, and an edit rewrites that
-//! entry (name, description, an effect's layer timing, a frame's layout and layers) and adds or replaces files. Every
+//! entry (name, description, tags, an effect's layer timing, a frame's layout and layers) and adds or replaces files. Every
 //! other field in an entry, and the file's other keys, are kept; `item_count` follows the list when the file has one.
 //! Turning items off and deleting them are Parley's alone (routes/cosmetics.rs). When the folder isn't writable
 //! (mounted read-only), adding and editing fail and say so.
@@ -211,6 +211,16 @@ fn apply(kind: &str, entry: &mut Map<String, Value>, sent: &Map<String, Value>) 
         entry.insert("name".into(), n.into());
     }
     if let Some(d) = text(sent.get("description"), 300, "description")? { entry.insert("description".into(), d.into()); }
+    match sent.get("tags") {
+        None => {}
+        Some(Value::Array(list)) => {
+            if list.iter().any(|t| !t.is_string()) { return Err(AppError::BadRequest("tags must be a list of text".into())) }
+            let tags = assets::clean_tags(list);
+            // No tags: the key goes, so an untagged entry stays as it was written.
+            if tags.is_empty() { entry.remove("tags"); } else { entry.insert("tags".into(), tags.into()); }
+        }
+        Some(_) => return Err(AppError::BadRequest("tags must be a list of text".into())),
+    }
     if layered(kind) {
         if let Some(l) = sent.get("layers") { let v = clean_layers(kind, l, entry.get("layers"))?; entry.insert("layers".into(), v.into()); }
         if kind == "frame" {
@@ -485,6 +495,19 @@ mod tests {
         assert!(entry["layers"][0].get("width").is_none());
         let keys: Vec<&String> = entry.as_object().unwrap().keys().collect();
         assert_eq!(keys, ["folder", "name", "description", "in_shop", "price", "layers"]);
+    }
+
+    #[test]
+    fn tags_are_cleaned_and_cleared() {
+        let mut entry = json!({ "file": "holly_wreath.png", "name": "Holly Wreath" }).as_object().unwrap().clone();
+        apply("decoration", &mut entry, json!({ "tags": ["Christmas", " winter ", "christmas"] }).as_object().unwrap()).unwrap();
+        assert_eq!(entry["tags"], json!(["christmas", "winter"]));
+        apply("decoration", &mut entry, json!({ "name": "Wreath" }).as_object().unwrap()).unwrap();
+        assert_eq!(entry["tags"], json!(["christmas", "winter"]), "kept when not sent");
+        assert!(apply("decoration", &mut entry, json!({ "tags": "christmas" }).as_object().unwrap()).is_err());
+        assert!(apply("decoration", &mut entry, json!({ "tags": [1] }).as_object().unwrap()).is_err());
+        apply("decoration", &mut entry, json!({ "tags": [] }).as_object().unwrap()).unwrap();
+        assert!(!entry.contains_key("tags"));
     }
 
     #[test]

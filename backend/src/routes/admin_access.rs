@@ -161,6 +161,15 @@ pub async fn log_case(state: &AppState, uid: Uuid, roles: &[String], headers: &H
     sqlx::query("INSERT INTO admin_access_log (id, actor_id, actor_roles, action, query, filters, justification, target_ids, case_id, ip, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)")
         .bind(Uuid::now_v7()).bind(uid).bind(roles).bind(e.action).bind(e.query).bind(&e.filters).bind(e.justification).bind(e.targets).bind(case_id)
         .bind(client_ip(headers)).bind(ua).execute(&state.db).await?;
+    // The event notification names the action and whom it was about, never the query or the justification.
+    let (kind, target) = match (case_id, e.targets) {
+        (_, [t]) if e.action == "guild.takedown" => ("guild", Some(*t)),
+        (Some(c), _) => ("case", Some(c)),
+        (None, [t]) if e.action != "network.view" => ("user", Some(*t)),
+        _ => ("", None),
+    };
+    let (st, action) = (state.clone(), e.action.to_string());
+    tokio::spawn(async move { crate::notify::console(&st, uid, &action, kind, target, "").await });
     Ok(())
 }
 
