@@ -1,7 +1,8 @@
 //! File attachments: uploaded first (`POST /channels/:id/attachments`), then referenced by
 //! `attachment_ids` when the message is created. Files live on disk under `UPLOAD_DIR/<id>`;
-//! metadata in the `attachments` table. Served at `/api/attachments/:id/:filename` without
-//! auth, relying on the unguessable v4 id (Discord-CDN style) so `<img>` tags work.
+//! metadata in the `attachments` table. Served at `/api/attachments/:id/:filename` to a signed link that has not
+//! expired (`media_sign`; what messages carry, so `<img>` tags work) or to a signed-in member who can see the
+//! channel. The address alone is not enough.
 //!
 //! Large files can be uploaded in parts instead (`POST /channels/:id/attachments/uploads`, then
 //! `PUT /attachments/uploads/:id?offset=` for each part), each request well under a proxy's body limit
@@ -11,9 +12,9 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
-    models::Attachment,
+    models::{Attachment, AttachmentJson},
     perms,
-    routes::channels::require_channel_perms,
+    routes::channels::{require_channel, require_channel_perms},
     state::AppState,
 };
 use crate::ratelimit::rl_uploads;
@@ -56,6 +57,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(BODY_CEILING)))
         .route("/channels/:id/attachments/uploads", post(start_parts).route_layer(from_fn(rl_uploads)))
         .route("/attachments/uploads/:id", put(put_part).get(parts_status).layer(DefaultBodyLimit::max(PART_CEILING)))
+        .route("/attachments/urls", post(fresh_urls))
         .route("/attachments/:id/thumb", get(serve_thumb))
         .route("/attachments/:id/viz", get(serve_viz))
         .route("/attachments/:id/listened", post(mark_listened))
@@ -248,14 +250,36 @@ fn byte_range(headers: &HeaderMap, len: u64) -> Option<Result<(u64, u64), ()>> {
 /// `?download=1` asks for the file as a download even when it could play or show inline (phones' Save button: the
 /// Android app hands such responses to the system's download manager).
 #[derive(Deserialize, Default)]
-struct ServeQuery { #[serde(default)] download: Option<String> }
+struct ServeQuery { #[serde(default)] download: Option<String>, #[serde(flatten)] link: Link }
 
-async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid, String)>, Query(q): Query<ServeQuery>, headers: HeaderMap) -> AppResult<Response> {
+/// The signature part of an attachment link (`?ex=…&sig=…`).
+#[derive(Deserialize, Default)]
+struct Link { #[serde(default)] ex: Option<String>, #[serde(default)] sig: Option<String> }
+
+/// Who may fetch an attachment: a link signed by this instance that has not expired, or a signed-in member who can
+/// see the channel it is in (its uploader always). Knowing the address is not enough, except for attachments from
+/// before the instance began signing links.
+async fn allow(state: &AppState, id: Uuid, channel_id: Uuid, uploader_id: Uuid, created_at: chrono::DateTime<chrono::Utc>, link: &Link, user: Option<Uuid>) -> AppResult<()> {
+    // Uploaded before this instance signed its links: the plain address still works, as it was promised to.
+    if !crate::media_sign::required(created_at) { return Ok(()); }
+    if let (Some(ex), Some(sig)) = (&link.ex, &link.sig) {
+        if crate::media_sign::valid(id, ex, sig) { return Ok(()); }
+    }
+    match user {
+        Some(uid) if uid == uploader_id => Ok(()),
+        Some(uid) => require_channel(&state.db, channel_id, uid).await.map(|_| ()).map_err(|_| AppError::Forbidden),
+        None if link.sig.is_some() => Err(AppError::ForbiddenWith("This link has expired. Open the file from the conversation it was posted in.".into())),
+        None => Err(AppError::Unauthorized),
+    }
+}
+
+async fn serve(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path((id, _filename)): Path<(Uuid, String)>, Query(q): Query<ServeQuery>, headers: HeaderMap) -> AppResult<Response> {
     let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    allow(&state, id, att.channel_id, att.uploader_id, att.created_at, &q.link, user).await?;
     let path = state.config.upload_dir.join(id.to_string());
     let mut file = tokio::fs::File::open(&path).await.map_err(|_| AppError::NotFound("Attachment file missing".into()))?;
     let len = file.metadata().await.map(|m| m.len()).unwrap_or(att.size as u64);
@@ -294,13 +318,14 @@ async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid,
 }
 
 #[derive(Deserialize, Default)]
-struct VizQuery { #[serde(default)] peaks: Option<String> }
+struct VizQuery { #[serde(default)] peaks: Option<String>, #[serde(flatten)] link: Link }
 
 /// An audio attachment's visualiser data (audio_viz.rs), made on first request for files uploaded before it existed.
 /// `?peaks=1` returns only the waveform for seek bars.
-async fn serve_viz(State(state): State<AppState>, Path(id): Path<Uuid>, Query(q): Query<VizQuery>) -> AppResult<Response> {
-    let ct: Option<String> = sqlx::query_scalar("SELECT content_type FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
-    let ct = ct.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+async fn serve_viz(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path(id): Path<Uuid>, Query(q): Query<VizQuery>) -> AppResult<Response> {
+    let row: Option<(String, Uuid, Uuid, chrono::DateTime<chrono::Utc>)> = sqlx::query_as("SELECT content_type, channel_id, uploader_id, created_at FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    let (ct, channel_id, uploader_id, created_at) = row.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    allow(&state, id, channel_id, uploader_id, created_at, &q.link, user).await?;
     if !crate::audio_viz::is_audio(&ct) { return Err(AppError::NotFound("Not audio".into())); }
     let bytes = crate::audio_viz::ensure_recorded(state.db.clone(), state.config.upload_dir.clone(), id).await
         .ok_or_else(|| AppError::NotFound("No visualiser data".into()))?;
@@ -313,12 +338,13 @@ async fn serve_viz(State(state): State<AppState>, Path(id): Path<Uuid>, Query(q)
 }
 
 /// The server-made thumbnail of an image attachment, or a video's poster frame (same caching as the file itself).
-async fn serve_thumb(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<Response> {
+async fn serve_thumb(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path(id): Path<Uuid>, Query(link): Query<Link>) -> AppResult<Response> {
     let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    allow(&state, id, att.channel_id, att.uploader_id, att.created_at, &link, user).await?;
     let ct = att.thumb_type.ok_or_else(|| AppError::NotFound("No thumbnail".into()))?;
     let path = state.config.upload_dir.join(format!("{id}.thumb"));
     let file = tokio::fs::File::open(&path).await.map_err(|_| AppError::NotFound("Thumbnail missing".into()))?;
@@ -330,6 +356,28 @@ async fn serve_thumb(State(state): State<AppState>, Path(id): Path<Uuid>) -> App
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=31536000, immutable"));
     h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'"));
     Ok(resp.into_response())
+}
+
+#[derive(Deserialize)]
+struct FreshUrls { ids: Vec<Uuid> }
+
+/// `POST /attachments/urls {ids}`: fresh links for attachments the caller can still see. Links run out after a day
+/// or two; a client that has had a conversation open for longer asks for new ones here. Ones the caller cannot see
+/// (any more) are left out.
+async fn fresh_urls(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<FreshUrls>) -> AppResult<Json<Vec<serde_json::Value>>> {
+    if req.ids.len() > 500 { return Err(AppError::BadRequest("At most 500 at a time".into())); }
+    let atts = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = ANY($1)")).bind(&req.ids).fetch_all(&state.db).await?;
+    let mut seen: HashMap<Uuid, bool> = HashMap::new();
+    let mut out = Vec::with_capacity(atts.len());
+    for a in atts {
+        let ok = if a.uploader_id == uid { true } else {
+            match seen.get(&a.channel_id) { Some(v) => *v, None => { let v = require_channel(&state.db, a.channel_id, uid).await.is_ok(); seen.insert(a.channel_id, v); v } }
+        };
+        if !ok { continue }
+        let j = AttachmentJson::from(a);
+        out.push(serde_json::json!({ "id": j.id, "url": j.url, "thumb_url": j.thumb_url }));
+    }
+    Ok(Json(out))
 }
 
 /// Attachments for a batch of messages.

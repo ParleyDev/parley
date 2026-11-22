@@ -1,3 +1,4 @@
+import { startAttachmentLinkRefresh } from './lib/attachmentLinks'
 import { useT } from './lib/i18n'
 import DeleteAccountPage from './pages/DeleteAccount'
 import WidgetPage from './pages/Widget'
@@ -39,6 +40,7 @@ export default function App() {
   const location = useLocation()
   const signedInTo = (location.state as { from?: string } | null)?.from ?? '/channels/@me'
 
+  useEffect(() => { if (token) startAttachmentLinkRefresh() }, [token])
   useEffect(() => {
     if (token) connectSocket()
     else disconnectSocket()

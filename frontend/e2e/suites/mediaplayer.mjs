@@ -29,20 +29,21 @@ const voiceMsg = await post(a.token, wav(1, 'voice-message.wav'), { duration_ms:
 console.log('-- server')
 const head = async (q) => (await fetch(`${B.replace(/\/api$/, '')}${song.att.url}${q}`)).headers.get('content-disposition') ?? ''
 ok('audio is served inline for playing', /^inline/.test(await head('')))
-ok('?download=1 asks for a download (the Android app saves those)', /^attachment; filename="Night_Drive.wav"/.test(await head('?download=1')), await head('?download=1'))
+ok('?download=1 asks for a download (the Android app saves those)', /^attachment; filename="Night_Drive.wav"/.test(await head('&download=1')), await head('&download=1'))
 
 console.log('-- visualiser data')
-const vz = await fetch(`${B}/attachments/${song.att.id}/viz`)
+const sig = (a) => a.url.split('?')[1] // attachment links are signed; the signature covers the visualiser data too
+const vz = await fetch(`${B}/attachments/${song.att.id}/viz?${sig(song.att)}`)
 const vb = Buffer.from(await vz.arrayBuffer())
 const frames = vb.length >= 16 ? vb.readUInt32LE(8) : 0
 ok('the server analyses the file: PVZ1, 15 fps, 32 bands, a frame per 1/15 s', vz.status === 200 && vb.subarray(0, 4).toString() === 'PVZ1' && vb[4] === 15 && vb[5] === 32 && frames >= 80 && frames <= 92 && vb.length === 16 + 256 + frames * 32, `${vz.status} ${vb.length} ${frames}`)
 ok('a few KB a second, not the file again', vb.length < song.att.size / 4, `${vb.length} vs ${song.att.size}`)
 const band = (f) => { const row = vb.subarray(16 + 256 + f * 32, 16 + 256 + (f + 1) * 32); return row.indexOf(Math.max(...row)) }
 ok('it follows the music (the sweep climbs through the bands)', band(frames - 8) > band(8), `${band(8)} → ${band(frames - 8)}`)
-const pk = await fetch(`${B}/attachments/${song.att.id}/viz?peaks=1`)
+const pk = await fetch(`${B}/attachments/${song.att.id}/viz?peaks=1&${sig(song.att)}`)
 ok('?peaks=1 is just the waveform for the seek bar', (await pk.arrayBuffer()).byteLength === 16 + 256)
 ok('immutable, so clients cache it', /immutable/.test(vz.headers.get('cache-control') ?? ''))
-ok('videos have none', (await fetch(`${B}/attachments/${clip.att.id}/viz`)).status === 404)
+ok('videos have none', (await fetch(`${B}/attachments/${clip.att.id}/viz?${sig(clip.att)}`)).status === 404)
 
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const open = async (tok, opts) => {

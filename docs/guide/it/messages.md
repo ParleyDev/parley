@@ -2,7 +2,7 @@
 title: Messaggi
 section: Conversare
 summary: Scrivi, formatta, menziona, reagisci, rispondi, allega file, crea sondaggi, programma messaggi e salvali nei segnalibri.
-source: 4148b065dc0e
+source: 5dc5683055d5
 ---
 
 ![Una conversazione con una risposta, delle reazioni e un sondaggio](shot:messages)
@@ -90,6 +90,7 @@ Fai clic su **+** e su **Carica un file**, trascina i file nella chat oppure inc
 - Fino a 10 file per messaggio, di solito 25 MB ciascuno. Chi gestisce il tuo server potrebbe permettere di più.
 - Prima di inviare puoi usare **Segna come spoiler** o **Aggiungi testo alternativo**: una descrizione per chi usa un lettore di schermo.
 - Le immagini si aprono a grandezza piena con un clic. Video e audio si riproducono direttamente in chat.
+- **Copia link** su un file dà un link che funziona per un giorno o due e poi smette, così un file di una conversazione privata non resta aperto a chiunque abbia il link. Per condividere un file più a lungo, inoltra il messaggio o invia di nuovo il file.
 
 ## Messaggi vocali
 

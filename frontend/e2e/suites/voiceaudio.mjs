@@ -25,7 +25,7 @@ const upload = async (bytes, name, type, fields = {}) => {
 }
 const vm = await upload(webm, 'voice-message.webm', 'audio/webm;codecs=opus', { duration_ms: '1500', waveform: 'abcdefgh' })
 ok('voice message converted to AAC .m4a on upload', vm.content_type === 'audio/mp4' && vm.filename === 'voice-message.m4a' && vm.duration_ms === 1500 && vm.size > 1000, JSON.stringify(vm).slice(0, 200))
-const url = `${B}/attachments/${vm.id}/${vm.filename}`
+const url = B.replace(/\/api$/, '') + vm.url
 const m4a = Buffer.from(await (await fetch(url)).arrayBuffer())
 ok('stored file is MP4 audio', m4a.subarray(4, 8).toString() === 'ftyp' && m4a.length === vm.size)
 

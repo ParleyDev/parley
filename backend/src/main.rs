@@ -16,6 +16,7 @@ mod routes;
 mod signup_guard;
 mod state;
 mod mcp;
+mod media_sign;
 mod video_thumb;
 mod voice_audio;
 mod ws;
@@ -32,6 +33,7 @@ pub const VERSION: &str = match option_env!("PARLEY_VERSION") { Some(v) => v, No
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = config::Config::from_env();
+    media_sign::init(&config.jwt_secret);
 
     // Optional Sentry: error-level tracing events and panics become Sentry events when SENTRY_DSN is set.
     let _sentry = config.sentry_dsn.as_deref().filter(|d| !d.is_empty()).map(|dsn| {
@@ -62,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
     }
     migrator.run(&db).await?;
     tracing::info!("migrations applied");
+    media_sign::load(&db).await;
 
     let state = state::AppState { db, config: Arc::new(config.clone()), hub: Arc::new(ws::hub::Hub::new()) };
     let state_for_sweep = state.clone();

@@ -2,7 +2,7 @@
 title: Mensagens
 section: Conversando
 summary: Escreva, formate, mencione, reaja, responda, anexe arquivos, crie enquetes, agende e salve mensagens.
-source: 4148b065dc0e
+source: 5dc5683055d5
 ---
 
 ![Uma conversa com uma resposta, reações e uma enquete](shot:messages)
@@ -90,6 +90,7 @@ Clique em **+** e em **Enviar um arquivo**, arraste arquivos para o chat ou cole
 - Até 10 arquivos por mensagem, normalmente de até 25 MB cada. Quem hospeda o seu servidor pode permitir mais.
 - Antes de enviar, você pode usar **Marcar como spoiler** ou **Adicionar texto alternativo**: uma descrição para quem usa leitor de tela.
 - As imagens abrem em tamanho real ao clicar. Vídeos e áudios tocam direto no chat.
+- **Copiar link** em um arquivo gera um link que funciona por um ou dois dias e depois para, para que um arquivo de uma conversa privada não fique aberto a qualquer pessoa que tenha o link. Para compartilhar um arquivo por mais tempo, encaminhe a mensagem ou envie o arquivo de novo.
 
 ## Mensagens de voz
 

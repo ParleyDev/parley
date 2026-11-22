@@ -23,8 +23,8 @@ const photo = Buffer.concat([raw.subarray(0, 2), Buffer.from([0xff, 0xe1]), len,
 const f = new FormData(); f.append('file', new Blob([photo], { type: 'image/jpeg' }), 'IMG_0001.jpg')
 const att = await (await fetch(`${B}/channels/${tc}/attachments`, { method: 'POST', headers: { Authorization: 'Bearer ' + a.token }, body: f })).json()
 ok('stored size is the displayed (upright) one', att.width === 400 && att.height === 800, JSON.stringify([att.width, att.height]))
-ok('a thumbnail was made', att.thumb_url === `/api/attachments/${att.id}/thumb?v=2`, String(att.thumb_url))
-const thumbUrl = `${B}/attachments/${att.id}/thumb`
+ok('a thumbnail was made', att.thumb_url?.startsWith(`/api/attachments/${att.id}/thumb?v=2&ex=`), String(att.thumb_url))
+const thumbUrl = B.replace(/\/api$/, '') + att.thumb_url
 const t = await p.evaluate(async (u) => {
   const img = new Image(); img.crossOrigin = 'anonymous'; img.src = u; await img.decode()
   const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const x = c.getContext('2d'); x.drawImage(img, 0, 0)
@@ -35,8 +35,8 @@ ok('thumbnail is upright: 200x400, red on top, blue below', t.w === 200 && t.h =
 
 const m = await call(a.token, 'POST', `/channels/${tc}/messages`, { content: '', attachment_ids: [att.id] })
 await p.evaluate((tok) => localStorage.setItem('parley.token', tok), a.token); await p.goto(`${WEB}/channels/${g.id}/${tc}`)
-const shown = p.locator(`[data-msg-id="${m.id}"] img`).last(); await shown.waitFor()
-await p.waitForFunction((id) => { const i = [...document.querySelectorAll(`[data-msg-id="${id}"] img`)].pop(); return i && i.complete && i.naturalWidth > 0 }, m.id)
+const shown = p.locator(`[data-msg-id="${m.id}"] [data-attachment-img]`).last(); await shown.waitFor()
+await p.waitForFunction((id) => { const i = [...document.querySelectorAll(`[data-msg-id="${id}"] [data-attachment-img]`)].pop(); return i && i.complete && i.naturalWidth > 0 }, m.id)
 const box = await shown.boundingBox()
 ok('chat shows it portrait, as the original', box.height > box.width * 1.5, JSON.stringify(box))
 await p.screenshot({ path: 'photo-orientation.png' })

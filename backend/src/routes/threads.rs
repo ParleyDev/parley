@@ -59,6 +59,7 @@ pub struct ThreadInfo {
     /// The post's first message (forum default reactions go on it).
     pub first_message_id: Option<Uuid>,
     /// Media channels: the first image or video of the post (a thumbnail when there is one), and its type.
+    #[serde(serialize_with = "crate::media_sign::serialize_signed")]
     pub cover_url: Option<String>,
     pub cover_type: Option<String>,
 }

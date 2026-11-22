@@ -2,7 +2,7 @@
 title: Messages
 section: Discuter
 summary: Écrire, mettre en forme, mentionner, réagir, répondre, joindre des fichiers, lancer des sondages, programmer des messages et les ajouter aux favoris.
-source: 4148b065dc0e
+source: 5dc5683055d5
 ---
 
 ![Une conversation avec une réponse, des réactions et un sondage](shot:messages)
@@ -90,6 +90,7 @@ Clique sur **+** puis **Importer un fichier**, fais glisser des fichiers dans la
 - Jusqu'à 10 fichiers par message, normalement 25 Mo chacun. L'hébergeur de ton serveur peut autoriser plus.
 - Avant d'envoyer, tu peux **Marquer comme spoiler** ou **Ajouter un texte alternatif** : une description pour les personnes qui utilisent un lecteur d'écran.
 - Les images s'ouvrent en grand quand on clique dessus. Les vidéos et l'audio se lisent directement dans la discussion.
+- **Copier le lien** sur un fichier donne un lien qui marche un jour ou deux, puis s'arrête, pour qu'un fichier venu d'une conversation privée ne reste pas ouvert à tous ceux qui ont le lien. Pour partager un fichier plus longtemps, transfère le message ou renvoie le fichier.
 
 ## Messages vocaux
 

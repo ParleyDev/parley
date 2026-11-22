@@ -12,9 +12,9 @@ const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -
 const PERMS = {
   SUPPORT: ['account_metadata_read', 'account_pii_reveal'],
   MODERATOR: ['account_metadata_read', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_action', 'audit_read_own'],
-  TS_LEAD: ['account_metadata_read', 'account_pii_reveal', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_search_private', 'content_action', 'case_approve', 'audit_read_team'],
-  LEGAL: ['account_metadata_read', 'account_pii_reveal', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_search_private', 'content_export', 'audit_read_all'],
-  SUPER_ADMIN: ['account_metadata_read', 'admin_roles_manage', 'audit_read_all', 'instance_manage'],
+  TS_LEAD: ['account_metadata_read', 'account_pii_reveal', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_search_private', 'content_action', 'case_approve', 'audit_read_team', 'safety_match_review'],
+  LEGAL: ['account_metadata_read', 'account_pii_reveal', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_search_private', 'content_export', 'audit_read_all', 'safety_match_review'],
+  SUPER_ADMIN: ['account_metadata_read', 'admin_roles_manage', 'audit_read_all', 'instance_manage', 'network_read'],
   AUDITOR: ['audit_read_all'],
 }
 const ROLES = Object.keys(PERMS)

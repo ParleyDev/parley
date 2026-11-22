@@ -173,7 +173,12 @@ export function parseViz(buf: ArrayBuffer): Viz | null {
   return { fps, bands, offset, frames: Math.min(frames, Math.floor(data.length / Math.max(1, bands))), peaks, data }
 }
 /** `/api/attachments/<id>/<file>` → its visualiser data. */
-export const vizUrl = (url: string, peaksOnly = false) => url.replace(/\/[^/?#]+(?:[?#].*)?$/, '/viz') + (peaksOnly ? '?peaks=1' : '')
+export const vizUrl = (url: string, peaksOnly = false) => {
+  // The file's link is signed (`?ex=…&sig=…`); the signature covers the attachment, so it goes along.
+  const q = /\?([^#]*)/.exec(url)?.[1] ?? ''
+  const query = [q, peaksOnly ? 'peaks=1' : ''].filter(Boolean).join('&')
+  return url.replace(/\/[^/?#]+(?:[?#].*)?$/, '/viz') + (query ? `?${query}` : '')
+}
 const vizCache = new Map<string, Promise<Viz | null>>()
 export function loadViz(url: string, peaksOnly = false): Promise<Viz | null> {
   const key = vizUrl(url, peaksOnly)

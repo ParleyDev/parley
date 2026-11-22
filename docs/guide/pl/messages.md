@@ -2,7 +2,7 @@
 title: Wiadomości
 section: Rozmowy
 summary: Pisz, formatuj, wzmiankuj, reaguj, odpowiadaj, dołączaj pliki, twórz ankiety, planuj wiadomości i dodawaj je do zakładek.
-source: 4148b065dc0e
+source: 5dc5683055d5
 ---
 
 ![Rozmowa z odpowiedzią, reakcjami i ankietą](shot:messages)
@@ -90,6 +90,7 @@ Kliknij **+** i **Prześlij plik**, przeciągnij pliki na czat albo je wklej.
 - Do 10 plików na wiadomość, zwykle do 25 MB każdy. Administrator twojego serwera może pozwolić na więcej.
 - Przed wysłaniem możesz użyć opcji **Oznacz jako spoiler** lub **Dodaj tekst alternatywny**: opis dla osób korzystających z czytników ekranu.
 - Obrazy po kliknięciu otwierają się w pełnym rozmiarze. Filmy i dźwięk odtwarzają się bezpośrednio na czacie.
+- **Kopiuj link** przy pliku daje link, który działa dzień lub dwa, a potem przestaje, żeby plik z prywatnej rozmowy nie pozostawał dostępny dla każdego, kto ma link. Aby udostępnić plik na dłużej, przekaż wiadomość dalej albo wyślij plik jeszcze raz.
 
 ## Wiadomości głosowe
 

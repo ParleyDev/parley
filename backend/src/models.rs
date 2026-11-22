@@ -908,14 +908,15 @@ impl From<Attachment> for AttachmentJson {
     fn from(a: Attachment) -> Self {
         let url = a.url();
         // `?v=2`: thumbnails are cached as immutable, and v2 ones honour EXIF orientation; bump when they change.
-        let thumb_url = a.thumb_type.as_ref().map(|_| format!("/api/attachments/{}/thumb?v=2", a.id));
+        let thumb_url = a.thumb_type.as_ref().map(|_| crate::media_sign::sign_path(&format!("/api/attachments/{}/thumb?v=2", a.id)));
         AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, description: a.description, listened_by: a.listened_by, plays: a.plays, media_ms: a.media_ms }
     }
 }
 
 impl Attachment {
+    /// The file's address, signed and good for a day or two (`media_sign`).
     pub fn url(&self) -> String {
-        format!("/api/attachments/{}/{}", self.id, urlencode(&self.filename))
+        crate::media_sign::sign_path(&format!("/api/attachments/{}/{}", self.id, urlencode(&self.filename)))
     }
 }
 
