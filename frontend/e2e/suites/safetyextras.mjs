@@ -48,8 +48,11 @@ const spammer = await reg('spammy'); const targets = []
 for (let i = 0; i < 16; i++) targets.push(await reg(`t${i}`))
 await openDms(...targets)
 let last = 0
-for (const t of targets) { const dm = await call(spammer.token, 'POST', '/users/@me/channels', { recipient_id: t.user.id }); last = (await raw(spammer.token, 'POST', `/channels/${dm.id}/messages`, { content: 'buy my stuff' })).status }
-ok('messaging lots of new people at once is cooled down', last === 429)
+// Two guards meet here: the same text to five conversations limits the account (it can then open no new ones, 403),
+// and fifteen new conversations in ten minutes is cooled down (429). Whichever comes first, the spam stops.
+let stopped = 0
+for (const t of targets) { const o = await raw(spammer.token, 'POST', '/users/@me/channels', { recipient_id: t.user.id }); if (o.status === 403) { stopped = 403; break } const dm = await o.json(); last = (await raw(spammer.token, 'POST', `/channels/${dm.id}/messages`, { content: 'buy my stuff' })).status; await new Promise((r) => setTimeout(r, 120)) }
+ok('messaging lots of new people at once is stopped', last === 429 || stopped === 403, `${last} ${stopped}`)
 
 console.log('-- sensitive media')
 await call(b.token, 'PATCH', '/users/@me/privacy', { sensitive_media: { servers: 'block', friend_dms: 'blur' } })

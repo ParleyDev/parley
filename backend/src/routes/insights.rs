@@ -71,7 +71,7 @@ async fn insights(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(g
 async fn activity(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
     perms::guild_perms(&state.db, gid, uid).await?;
     let db = &state.db;
-    let visible: Vec<Uuid> = perms::visible_channels(db, gid, uid).await?.into_iter().map(|c| c.id).collect();
+    let visible: Vec<Uuid> = perms::readable_channels(db, gid, uid).await?.into_iter().map(|c| c.id).collect();
     let top: Vec<(Uuid, Uuid, String, Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>, i64)> = sqlx::query_as(
         "SELECT m.id, m.channel_id, LEFT(m.content, 300), u.id, u.display_name, u.avatar_url, m.created_at, COUNT(r.*) AS n
          FROM messages m JOIN users u ON u.id = m.author_id JOIN reactions r ON r.message_id = m.id

@@ -271,10 +271,17 @@ pub struct PrivateUser {
     /// Device-independent client settings (appearance, prefs, sounds, keybinds) with a revision stamp.
     #[sqlx(default)]
     pub client_settings: serde_json::Value,
-    /// Set once by the user; gates 18+ channels.
+    /// A birthday without a year, if the user saved one (reminders). Never an age.
     #[sqlx(default)]
-    pub birthdate: Option<chrono::NaiveDate>,
-    /// 'unknown' (no birth date yet), 'teen' (13-17) or 'adult'.
+    pub birthday_month: Option<i16>,
+    #[sqlx(default)]
+    pub birthday_day: Option<i16>,
+    /// The user said they are under 18. Only staff can undo it.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub declared_minor: bool,
+    /// 'teen' (said they are under 18), 'adult' (meets 18 under this instance's rules) or 'unknown' (everyone else,
+    /// who get the protective settings).
     #[sqlx(default)]
     #[serde(default)]
     pub age_group: String,
@@ -294,6 +301,10 @@ fn yes() -> bool { true }
 pub struct Guild {
     pub id: Uuid,
     pub name: String,
+    /// The age everyone must meet to read anything in this server.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub min_age: Option<i16>,
     pub icon_url: Option<String>,
     pub owner_id: Uuid,
     pub created_at: DateTime<Utc>,
@@ -434,6 +445,10 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub nsfw: bool,
+    /// The age this channel itself asks for (a category or forum passes it down; the server may ask for more).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub min_age: Option<i16>,
     /// Voice/stage/studio: 'voice' (speech) or 'music' (high fidelity: stereo, no processing, no DTX).
     #[sqlx(default)]
     #[serde(default = "default_audio_mode")]
@@ -777,6 +792,10 @@ pub struct Message {
     pub pinned_at: Option<DateTime<Utc>>,
     pub reactions: Vec<Reaction>,
     pub attachments: Vec<Attachment>,
+    /// A message request the viewer has not accepted, and the viewer is not verified as an adult: pictures, files
+    /// and link previews were left out of this copy (`routes::dms::lock_media`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub media_locked: bool,
     pub sticker: Option<MessageSticker>,
     /// Set when this message was forwarded from another (the original's id, which may since be deleted).
     pub forwarded_from: Option<Uuid>,
@@ -871,6 +890,9 @@ pub struct Attachment {
     /// Audio files: the length, once the server has analysed it.
     #[sqlx(default)]
     pub media_ms: Option<i32>,
+    /// The channel it is in has a minimum age: its links are the short kind (`media_sign`).
+    #[sqlx(default)]
+    pub restricted: bool,
 }
 
 #[derive(Serialize)]
@@ -908,7 +930,7 @@ impl From<Attachment> for AttachmentJson {
     fn from(a: Attachment) -> Self {
         let url = a.url();
         // `?v=2`: thumbnails are cached as immutable, and v2 ones honour EXIF orientation; bump when they change.
-        let thumb_url = a.thumb_type.as_ref().map(|_| crate::media_sign::sign_path(&format!("/api/attachments/{}/thumb?v=2", a.id)));
+        let thumb_url = a.thumb_type.as_ref().map(|_| crate::media_sign::sign(&format!("/api/attachments/{}/thumb?v=2", a.id), a.restricted));
         AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, description: a.description, listened_by: a.listened_by, plays: a.plays, media_ms: a.media_ms }
     }
 }
@@ -916,7 +938,7 @@ impl From<Attachment> for AttachmentJson {
 impl Attachment {
     /// The file's address, signed and good for a day or two (`media_sign`).
     pub fn url(&self) -> String {
-        crate::media_sign::sign_path(&format!("/api/attachments/{}/{}", self.id, urlencode(&self.filename)))
+        crate::media_sign::sign(&format!("/api/attachments/{}/{}", self.id, urlencode(&self.filename)), self.restricted)
     }
 }
 
@@ -943,6 +965,7 @@ impl MessageRow {
             pinned_at: self.pinned_at,
             forwarded_from: self.forwarded_from,
             forwarded_unavailable: self.forwarded_unavailable,
+            media_locked: false,
             ref_id: self.ref_id,
             mentions: self.mentions,
             mention_roles: self.mention_roles,

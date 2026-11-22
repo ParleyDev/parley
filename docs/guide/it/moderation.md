@@ -2,7 +2,7 @@
 title: Moderazione e sicurezza
 section: Gestire un server
 summary: Mantieni il server accogliente con AutoMod, timeout, ban, segnalazioni, protezione anti-raid e registro attività.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Gestire una persona
@@ -46,7 +46,8 @@ Puoi anche escludere ruoli o canali, come un canale in cui i moderatori discuton
 - **Livello di verifica**: cosa serve a un nuovo arrivato prima di poter scrivere. **Basso** richiede un'email verificata. **Medio** richiede anche un account Parley creato da più di 5 minuti. **Alto** richiede anche 10 minuti nel tuo server. I membri con un ruolo qualsiasi lo saltano.
 - **Protezione anti-raid**: nota un improvviso afflusso di nuovi account e avvisa i moderatori.
 - **Metti in pausa gli inviti** e **Metti in pausa i DM tra membri**: freni di emergenza durante un raid.
-- **Filtro immagini esplicite**: analizza le immagini pubblicate nel server.
+- **Server per soli adulti**: spunta **Tutto in questo server è 18+** e solo i membri confermati come maggiorenni (almeno 18 anni) possono leggere o partecipare, ovunque nel server. Per limitare solo alcune aree, usa invece **Canale vietato ai minori** su un canale o una categoria. Vedi [Canali e categorie](server-settings#channels-and-categories).
+- **Filtro immagini esplicite**: analizza le immagini pubblicate nel server. Il controllo lo fa l'app di ogni membro, e anche l'istanza se i suoi admin l'hanno configurata per farlo.
 - **Autenticazione a due fattori per i moderatori**: i moderatori devono avere la 2FA attiva o una passkey aggiunta, così una password rubata non può essere usata contro il server. Va bene una delle due, e per attivarlo ne serve una anche a te.
 - **Riassunti IA**: attiva o disattiva il pulsante Riassunti.
 

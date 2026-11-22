@@ -58,7 +58,8 @@ You can also exempt roles or channels, like a channel where your moderators disc
 - **Verification level**: what a newcomer needs before they can post. **Low** requires a verified email. **Medium** also requires a Parley account older than 5 minutes. **High** also requires 10 minutes in your server. Members with any role skip it.
 - **Raid protection**: notices a sudden rush of new accounts and alerts your moderators.
 - **Pause invites** and **Pause DMs between members**: emergency brakes during a raid.
-- **Explicit image filter**: scans pictures posted in the server.
+- **Adults-only server**: tick **Everything in this server is 18+** and only members confirmed as 18 or older can read or join in, anywhere in the server. To restrict only some areas, use **Age-Restricted** on a channel or a category instead. See [Channels and categories](server-settings#channels-and-categories).
+- **Explicit image filter**: scans pictures posted in the server. Each member's app does the checking, and so does the instance if its admins have set that up.
 - **Two-factor authentication for moderators**: moderators must have 2FA turned on or a passkey added, so a stolen password can't be used against the server. Either one counts, and you need one yourself to switch this on.
 - **AI summaries**: turn the Summaries button on or off.
 

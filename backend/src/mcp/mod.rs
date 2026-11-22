@@ -130,7 +130,7 @@ async fn unreads(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppR
     let guilds: Vec<(Uuid, String)> = sqlx::query_as("SELECT g.id, g.name FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 AND g.state = 'active' ORDER BY m.joined_at").bind(uid).fetch_all(&state.db).await?;
     let mut place: std::collections::HashMap<Uuid, Value> = std::collections::HashMap::new();
     for (gid, gname) in &guilds {
-        for c in crate::perms::visible_channels(&state.db, *gid, uid).await.unwrap_or_default() {
+        for c in crate::perms::readable_channels(&state.db, *gid, uid).await.unwrap_or_default() {
             if matches!(c.kind.as_str(), "category" | "voice" | "stage") { continue; }
             place.insert(c.id, json!({ "channel_id": c.id, "channel_name": c.name, "server_id": gid, "server_name": gname }));
         }
@@ -182,6 +182,9 @@ fn unauthorized(state: &AppState, presented: bool) -> Response {
 fn rpc_result(id: &Value, result: Value) -> Value { json!({ "jsonrpc": "2.0", "id": id, "result": result }) }
 fn rpc_error(id: &Value, code: i64, message: &str) -> Value { json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }) }
 
+/// The most calls one request may carry.
+const MAX_BATCH: usize = 25;
+
 /// The caller, as tools need it: the token to forward and the client's address (for per-client rate limits).
 pub struct Caller { pub auth: String, pub forwarded_for: String, pub scopes: Vec<String>, pub base: String }
 
@@ -200,8 +203,16 @@ async fn endpoint(State(state): State<AppState>, headers: HeaderMap, body: Bytes
         Err(_) => return Json(rpc_error(&Value::Null, -32700, "Parse error")).into_response(),
     };
     let (batch, msgs) = match parsed { Value::Array(a) => (true, a), v => (false, vec![v]) };
+    // One request may carry several calls, but not enough to act faster than a person's own limits allow.
+    if msgs.len() > MAX_BATCH { return Json(rpc_error(&Value::Null, -32600, "Too many calls in one request")).into_response(); }
+    let limit = crate::ratelimit::Limit { count: 240.0, secs: 60.0 };
     let mut out = Vec::new();
     for m in msgs {
+        if crate::ratelimit::LIMITER.take("mcp", &auth, limit).is_err() {
+            let id = m.get("id").cloned().unwrap_or(Value::Null);
+            out.push(rpc_error(&id, -32000, "Too many calls. Wait a moment and try again."));
+            continue;
+        }
         if let Some(r) = handle(&caller, m).await { out.push(r); }
     }
     if out.is_empty() { return StatusCode::ACCEPTED.into_response(); } // notifications and responses only

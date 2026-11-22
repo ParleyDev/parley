@@ -2,7 +2,7 @@
 title: Kanallar, konular ve forumlar
 section: Konuşmak
 summary: Kanal türleri, yan sohbetler için konular, forumlar, topluluklar ve etkinlikler.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Her sunucu, her biri tek bir konu veya etkinlik için olan **kanallara** ayrılır. Kanallar daraltılabilir **kategoriler** altında gruplanır.
@@ -24,7 +24,7 @@ Bir kanaldaki küçük kilit, onun **özel** olduğu anlamına gelir: yalnızca 
 
 Bazı kanallar içeri girmeden önce bir uyarı gösterir:
 
-- **Yaş sınırlı** kanallar 18 yaşında veya daha büyük olduğunu onaylamanı ister.
+- **Yaş sınırlı** kanallar yalnızca 18 yaşında veya daha büyük olduğu onaylanmış kişiler içindir. Onaylandıysan bir kez uyarı görür, sonra içeri girersin. Onaylanmadıysan kanalda bir kilit ve onaylanmanın yolları gösterilir. Bkz. [Yaşın](settings#your-age).
 - **Spoiler** kanalları resimleri ve videoları sen tıklayana kadar gizli tutar.
 - **Yavaş mod** kanallarında herkes yalnızca belirli aralıklarla mesaj yazabilir. Mesaj kutusu ne kadar beklemen gerektiğini söyler.
 

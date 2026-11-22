@@ -2,7 +2,7 @@
 title: Başlarken
 section: Başlarken
 summary: Bir hesap oluştur, her cihazda oturum aç ve sana uyan Parley uygulamasını seç.
-source: 9e3cf6b58c63
+source: a4675d9c72bd
 ---
 
 Parley arkadaşlarınla ve topluluklarla konuşabileceğin bir yer: yazılı sohbet, sesli ve görüntülü aramalar, canlı sahneler ve bir müzik stüdyosu. Her şey herkes için ücretsiz.
@@ -19,6 +19,10 @@ Misafir hesabı sen ayrıldıktan bir saat sonra silinir. Korumak için banner'd
 2. E-postanı gir ve bir **kullanıcı adı** seç: 2 ile 32 arası harf, rakam, `_` veya `.`. İnsanlar seni bununla bulabilir.
 3. İstersen bir **görünen ad** ekle. İnsanların gördüğü ad budur; boşluk ve büyük harf içerebilir.
 4. En az 8 karakterlik bir parola seç, sonra **Devam Et**'e tıkla.
+
+Parley sunucunu işletenler **Koşullar** ve **Topluluk Kuralları**'nı yayımlıyorsa bunların bağlantıları formun altındadır. Hesap oluşturman bunları kabul ettiğin anlamına gelir.
+
+Parley doğum tarihini sormaz. Bazı yerler yalnızca yetişkin olduğu onaylanmış kişilere açıktır; bkz. [Yaşın](settings#your-age).
 
 Parley adresini doğrulaman için sana bir bağlantı e-postalar. Ona tıklayana kadar sohbet edebilirsin ama sunucu oluşturamaz veya Keşfet'i kullanamazsın. E-posta gelmediyse uygulamanın üstündeki banner'da **Yeniden gönder**'i kullan.
 

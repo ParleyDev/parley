@@ -2,7 +2,7 @@
 title: Einstellungen
 section: Du
 summary: Kontosicherheit, Privatsphäre, Darstellung, Barrierefreiheit, Sprache und die Optionen der Desktop-App.
-source: 34c162a49c91
+source: c3991172940f
 ---
 
 Öffne die **Benutzereinstellungen** mit dem Zahnrad neben deinem Namen in der Ecke unten links oder drück <kbd>Ctrl</kbd>+<kbd>,</kbd>. Du findest etwas nicht? Tippe in das Suchfeld oben in der Liste. Instanz-Admins finden unten in der Liste außerdem die **Admin-Konsole**.
@@ -16,11 +16,32 @@ source: 34c162a49c91
 - **Zwei-Faktor-Authentifizierung**: dringend empfohlen. Klicke auf **Zwei-Faktor-Authentifizierung aktivieren**, scanne den Code mit einer Authenticator-App und gib den 6-stelligen Code ein, um sie einzuschalten.
   - Bewahre deine **Backup-Codes** an einem sicheren Ort auf. Mit ihnen kommst du rein, wenn du dein Handy verlierst.
 - **Passkeys**: Melde dich mit Fingerabdruck, Gesicht oder der PIN deines Geräts an. Klicke auf **Passkey hinzufügen**. Ein Passkey zählt auch als Zwei-Faktor-Authentifizierung für Server, die das von Moderatoren verlangen.
-- **Kontostatus**: ob du in letzter Zeit gegen Regeln verstoßen hast. Normalerweise steht dort *Alles in Ordnung*.
+- **Kontostatus**: ob du in letzter Zeit gegen Regeln verstoßen hast. Normalerweise steht dort *Alles in Ordnung*. Wenn die Betreiber deines Parley dein Konto eingeschränkt haben, steht hier ein Hinweis, bis wann und was du in der Zeit nicht tun kannst.
+- **Alter**: siehe [Dein Alter](#your-age).
 - **Serverbanns**: Server, die dich gebannt haben, mit **Gegen diesen Bann Einspruch einlegen**, wo der Server das erlaubt.
 - **Speicher**: wie viel deines Upload-Speichers du verbraucht hast.
 - **Jahresrückblick**: dein Jahr auf Parley.
 - **Kontoentfernung**: Deaktiviere oder lösche dein Konto. Siehe [Erste Schritte](getting-started#taking-a-break-or-leaving).
+
+## Dein Alter
+
+Parley fragt nicht nach deinem Geburtsdatum. Bis du als erwachsen bestätigt bist, behandelt es dein Konto wie das einer jüngeren Person:
+
+- Altersbeschränkte Kanäle und Server nur für Erwachsene bleiben geschlossen.
+- Nachrichten von Leuten, die du nicht hinzugefügt hast, kommen als [Anfragen](direct-messages#message-requests) an; Bilder, Dateien und Linkvorschauen bleiben ausgeblendet, bis du annimmst.
+
+**Benutzereinstellungen → Mein Konto → Alter** zeigt, wo du stehst und auf welchen Wegen dein Parley dich bestätigen kann:
+
+- **Mit** einem Dienst **verifizieren**, falls einer eingerichtet ist. Er teilt Parley nur mit, ob du mindestens 18 bist.
+- **Das Team bitten, mich als erwachsen zu bestätigen**. Das Team meldet sich vielleicht bei dir. Schick keine Ausweisdokumente über Parley.
+- **Ich bin mindestens 18**, wo dein Parley deine eigene Angabe gelten lässt.
+
+Wird nichts davon angeboten, kann dein Parley Alter noch nicht bestätigen.
+
+- **Ich bin unter 18** markiert dein Konto als das eines Teenagers. Nur Freunde können dir schreiben, sensible Medien werden unscharf gemacht oder blockiert, und du kannst das [Familienzentrum](#family-center) nutzen. Nur ein Administrator kann das rückgängig machen.
+- **Geburtstag (optional)** speichert einen Tag und einen Monat, ohne Jahr. Nur du kannst ihn sehen.
+
+> Note: Niemand sonst kann deinen Altersstatus sehen.
 
 ## Daten und Datenschutz
 
@@ -39,6 +60,8 @@ source: 34c162a49c91
 ## Familienzentrum
 
 Eltern und Teenager können ihre Konten verknüpfen. Ein Elternteil sieht, welchen Servern der Teenager beitritt, wen er als Freund hinzufügt und wem er schreibt, aber nie, was in den Nachrichten steht. Der Teenager bekommt unter **Elternteil verknüpfen** einen Code, und das Elternteil gibt ihn unter **Teenager-Konto verknüpfen** ein. Beide können die **Verknüpfung aufheben**.
+
+Der Code kommt von einem Konto, das als unter 18 markiert ist. Siehe [Dein Alter](#your-age).
 
 ## Geräte und Verknüpfungen
 

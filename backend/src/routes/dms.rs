@@ -46,6 +46,15 @@ async fn answer_request(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     }
     let view = dm_view(&state.db, id, uid).await?;
     state.hub.emit_users(vec![uid], "CHANNEL_UPDATE", json!(view));
+    // Media that was held back while this was a request (`lock_media`) arrives now, on every device of theirs.
+    if next == "accepted" {
+        let rows = sqlx::query_as::<_, crate::models::MessageRow>(&format!("{} WHERE m.channel_id = $1 ORDER BY m.id DESC LIMIT 100", crate::routes::channels::MESSAGE_SELECT)).bind(id).fetch_all(&state.db).await.unwrap_or_default();
+        for m in crate::routes::channels::hydrate(&state.db, rows, uid, false).await.unwrap_or_default() {
+            if !m.attachments.is_empty() || m.embeds.is_some() || m.sticker.is_some() {
+                state.hub.emit_users(vec![uid], "MESSAGE_UPDATE", json!({ "message": m, "guild_id": null }));
+            }
+        }
+    }
     Ok(Json(view))
 }
 
@@ -154,7 +163,7 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
     for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee, closed, spam_reasons) in channels {
         let recipients = recipients_for(db, id, uid).await?;
         out.push(DmChannel {
-            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, spoiler: false, video_quality: String::new(), permissions_synced: None, forum_layout: String::new(), forum_sort: String::new(), forum_require_tag: false, forum_default_reaction: String::new(), news: false, media: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, rate_limit_per_user: 0, user_limit: 0, voice_status: String::new(), engineer_ids: vec![], artist_ids: vec![], studio: None, overwrites: vec![] },
+            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, min_age: None, spoiler: false, video_quality: String::new(), permissions_synced: None, forum_layout: String::new(), forum_sort: String::new(), forum_require_tag: false, forum_default_reaction: String::new(), news: false, media: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, rate_limit_per_user: 0, user_limit: 0, voice_status: String::new(), engineer_ids: vec![], artist_ids: vec![], studio: None, overwrites: vec![] },
             recipients,
             last_message_at: last,
             request_state,
@@ -419,13 +428,23 @@ async fn open_dm(
             .fetch_one(&mut *tx)
             .await?;
             // A DM opened by a non-friend lands in the recipient's Message Requests (if they use them).
-            let (wants_requests,): (bool,) = sqlx::query_as("SELECT message_requests FROM users WHERE id = $1").bind(req.recipient_id).fetch_one(&mut *tx).await?;
-            let pending = wants_requests && !are_friends(&state.db, uid, req.recipient_id).await?;
+            // Someone not verified as an adult always gets requests from non-friends: that protection is not optional.
+            let (wants_requests,): (bool,) = sqlx::query_as("SELECT message_requests OR NOT age_meets(id, 18) FROM users WHERE id = $1").bind(req.recipient_id).fetch_one(&mut *tx).await?;
+            let friends = are_friends(&state.db, uid, req.recipient_id).await?;
+            let pending = wants_requests && !friends;
+            // A new conversation with someone who is not a friend: rate-limited, closed to a limited account, and
+            // set aside unseen when the sender is a confirmed spammer.
+            if !friends {
+                crate::abuse::rate_dm_open(uid)?;
+                crate::abuse::deny_new(&state.db, uid).await?;
+                crate::abuse::after_reach(state.clone(), uid, "dm_open", req.recipient_id);
+            }
+            let quiet = !friends && crate::abuse::is_quiet(&state.db, uid).await;
             sqlx::query("INSERT INTO channel_members (channel_id, user_id, request_state) VALUES ($1, $2, 'accepted'), ($1, $3, $4)")
                 .bind(cid)
                 .bind(uid)
                 .bind(req.recipient_id)
-                .bind(if pending { "pending" } else { "accepted" })
+                .bind(if quiet { "ignored" } else if pending { "pending" } else { "accepted" })
                 .execute(&mut *tx)
                 .await?;
             tx.commit().await?;
@@ -451,7 +470,7 @@ async fn open_dm(
             .await?;
         state.hub.emit_users(vec![uid], "CHANNEL_CREATE", json!(dm));
         let other_view = DmChannel { spam_reasons: vec![], channel: channel.clone(), recipients: vec![me], last_message_at: None, request_state: request_state_of(&state.db, channel.id, req.recipient_id).await?, closed: false };
-        state.hub.emit_users(vec![req.recipient_id], "CHANNEL_CREATE", json!(other_view));
+        if other_view.request_state != "ignored" { state.hub.emit_users(vec![req.recipient_id], "CHANNEL_CREATE", json!(other_view)); }
     }
     Ok((if created { StatusCode::CREATED } else { StatusCode::OK }, Json(dm)))
 }
@@ -468,4 +487,32 @@ mod spam_tests {
         assert!(score("check out https://example.com/article", 365) < 3);
         assert!(score("hello there!", 0) < 3);
     }
+}
+
+/// Members of this DM for whom its media is locked: it is still a message request to them (or was filtered as
+/// spam) and they are not verified as an adult. They read the text and decide; pictures, files and link previews
+/// stay out until they accept, whatever client they use.
+pub async fn locked_members(db: &PgPool, channel_id: Uuid) -> AppResult<Vec<Uuid>> {
+    Ok(sqlx::query_as::<_, (Uuid,)>(
+        "SELECT cm.user_id FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
+          WHERE cm.channel_id = $1 AND c.kind = 'dm' AND cm.request_state <> 'accepted' AND NOT age_meets(cm.user_id, 18)",
+    ).bind(channel_id).fetch_all(db).await?.into_iter().map(|r| r.0).collect())
+}
+
+/// Of these channels, the DMs whose media is locked for this viewer.
+pub async fn locked_for(db: &PgPool, channels: &[Uuid], viewer: Uuid) -> AppResult<std::collections::HashSet<Uuid>> {
+    Ok(sqlx::query_as::<_, (Uuid,)>(
+        "SELECT cm.channel_id FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
+          WHERE cm.user_id = $2 AND cm.channel_id = ANY($1) AND c.kind = 'dm' AND cm.request_state <> 'accepted' AND NOT age_meets($2, 18)",
+    ).bind(channels).bind(viewer).fetch_all(db).await?.into_iter().map(|r| r.0).collect())
+}
+
+/// Take the pictures, files and link previews out of a copy of a message.
+pub fn lock_media(m: &mut crate::models::Message) {
+    if m.attachments.is_empty() && m.embeds.is_none() && m.sticker.is_none() { return }
+    m.attachments.clear();
+    m.embeds = None;
+    m.sticker = None;
+    m.suppress_embeds = true;
+    m.media_locked = true;
 }

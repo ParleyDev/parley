@@ -186,7 +186,8 @@ pub async fn invites_paused(db: &sqlx::PgPool, gid: Uuid, uid: Uuid) -> AppResul
 /// category's and its own overwrites applied): what a logged-out visitor may be shown.
 pub async fn everyone_can_read(db: &sqlx::PgPool, channel: &crate::models::Channel) -> AppResult<bool> {
     // Age-restricted channels are never shown logged out, and an encrypted one would only serve ciphertext.
-    let Some(gid) = channel.guild_id.filter(|_| channel.kind == "text" && !channel.nsfw && !channel.e2ee) else { return Ok(false) };
+    let Some(gid) = channel.guild_id.filter(|_| channel.kind == "text" && !channel.e2ee) else { return Ok(false) };
+    if crate::age::min_age(db, channel.id).await?.is_some() { return Ok(false) }
     let ctx = perms::GuildCtx::load(db, gid).await?;
     let mut c = [channel.clone()];
     perms::attach_overwrites(db, &mut c).await?;
@@ -285,6 +286,10 @@ async fn accept(
     if expires.is_some_and(|t| t <= chrono::Utc::now()) {
         return Err(AppError::BadRequest("This invite has expired".into()));
     }
+    crate::abuse::rate_invite_accept(uid)?;
+    crate::abuse::deny_new(&state.db, uid).await?;
+    // An adults-only server takes new members only once they are confirmed. (People already in it stay, locked out.)
+    crate::age::check_guild(&state.db, gid, uid).await?;
     if max.map(|m| uses >= m).unwrap_or(false) {
         return Err(AppError::BadRequest("Invite has reached its maximum uses".into()));
     }

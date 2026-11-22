@@ -2,7 +2,7 @@
 title: Znajomi i wiadomości prywatne
 section: Rozmowy
 summary: Dodawaj znajomych, rozmawiaj w cztery oczy lub w małych grupach i obsługuj prośby o wiadomość.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Kliknij **Wiadomości prywatne** na górze listy serwerów, aby zobaczyć znajomych i prywatne rozmowy.
@@ -46,6 +46,8 @@ Grupowa wiadomość prywatna to mały prywatny czat dla maksymalnie 10 osób, be
 Wiadomości od osób, które nie są twoimi znajomymi, trafiają do **Prośby o wiadomość**, więc obcy nie wpadają prosto do twoich wiadomości prywatnych. Przy każdej prośbie wybierz **Akceptuj**, **Ignoruj** lub **Zablokuj**.
 
 Wiadomości wyglądające na spam są trzymane osobno w zakładce **Spam**. Jeśli któraś jest w porządku, oznacz ją jako **To nie spam**.
+
+Dopóki twoja pełnoletność nie zostanie potwierdzona, prośba pokazuje tylko tekst. Obrazy, pliki i podglądy linków pozostają ukryte, dopóki nie wybierzesz **Akceptuj**, a próśb o wiadomość nie da się wyłączyć. Zobacz [Twój wiek](settings#your-age).
 
 Wybierz, kto może do ciebie pisać, w **Ustawienia użytkownika → Treści i społeczność**. Zobacz [Ustawienia](settings#content-and-social).
 

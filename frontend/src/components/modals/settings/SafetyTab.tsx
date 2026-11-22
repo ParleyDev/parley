@@ -88,9 +88,16 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
         </section>
       )}
 
+      <section data-guild-min-age={guild.min_age ?? 0}>
+        <h2 className="label">{t('Adults-only server')}</h2>
+        <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
+          <span><span className="block text-[15px]">{t('Everything in this server is 18+')}</span><span className="block text-xs text-text-2">{t('Only members confirmed as 18 or older can read or join the conversation anywhere in this server. To restrict only some areas, turn on Age-Restricted in the settings of a channel or a category instead.')}</span></span>
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={!!guild.min_age} onChange={(e) => save({ min_age: e.target.checked ? 18 : 0 }, e.target.checked ? t('This server is now adults-only') : t('This server is no longer adults-only'))} />
+        </label>
+      </section>
       <section data-explicit-filter>
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">{t('Explicit image filter')}</h2>
-        <p className="mb-2 text-xs text-text-2">{t("Pictures and videos that look explicit are kept out: members' apps refuse to upload them and hide any that arrive. Checked on each member's device; nothing is sent anywhere to be scanned.")}</p>
+        <p className="mb-2 text-xs text-text-2">{t("Pictures and videos that look explicit are kept out: members' apps refuse to upload them and hide any that arrive. Checked on each member's device. If this instance runs its own checking service, uploads are checked there as well.")}</p>
         <div className="space-y-1.5">
           {([['off', t("Don't filter")], ['no_roles', t('Filter media from members without roles')], ['all', t('Filter media from all members')]] as const).map(([v, label]) => (
             <label key={v} className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm cursor-pointer ${(guild.explicit_filter ?? 'off') === v ? 'border-accent bg-accent/10' : 'border-line bg-bg-1 hover:border-text-2'}`} data-explicit-filter-option={v}>

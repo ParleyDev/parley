@@ -2,7 +2,7 @@
 title: Modération et sécurité
 section: Gérer un serveur
 summary: Garde ton serveur convivial avec AutoMod, les exclusions temporaires, les bannissements, les signalements, la protection anti-raid et les logs du serveur.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Gérer une personne
@@ -46,7 +46,8 @@ Tu peux aussi exempter des rôles ou des salons, comme un salon où tes modérat
 - **Niveau de vérification** : ce qu'il faut à un nouveau venu avant de pouvoir publier. **Faible** exige un e-mail vérifié. **Moyenne** exige en plus un compte Parley de plus de 5 minutes. **Élevée** exige en plus 10 minutes sur ton serveur. Les membres qui ont un rôle en sont dispensés.
 - **Protection anti-raid** : repère un afflux soudain de nouveaux comptes et alerte tes modérateurs.
 - **Mettre les invitations en pause** et **Mettre en pause les MP entre membres** : des freins d'urgence pendant un raid.
-- **Filtre d'images explicites** : analyse les images publiées sur le serveur.
+- **Serveur réservé aux adultes** : coche **Tout sur ce serveur est 18+** et seuls les membres confirmés comme ayant 18 ans ou plus peuvent lire ou participer, partout sur le serveur. Pour ne restreindre que certaines zones, utilise plutôt **Salon réservé aux +18 ans** sur un salon ou une catégorie. Voir [Salons et catégories](server-settings#channels-and-categories).
+- **Filtre d'images explicites** : analyse les images publiées sur le serveur. La vérification se fait dans l'appli de chaque membre, et aussi par l'instance si ses admins l'ont configurée pour ça.
 - **Authentification à deux facteurs pour les modérateurs** : les modérateurs doivent avoir activé la 2FA ou ajouté une clé d'accès, pour qu'un mot de passe volé ne puisse pas être utilisé contre le serveur. L'un ou l'autre suffit, et il t'en faut un toi-même pour activer cette option.
 - **Résumés IA** : active ou désactive le bouton Résumés.
 

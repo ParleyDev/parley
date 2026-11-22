@@ -58,6 +58,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/attachments/uploads", post(start_parts).route_layer(from_fn(rl_uploads)))
         .route("/attachments/uploads/:id", put(put_part).get(parts_status).layer(DefaultBodyLimit::max(PART_CEILING)))
         .route("/attachments/urls", post(fresh_urls))
+        .route("/attachments/session", post(media_session))
         .route("/attachments/:id/thumb", get(serve_thumb))
         .route("/attachments/:id/viz", get(serve_viz))
         .route("/attachments/:id/listened", post(mark_listened))
@@ -66,7 +67,7 @@ pub fn router() -> Router<AppState> {
         .route("/attachments/:id/:filename", get(serve))
 }
 
-pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description, plays, media_ms";
+pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description, plays, media_ms, (channel_min_age(channel_id) IS NOT NULL) AS restricted";
 
 fn sanitize_filename(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("file");
@@ -156,7 +157,15 @@ async fn finish_file(state: &AppState, uid: Uuid, channel_id: Uuid, id: Uuid, mu
         return Err(e);
     }
     // Antivirus (when configured): the file is scanned before it is recorded, so it is never served unscanned.
-    if let Ok(bytes) = tokio::fs::read(&path).await {
+    // A file that cannot be read back cannot be scanned, so it is refused rather than stored.
+    let bytes = match tokio::fs::read(&path).await {
+        Ok(b) => b,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(AppError::Other(anyhow::anyhow!("could not read the upload back to scan it: {e}")));
+        }
+    };
+    {
         if let Err(e) = crate::av::check(state, &bytes, "attachment").await {
             let _ = tokio::fs::remove_file(&path).await;
             return Err(e);
@@ -165,6 +174,11 @@ async fn finish_file(state: &AppState, uid: Uuid, channel_id: Uuid, id: Uuid, mu
         // by the check itself; the copy here is removed like any refused upload.
         let kind = infer::get(head).map(|t| t.mime_type().to_string()).unwrap_or_else(|| declared.clone());
         if let Err(e) = crate::routes::matching::check(state, &bytes, crate::routes::matching::Ctx { user_id: uid, surface: "attachment", channel_id: Some(channel_id), filename: &filename, content_type: &kind }).await {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(e);
+        }
+        // The server's explicit image filter, checked here as well as in members' apps (when a service is set up).
+        if let Err(e) = crate::routes::explicit::check_attachment(state, &bytes, &kind, channel_id, uid).await {
             let _ = tokio::fs::remove_file(&path).await;
             return Err(e);
         }
@@ -262,18 +276,43 @@ struct Link { #[serde(default)] ex: Option<String>, #[serde(default)] sig: Optio
 async fn allow(state: &AppState, id: Uuid, channel_id: Uuid, uploader_id: Uuid, created_at: chrono::DateTime<chrono::Utc>, link: &Link, user: Option<Uuid>) -> AppResult<()> {
     // Uploaded before this instance signed its links: the plain address still works, as it was promised to.
     if !crate::media_sign::required(created_at) { return Ok(()); }
-    if let (Some(ex), Some(sig)) = (&link.ex, &link.sig) {
-        if crate::media_sign::valid(id, ex, sig) { return Ok(()); }
+    // In a channel with a minimum age only the short kind of link opens the file, and a login must meet the age
+    // (`require_channel` checks it), the uploader's too.
+    let restricted = crate::age::min_age(&state.db, channel_id).await?.is_some();
+    if !restricted {
+        if let (Some(ex), Some(sig)) = (&link.ex, &link.sig) {
+            if crate::media_sign::valid(id, ex, sig, false) { return Ok(()); }
+        }
     }
     match user {
-        Some(uid) if uid == uploader_id => Ok(()),
+        // A link can be passed on, so for a restricted channel it is never enough: the request has to come from a
+        // signed-in session (the media cookie, or a login header) whose account meets the age.
+        None if restricted => Err(AppError::ForbiddenWith("This file is in an age-restricted channel. Open it from the conversation, signed in.".into())),
+        Some(uid) if uid == uploader_id && !restricted => Ok(()),
         Some(uid) => require_channel(&state.db, channel_id, uid).await.map(|_| ()).map_err(|_| AppError::Forbidden),
         None if link.sig.is_some() => Err(AppError::ForbiddenWith("This link has expired. Open the file from the conversation it was posted in.".into())),
         None => Err(AppError::Unauthorized),
     }
 }
 
+/// Who is asking for a file: the login header if there is one, else the media cookie of a live session.
+async fn viewer(state: &AppState, user: Option<Uuid>, headers: &HeaderMap) -> Option<Uuid> {
+    if user.is_some() { return user }
+    let (uid, sid) = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).and_then(crate::media_sign::cookie_claim)?;
+    crate::auth::check_session(state, uid, sid).await.unwrap_or(false).then_some(uid)
+}
+
+/// `POST /attachments/session`: give this browser the media cookie for the session it is signed in with, so that
+/// pictures and video in age-restricted channels load (see `media_sign`).
+async fn media_session(State(state): State<AppState>, crate::auth::AuthSession(uid, sid): crate::auth::AuthSession) -> AppResult<Response> {
+    let mut resp = StatusCode::NO_CONTENT.into_response();
+    let value = crate::media_sign::cookie_for(uid, sid, state.config.app_url.starts_with("https://"));
+    resp.headers_mut().insert(header::SET_COOKIE, HeaderValue::from_str(&value).map_err(|e| AppError::Other(anyhow::anyhow!(e)))?);
+    Ok(resp)
+}
+
 async fn serve(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path((id, _filename)): Path<(Uuid, String)>, Query(q): Query<ServeQuery>, headers: HeaderMap) -> AppResult<Response> {
+    let user = viewer(&state, user, &headers).await;
     let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
@@ -322,7 +361,8 @@ struct VizQuery { #[serde(default)] peaks: Option<String>, #[serde(flatten)] lin
 
 /// An audio attachment's visualiser data (audio_viz.rs), made on first request for files uploaded before it existed.
 /// `?peaks=1` returns only the waveform for seek bars.
-async fn serve_viz(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path(id): Path<Uuid>, Query(q): Query<VizQuery>) -> AppResult<Response> {
+async fn serve_viz(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path(id): Path<Uuid>, Query(q): Query<VizQuery>, headers: HeaderMap) -> AppResult<Response> {
+    let user = viewer(&state, user, &headers).await;
     let row: Option<(String, Uuid, Uuid, chrono::DateTime<chrono::Utc>)> = sqlx::query_as("SELECT content_type, channel_id, uploader_id, created_at FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     let (ct, channel_id, uploader_id, created_at) = row.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
     allow(&state, id, channel_id, uploader_id, created_at, &q.link, user).await?;
@@ -338,7 +378,8 @@ async fn serve_viz(State(state): State<AppState>, crate::auth::MaybeUser(user): 
 }
 
 /// The server-made thumbnail of an image attachment, or a video's poster frame (same caching as the file itself).
-async fn serve_thumb(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path(id): Path<Uuid>, Query(link): Query<Link>) -> AppResult<Response> {
+async fn serve_thumb(State(state): State<AppState>, crate::auth::MaybeUser(user): crate::auth::MaybeUser, Path(id): Path<Uuid>, Query(link): Query<Link>, headers: HeaderMap) -> AppResult<Response> {
+    let user = viewer(&state, user, &headers).await;
     let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
@@ -370,7 +411,7 @@ async fn fresh_urls(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
     let mut seen: HashMap<Uuid, bool> = HashMap::new();
     let mut out = Vec::with_capacity(atts.len());
     for a in atts {
-        let ok = if a.uploader_id == uid { true } else {
+        let ok = if a.uploader_id == uid && !a.restricted { true } else {
             match seen.get(&a.channel_id) { Some(v) => *v, None => { let v = require_channel(&state.db, a.channel_id, uid).await.is_ok(); seen.insert(a.channel_id, v); v } }
         };
         if !ok { continue }
@@ -614,7 +655,7 @@ async fn retranscribe(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     if status.as_deref() == Some("pending") { return Ok(Json(serde_json::json!({ "status": "pending" }))); }
     sqlx::query("UPDATE attachments SET transcript_status = 'pending', transcript = NULL WHERE id = $1").bind(id).execute(&state.db).await?;
     if let (Ok(msg), Ok(target)) = (crate::routes::channels::fetch_message(&state.db, mid, author).await, crate::routes::channels::target_for(&state.db, &c).await) {
-        state.hub.emit(target, "MESSAGE_UPDATE", serde_json::json!({ "message": msg, "guild_id": c.guild_id }));
+        crate::routes::channels::emit_message(&state, &c, target, "MESSAGE_UPDATE", &msg).await;
     }
     let st = state.clone();
     let (url, key, model) = (settings.stt_url.clone(), settings.stt_api_key.clone(), settings.stt_model.clone());
@@ -650,7 +691,7 @@ async fn transcribe(state: AppState, id: Uuid, mid: Uuid, author: Uuid, c: crate
     };
     tracing::debug!(attachment = %id, status, "transcription finished");
     if let (Ok(msg), Ok(target)) = (crate::routes::channels::fetch_message(&state.db, mid, author).await, crate::routes::channels::target_for(&state.db, &c).await) {
-        state.hub.emit(target, "MESSAGE_UPDATE", serde_json::json!({ "message": msg, "guild_id": c.guild_id }));
+        crate::routes::channels::emit_message(&state, &c, target, "MESSAGE_UPDATE", &msg).await;
     }
 }
 

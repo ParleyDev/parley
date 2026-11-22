@@ -14,7 +14,9 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { clearHighlights, highlightTerms, searchTerms } from '../lib/searchHighlight'
 import { usePhone } from '../lib/swipe'
 import type { Channel, DmChannel, Message, PrivateUser } from '../lib/types'
-import { BirthdateForm, TeenDmNotice } from './AgeSafety'
+import { TeenDmNotice } from './AgeSafety'
+import { AgePaths } from './AgeChecks'
+import { useAgeStatus, useMinAge } from '../lib/age'
 import { api } from '../lib/api'
 import { myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
@@ -95,6 +97,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
   const t = useT()
   const isDm = channel.guild_id === null
   const [ageOk, setAgeOk] = useState(() => nsfwAccepted(channel.id))
+  const minAge = useMinAge(channel)
   const [spoilerOk, setSpoilerOk] = useState(() => gateAccepted(SPOILER_KEY, channel.id))
   useEffect(() => { setSpoilerOk(gateAccepted(SPOILER_KEY, channel.id)) }, [channel.id])
   const users = useStore((s) => s.users)
@@ -282,7 +285,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
     <>
         {isDm && <DmCall channel={channel as DmChannel} />}
         {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={nameOf(other, notes)} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(t('{name} blocked', { name: nameOf(other, notes) }))).catch((e: Error) => pushToast(e.message, 'error')) }} />}
-        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : channel.kind === 'studio' ? <StudioView channel={channel as Channel} /> : <ChatPane channel={channel} />}
+        {minAge !== null && (!ageOk || myAge !== 'adult') ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : channel.kind === 'studio' ? <StudioView channel={channel as Channel} /> : <ChatPane channel={channel} />}
     </>
   )
   const side = search !== null ? (
@@ -338,10 +341,11 @@ function SpoilerGate({ channel, onOk }: { channel: Channel; onOk: () => void }) 
   )
 }
 
-/** The warning shown once before an age-restricted channel opens. */
+/** What stands in for an age-restricted channel: a lock for anyone not confirmed as an adult, a warning (once) for adults. */
 function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
   const navigate = useNavigate()
   const age = useStore((s) => (s.user as PrivateUser | null)?.age_group ?? 'unknown')
+  const [status, setStatus] = useAgeStatus()
   const t = useT()
   if (age === 'teen') {
     return (
@@ -355,6 +359,19 @@ function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
       </div>
     )
   }
+  if (age !== 'adult') {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto" data-age-gate="locked">
+        <div className="max-w-md text-center space-y-4">
+          <div className="mx-auto h-16 w-16 rounded-full bg-danger/15 text-danger flex items-center justify-center text-2xl font-extrabold">18+</div>
+          <h2 className="text-xl font-bold">{t('Adults only')}</h2>
+          <p className="text-sm text-text-2">{t('#{name} is open only to people confirmed as 18 or older. Saying so is not enough here: your age has to be confirmed first.', { name: channel.name })}</p>
+          {status && <AgePaths status={status} onChange={setStatus} />}
+          <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-age-nope>{t('Go back')}</button>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex-1 flex items-center justify-center p-6" data-age-gate>
       <div className="max-w-md text-center space-y-4">
@@ -363,9 +380,8 @@ function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
         <p className="text-sm text-text-2">{t('#{name} may contain content that is not suitable for everyone. You must be over 18 to continue. Pictures and videos here stay blurred until clicked if your sensitive-media setting says so.', { name: channel.name })}</p>
         <div className="flex justify-center gap-2">
           <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-age-nope>{t('Nope')}</button>
-          {age === 'adult' && <button type="button" className="btn-primary" onClick={() => { rememberNsfw(channel.id); onOk() }} data-age-continue>{t('Continue')}</button>}
+          <button type="button" className="btn-primary" onClick={() => { rememberNsfw(channel.id); onOk() }} data-age-continue>{t('Continue')}</button>
         </div>
-        {age === 'unknown' && <div className="text-left"><BirthdateForm onDone={(u) => { if (u.age_group === 'adult') { rememberNsfw(channel.id); onOk() } }} /></div>}
       </div>
     </div>
   )

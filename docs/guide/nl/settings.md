@@ -2,7 +2,7 @@
 title: Instellingen
 section: Jij
 summary: Accountbeveiliging, privacy, weergave, toegankelijkheid, taal en de opties van de desktop-app.
-source: 34c162a49c91
+source: c3991172940f
 ---
 
 Open **Gebruikersinstellingen** met het tandwiel naast je naam in de hoek linksonder, of druk op <kbd>Ctrl</kbd>+<kbd>,</kbd>. Kun je iets niet vinden? Typ in het zoekvak bovenaan de lijst. Instancebeheerders vinden onderaan de lijst ook de **Beheerconsole**.
@@ -16,11 +16,32 @@ Open **Gebruikersinstellingen** met het tandwiel naast je naam in de hoek linkso
 - **Tweestapsverificatie**: sterk aangeraden. Klik op **Tweestapsverificatie inschakelen**, scan de code met een authenticator-app en typ de 6-cijferige code om het aan te zetten.
   - Bewaar je **back-upcodes** op een veilige plek. Daarmee kom je erin als je je telefoon kwijtraakt.
 - **Passkeys**: log in met je vingerafdruk, gezicht of de pincode van je apparaat. Klik op **Passkey toevoegen**. Een passkey telt ook als tweestapsverificatie voor servers die dat van moderators eisen.
-- **Accountstatus**: of je onlangs regels hebt overtreden. Normaal staat er *Alles in orde*.
+- **Accountstatus**: of je onlangs regels hebt overtreden. Normaal staat er *Alles in orde*. Als de beheerders van je Parley je account hebben beperkt, staat hier tot wanneer en wat je in de tussentijd niet kunt doen.
+- **Leeftijd**: zie [Je leeftijd](#your-age).
 - **Serververbanningen**: servers die je hebben verbannen, met **Beroep aantekenen tegen deze verbanning** waar de server dat toestaat.
 - **Opslag**: hoeveel van je uploadruimte je hebt gebruikt.
 - **Jaaroverzicht**: jouw jaar op Parley.
 - **Accountverwijdering**: je account uitschakelen of verwijderen. Zie [Aan de slag](getting-started#taking-a-break-or-leaving).
+
+## Je leeftijd
+
+Parley vraagt niet naar je geboortedatum. Totdat is bevestigd dat je volwassen bent, behandelt het je account zoals dat van een jonger iemand:
+
+- Kanalen met leeftijdsbeperking en servers alleen voor volwassenen blijven gesloten.
+- Berichten van mensen die je niet hebt toegevoegd, komen binnen als [verzoeken](direct-messages#message-requests), waarbij afbeeldingen, bestanden en linkvoorbeelden verborgen blijven tot je accepteert.
+
+**Gebruikersinstellingen → Mijn account → Leeftijd** toont hoe je ervoor staat en op welke manieren jouw Parley je kan bevestigen:
+
+- **Verifiëren met** een dienst, als er een is ingesteld. Die vertelt Parley alleen of je 18 jaar of ouder bent.
+- **Vraag het team te bevestigen dat ik volwassen ben**. Ze kunnen contact met je opnemen. Stuur geen identiteitsdocumenten via Parley.
+- **Ik ben 18 jaar of ouder**, waar jouw Parley je op je woord gelooft.
+
+Wordt geen van deze aangeboden, dan kan jouw Parley leeftijden nog niet bevestigen.
+
+- **Ik ben jonger dan 18** markeert je account als dat van een tiener. Alleen vrienden kunnen je berichten sturen, gevoelige media worden vervaagd of geblokkeerd, en je kunt het [Gezinscentrum](#family-center) gebruiken. Alleen een beheerder kan dit ongedaan maken.
+- **Verjaardag (optioneel)** bewaart een dag en een maand, zonder jaar. Alleen jij kunt hem zien.
+
+> Note: niemand anders kan je leeftijdsstatus zien.
 
 ## Gegevens en privacy
 
@@ -39,6 +60,8 @@ Open **Gebruikersinstellingen** met het tandwiel naast je naam in de hoek linkso
 ## Gezinscentrum
 
 Ouders en tieners kunnen hun accounts koppelen. Een ouder ziet bij welke servers de tiener zich aansluit, wie hij of zij als vriend toevoegt en met wie hij of zij berichten stuurt, maar nooit wat er in de berichten staat. De tiener krijgt een code onder **Ouder koppelen**, en de ouder voert die in onder **Tieneraccount koppelen**. Allebei kunnen ze **Ontkoppelen**.
+
+De code komt van een account dat is gemarkeerd als jonger dan 18. Zie [Je leeftijd](#your-age).
 
 ## Apparaten en verbindingen
 

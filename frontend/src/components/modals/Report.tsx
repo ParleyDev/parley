@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SafetyContact } from '../../lib/policies'
 import Modal from '../Modal'
 import { api } from '../../lib/api'
 import { useStore } from '../../store'
@@ -63,6 +64,7 @@ export default function ReportModal({ onClose, messageId, userId, name, guildId,
     <Modal title={server ? t('Report {name}', { name }) : messageId ? t('Report Message') : t('Report {name}', { name })} onClose={onClose} width="max-w-sm"
       footer={<><button className="btn-ghost" onClick={onClose}>{t('Cancel')}</button><button className="btn-danger" onClick={submit} disabled={busy} data-report-submit>{t('Submit Report')}</button></>}>
       <div data-report-form>
+        <SafetyContact className="mb-2" />
         <p className="text-sm text-text-1">{messageId ? <>{tn('Report this message by {name} to the admins of this Parley instance.', { name: <b className="text-text-0">{name}</b> })}</> : <>{tn('Report {name} to the admins of this Parley instance.', { name: <b className="text-text-0">{name}</b> })}</>}</p>
         <label className="label mt-4">{t("What's wrong?")}</label>
         <div className="space-y-1">

@@ -19,6 +19,7 @@ covers:
   - frontend/src/components/modals/FollowChannel.tsx
   - frontend/src/components/modals/Events.tsx
   - frontend/src/components/AgeSafety.tsx
+  - frontend/src/components/AgeChecks.tsx
 ---
 
 Every server is split into **channels**, each for one topic or activity. Channels are grouped under collapsible **categories**.
@@ -40,7 +41,7 @@ A small lock on a channel means it's **private**: only some roles or people can 
 
 Some channels show a notice before you go in:
 
-- **Age-restricted** channels ask you to confirm you're 18 or over.
+- **Age-restricted** channels are only for people confirmed as 18 or older. If you are confirmed, you get a warning once and then go in. If you are not, the channel shows a lock with the ways to be confirmed. See [Your age](settings#your-age).
 - **Spoiler** channels keep pictures and videos hidden until you click them.
 - **Slowmode** channels let each person post only every so often. The message box tells you how long to wait.
 

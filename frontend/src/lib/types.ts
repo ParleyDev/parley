@@ -51,7 +51,9 @@ export interface PrivateUser extends User {
   guest?: boolean
   email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean; has_passkey?: boolean
   /** Set once; 'teen' (13-17) gets safety defaults and no 18+ channels. */
-  birthdate?: string | null; age_group?: 'unknown' | 'teen' | 'adult'
+  birthday_month?: number | null; birthday_day?: number | null; declared_minor?: boolean
+  /** 'teen': said they are under 18. 'adult': meets 18 under this instance's rules. 'unknown': everyone else. */
+  age_group?: 'unknown' | 'teen' | 'adult'
   /** When the chosen status reverts to Online, and when the custom status clears (null: they don't). */
   status_expires_at?: string | null; custom_status_expires_at?: string | null
   /** Channels and DMs pinned to the top of their lists, in order. */
@@ -134,6 +136,8 @@ export interface Onboarding { enabled?: boolean; questions?: OnboardingQuestion[
 
 export interface Guild {
   id: string
+  /** The age everyone must meet to read anything in this server. */
+  min_age?: number | null
   name: string
   icon_url: string | null
   owner_id: string
@@ -234,6 +238,8 @@ export interface Channel {
   parent_id?: string | null
   /** Guild text channels: age-restricted (gate before first view; media blurred by preference). */
   nsfw?: boolean
+  /** The age this channel itself asks for (see lib/age minAgeOf for what applies after inheritance). */
+  min_age?: number | null
   /** Voice/stage/studio audio profile (see lib/audioProfile). */
   audio_mode?: 'voice' | 'music'
   audio_bitrate?: number
@@ -450,6 +456,8 @@ export interface Message {
   forwarded_from?: string | null
   /** The forward's source server was deleted: the copy stays, without a link back. */
   forwarded_unavailable?: boolean
+  /** A message request you have not accepted: pictures, files and link previews were left out by the server. */
+  media_locked?: boolean
   mentions?: string[]
   mention_roles?: string[]
   mention_everyone?: boolean

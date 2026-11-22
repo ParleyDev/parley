@@ -2,7 +2,7 @@
 title: Kanały, wątki i fora
 section: Rozmowy
 summary: Rodzaje kanałów, wątki do pobocznych rozmów, fora, społeczności i wydarzenia.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Każdy serwer jest podzielony na **kanały**, każdy na jeden temat lub zajęcie. Kanały są pogrupowane w zwijane **kategorie**.
@@ -24,7 +24,7 @@ Mała kłódka przy kanale oznacza, że jest **prywatny**: widzą go tylko niekt
 
 Niektóre kanały pokazują komunikat, zanim wejdziesz:
 
-- Kanały **z ograniczeniem wiekowym** proszą o potwierdzenie, że masz co najmniej 18 lat.
+- Kanały **z ograniczeniem wiekowym** są tylko dla osób z potwierdzonym ukończeniem 18 lat. Jeśli masz potwierdzenie, raz zobaczysz ostrzeżenie i wejdziesz. Jeśli nie, kanał pokazuje kłódkę i sposoby na uzyskanie potwierdzenia. Zobacz [Twój wiek](settings#your-age).
 - Kanały ze **Spoilerem** ukrywają obrazy i filmy, dopóki ich nie klikniesz.
 - Kanały w **Trybie powolnym** pozwalają każdemu pisać tylko co jakiś czas. Pole wiadomości mówi, ile trzeba poczekać.
 

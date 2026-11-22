@@ -11,6 +11,7 @@ covers:
   - frontend/src/components/modals/WhatsNew.tsx
   - frontend/src/components/modals/Recap.tsx
   - frontend/src/components/modals/settings/AccountTab.tsx
+  - frontend/src/components/AgeChecks.tsx
   - frontend/src/components/modals/settings/AccountChanges.tsx
   - frontend/src/components/modals/settings/MfaSection.tsx
   - frontend/src/components/modals/settings/PasskeysSection.tsx
@@ -49,11 +50,32 @@ Open **User Settings** with the cog beside your name in the bottom-left corner, 
 - **Two-Factor Authentication**: strongly recommended. Click **Enable Two-Factor Auth**, scan the code with an authenticator app, and type the 6-digit code to switch it on.
   - Save your **backup codes** somewhere safe. They get you in if you lose your phone.
 - **Passkeys**: sign in with your fingerprint, face or device PIN. Click **Add a passkey**. A passkey also counts as two-factor authentication for servers that require it of moderators.
-- **Account Standing**: whether you've broken any rules recently. Normally it says *All good*.
+- **Account Standing**: whether you've broken any rules recently. Normally it says *All good*. If the people who run your Parley have limited your account, a notice here says until when and what you can't do meanwhile.
+- **Age**: see [Your age](#your-age).
 - **Server Bans**: servers that have banned you, with **Appeal this ban** where the server allows it.
 - **Storage**: how much of your upload space you've used.
 - **Year in Review**: your year on Parley.
 - **Account Removal**: disable or delete your account. See [Getting started](getting-started#taking-a-break-or-leaving).
+
+## Your age
+
+Parley doesn't ask for your date of birth. Until you are confirmed as an adult, it treats your account as it would a younger person's:
+
+- Age-restricted channels and adults-only servers stay closed.
+- Messages from people you haven't added arrive as [requests](direct-messages#message-requests), with pictures, files and link previews hidden until you accept.
+
+**User Settings → My Account → Age** shows where you stand and the ways your Parley offers to confirm you:
+
+- **Verify with** a service, if one is set up. It tells Parley only whether you're 18 or older.
+- **Ask the staff to confirm I am an adult**. They may contact you. Don't send identity documents through Parley.
+- **I am 18 or older**, where your Parley accepts your word for it.
+
+If none of these is offered, your Parley has no way to confirm ages yet.
+
+- **I am under 18** marks your account as a teen's. Only friends can message you, sensitive media is blurred or blocked, and you can use [Family Center](#family-center). Only an administrator can undo it.
+- **Birthday (optional)** saves a day and a month, without the year. Only you can see it.
+
+> Note: nobody else can see your age status.
 
 ## Data and privacy
 
@@ -72,6 +94,8 @@ Open **User Settings** with the cog beside your name in the bottom-left corner, 
 ## Family Center
 
 Parents and teens can link their accounts. A parent sees which servers the teen joins, who they add as friends and who they message, but never what the messages say. The teen gets a code under **Link a parent**, and the parent enters it under **Link a teen account**. Either one can **Unlink**.
+
+The code comes from an account marked as under 18. See [Your age](#your-age).
 
 ## Devices and connections
 

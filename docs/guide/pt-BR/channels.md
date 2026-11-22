@@ -2,7 +2,7 @@
 title: Canais, threads e fóruns
 section: Conversando
 summary: Os tipos de canal, threads para conversas paralelas, fóruns, comunidades e eventos.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Todo servidor é dividido em **canais**, cada um para um assunto ou atividade. Os canais ficam agrupados em **categorias** que podem ser recolhidas.
@@ -24,7 +24,7 @@ Um cadeadinho em um canal quer dizer que ele é **privado**: só alguns cargos o
 
 Alguns canais mostram um aviso antes de você entrar:
 
-- Canais **com restrição de idade** pedem que você confirme que tem 18 anos ou mais.
+- Canais **com restrição de idade** são só para pessoas confirmadas como maiores de 18 anos. Se você está confirmado, vê um aviso uma vez e depois entra. Se não, o canal mostra um cadeado com as formas de conseguir a confirmação. Veja [Sua idade](settings#your-age).
 - Canais de **Spoiler** mantêm imagens e vídeos ocultos até você clicar neles.
 - Canais com **Modo lento** só deixam cada pessoa postar de tempos em tempos. A caixa de mensagem diz quanto tempo falta.
 

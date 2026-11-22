@@ -2,7 +2,7 @@
 title: Paramètres
 section: Toi
 summary: Sécurité du compte, confidentialité, apparence, accessibilité, langue et options de l'appli de bureau.
-source: 34c162a49c91
+source: c3991172940f
 ---
 
 Ouvre les **Paramètres utilisateur** avec la roue dentée à côté de ton nom en bas à gauche, ou appuie sur <kbd>Ctrl</kbd>+<kbd>,</kbd>. Tu ne trouves pas quelque chose ? Tape dans la zone de recherche en haut de la liste. Les admins de l'instance trouvent aussi la **Console d'administration** en bas de la liste.
@@ -16,11 +16,32 @@ Ouvre les **Paramètres utilisateur** avec la roue dentée à côté de ton nom 
 - **Authentification à deux facteurs** : vivement conseillée. Clique sur **Activer l'authentification à deux facteurs**, scanne le code avec une appli d'authentification et tape le code à 6 chiffres pour l'activer.
   - Garde tes **codes de secours** en lieu sûr. Ils te permettent de te connecter si tu perds ton téléphone.
 - **Clés d'accès** : connecte-toi avec ton empreinte, ton visage ou le code PIN de ton appareil. Clique sur **Ajouter une clé d'accès**. Une clé d'accès compte aussi comme authentification à deux facteurs pour les serveurs qui l'exigent des modérateurs.
-- **Statut du compte** : indique si tu as enfreint des règles récemment. Normalement, c'est écrit *Tout va bien*.
+- **Statut du compte** : indique si tu as enfreint des règles récemment. Normalement, c'est écrit *Tout va bien*. Si l'équipe qui gère ton Parley a limité ton compte, un message indique ici jusqu'à quand et ce que tu ne peux pas faire entre-temps.
+- **Âge** : voir [Ton âge](#your-age).
 - **Bannissements du serveur** : les serveurs qui t'ont banni, avec **Faire appel de ce bannissement** quand le serveur le permet.
 - **Stockage** : l'espace d'envoi que tu as utilisé.
 - **Année en revue** : ton année sur Parley.
 - **Suppression du compte** : désactive ou supprime ton compte. Voir [Premiers pas](getting-started#taking-a-break-or-leaving).
+
+## Ton âge
+
+Parley ne te demande pas ta date de naissance. Tant que tu n'es pas confirmé comme majeur, il traite ton compte comme celui d'une personne plus jeune :
+
+- Les salons réservés aux +18 ans et les serveurs réservés aux adultes restent fermés.
+- Les messages des personnes que tu n'as pas ajoutées arrivent sous forme de [demandes](direct-messages#message-requests), avec les images, fichiers et aperçus de liens masqués jusqu'à ce que tu acceptes.
+
+**Paramètres utilisateur → Mon compte → Âge** t'indique où tu en es et les moyens que ton Parley propose pour te confirmer :
+
+- **Vérifier avec** un service, s'il y en a un de configuré. Il indique seulement à Parley si tu as 18 ans ou plus.
+- **Demander à l'équipe de confirmer que je suis majeur**. Elle peut te contacter. N'envoie pas de pièces d'identité via Parley.
+- **J'ai 18 ans ou plus**, quand ton Parley te croit sur parole.
+
+Si aucune de ces options n'est proposée, ton Parley n'a pas encore de moyen de confirmer les âges.
+
+- **J'ai moins de 18 ans** marque ton compte comme celui d'un ado. Seuls tes amis peuvent t'écrire, les médias sensibles sont floutés ou bloqués, et tu peux utiliser le [Centre familial](#family-center). Seul un administrateur peut annuler ce choix.
+- **Date d'anniversaire (facultatif)** enregistre un jour et un mois, sans l'année. Toi seul peux la voir.
+
+> Note: personne d'autre ne peut voir le statut de ton âge.
 
 ## Données et confidentialité
 
@@ -39,6 +60,8 @@ Ouvre les **Paramètres utilisateur** avec la roue dentée à côté de ton nom 
 ## Centre familial
 
 Les parents et les ados peuvent lier leurs comptes. Un parent voit quels serveurs l'ado rejoint, qui il ajoute en ami et à qui il écrit, mais jamais le contenu des messages. L'ado obtient un code sous **Lier un parent**, et le parent le saisit sous **Lier un compte d'ado**. L'un ou l'autre peut **Dissocier**.
+
+Le code vient d'un compte marqué comme ayant moins de 18 ans. Voir [Ton âge](#your-age).
 
 ## Appareils et connexions
 

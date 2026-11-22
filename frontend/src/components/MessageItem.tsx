@@ -1,4 +1,5 @@
 import { AlarmClock, AppWindow, Languages, Check, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { minAgeOf } from '../lib/age'
 import CropImg from './CropImg'
 import { previewText } from '../lib/desktopNotify'
 import { isImage } from '../lib/upload'
@@ -268,7 +269,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     if (isOwn) return 'show'
     const pref = s.user?.sensitive_media ?? {}
     if (s.dms[m.channel_id]) return (s.relationships[m.author.id]?.kind === 'friend' ? pref.friend_dms : pref.non_friend_dms) ?? 'show'
-    return (s.channels[m.channel_id]?.nsfw ? pref.restricted : pref.servers) ?? 'show'
+    return (minAgeOf(s.channels[m.channel_id]) !== null ? pref.restricted : pref.servers) ?? 'show'
   })
   const sensitive = mediaLevel === 'blur'
   const blockMedia = mediaLevel === 'block'
@@ -469,6 +470,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 </div>
               )}
               {m.forwarded_from && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded><Forward size={13} /> {t('Forwarded')}</div>}
+              {m.media_locked && <div className="mt-1 text-xs text-text-2 italic" data-media-locked>{t('Pictures, files and link previews are hidden until you accept this request.')}</div>}
               {m.forwarded_unavailable && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded="unavailable"><Forward size={13} /> {t("Forwarded from a server that's no longer available")}</div>}
               {m.crosspost?.channel_name && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-crosspost-from={m.crosspost.channel_id}><Megaphone size={13} /><span className="rounded bg-accent/80 px-1 text-[10px] font-bold uppercase text-white">{t('Server')}</span> {m.crosspost.guild_name} · #{m.crosspost.channel_name}</div>}
               {(shownContent || m.edited_at) && !media && (

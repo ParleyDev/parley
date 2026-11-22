@@ -2,7 +2,7 @@
 title: Moderation und Sicherheit
 section: Einen Server leiten
 summary: Halte deinen Server freundlich mit AutoMod, Timeouts, Banns, Meldungen, Raid-Schutz und dem Audit-Log.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Mit jemandem umgehen
@@ -46,7 +46,8 @@ Du kannst auch Rollen oder Kanäle ausnehmen, etwa einen Kanal, in dem deine Mod
 - **Verifizierungsstufe**: was ein Neuling braucht, bevor er posten darf. **Niedrig** verlangt eine bestätigte E-Mail-Adresse. **Mittel** verlangt zusätzlich ein Parley-Konto, das älter als 5 Minuten ist. **Hoch** verlangt zusätzlich 10 Minuten auf deinem Server. Mitglieder mit irgendeiner Rolle überspringen das.
 - **Raid-Schutz**: bemerkt einen plötzlichen Ansturm neuer Konten und warnt deine Moderatoren.
 - **Einladungen pausieren** und **DMs zwischen Mitgliedern pausieren**: Notbremsen während eines Raids.
-- **Filter für explizite Bilder**: prüft Bilder, die auf dem Server gepostet werden.
+- **Server nur für Erwachsene**: Setze das Häkchen bei **Alles auf diesem Server ist 18+**, dann können nur Mitglieder, die als mindestens 18 bestätigt sind, irgendwo auf dem Server mitlesen oder mitreden. Um nur einzelne Bereiche zu beschränken, nutze stattdessen **Altersbeschränkter Kanal** bei einem Kanal oder einer Kategorie. Siehe [Kanäle und Kategorien](server-settings#channels-and-categories).
+- **Filter für explizite Bilder**: prüft Bilder, die auf dem Server gepostet werden. Die Prüfung übernimmt die App jedes Mitglieds und zusätzlich die Instanz, wenn ihre Admins das eingerichtet haben.
 - **Zwei-Faktor-Authentifizierung für Moderatoren**: Moderatoren müssen 2FA eingeschaltet oder einen Passkey hinzugefügt haben, damit ein gestohlenes Passwort nicht gegen den Server verwendet werden kann. Beides zählt, und du brauchst selbst eins davon, um das einzuschalten.
 - **KI-Zusammenfassungen**: Schalte die Schaltfläche Zusammenfassungen ein oder aus.
 

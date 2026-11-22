@@ -2,7 +2,7 @@
 title: Salons, fils et forums
 section: Discuter
 summary: Les types de salon, les fils pour les discussions annexes, les forums, les communautés et les événements.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Chaque serveur est divisé en **salons**, chacun consacré à un sujet ou une activité. Les salons sont regroupés dans des **catégories** que l'on peut réduire.
@@ -24,7 +24,7 @@ Un petit cadenas sur un salon signifie qu'il est **privé** : seuls certains rô
 
 Certains salons affichent un avertissement avant d'entrer :
 
-- Les salons **réservés aux +18 ans** te demandent de confirmer que tu as 18 ans ou plus.
+- Les salons **réservés aux +18 ans** ne sont ouverts qu'aux personnes confirmées comme ayant 18 ans ou plus. Si tu es confirmé, tu vois un avertissement une fois, puis tu entres. Sinon, le salon affiche un cadenas avec les moyens d'être confirmé. Voir [Ton âge](settings#your-age).
 - Les salons **Spoiler** gardent les images et vidéos masquées jusqu'à ce que tu cliques dessus.
 - Les salons en **Mode lent** ne laissent chaque personne publier qu'à intervalles réguliers. La zone de saisie t'indique combien de temps attendre.
 

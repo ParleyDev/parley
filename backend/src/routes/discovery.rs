@@ -114,10 +114,12 @@ async fn browse(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q)
     let rows = sqlx::query_as::<_, Listing>(&format!(
         "{LISTING_SELECT} WHERE d.status = 'approved' AND g.state = 'active' AND ($1::text IS NULL OR d.category = $1)
            AND ($2::text IS NULL OR g.name ILIKE $2 OR d.description ILIKE $2)
+           AND (g.min_age IS NULL OR age_meets($3, g.min_age))
          ORDER BY d.featured_order ASC NULLS LAST, member_count DESC, g.name LIMIT 100"
     ))
     .bind(category)
     .bind(pattern)
+    .bind(uid)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(decorate(&state, uid, rows).await?))
@@ -170,6 +172,9 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     if approved.is_none() {
         return Err(AppError::NotFound("Server not found in Discover".into()));
     }
+    crate::age::check_guild(&state.db, gid, uid).await?;
+    crate::abuse::rate_invite_accept(uid)?;
+    crate::abuse::deny_new(&state.db, uid).await?;
     join_guild(&state, gid, uid, "discover").await
 }
 
@@ -217,9 +222,12 @@ pub async fn public_channels(db: &PgPool, gid: Uuid) -> AppResult<(perms::GuildC
         return Err(AppError::NotFound("Server not found in Discover".into()));
     }
     let ctx = perms::GuildCtx::load(db, gid).await?;
+    // A preview is for people who have not joined: nothing with a minimum age is in it, whoever is looking.
+    let restricted: std::collections::HashSet<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT id FROM channels WHERE guild_id = $1 AND channel_min_age(id) IS NOT NULL")
+        .bind(gid).fetch_all(db).await?.into_iter().map(|r| r.0).collect();
     let channels = perms::guild_channels(db, gid).await?
         .into_iter()
-        .filter(|c| c.kind == "text" && perms::has(everyone_perms(&ctx, c), perms::VIEW_CHANNEL))
+        .filter(|c| c.kind == "text" && !restricted.contains(&c.id) && perms::has(everyone_perms(&ctx, c), perms::VIEW_CHANNEL))
         .collect();
     Ok((ctx, channels))
 }
@@ -232,6 +240,7 @@ pub fn everyone_perms(ctx: &perms::GuildCtx, c: &crate::models::Channel) -> u64 
 
 /// Discord-style preview for non-members: the server, its public text channels and the listing.
 async fn preview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
+    if crate::age::guild_blocked(&state.db, gid, uid).await? { return Err(AppError::NotFound("Server not found in Discover".into())) }
     let (ctx, channels) = public_channels(&state.db, gid).await?;
     let listing = listing_for(&state, uid, gid).await?;
     Ok(Json(json!({ "guild": ctx.guild, "channels": channels, "listing": listing, "joined": ctx.is_member(uid) })))

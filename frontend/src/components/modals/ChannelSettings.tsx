@@ -121,9 +121,9 @@ function Overview({ channel }: { channel: Channel }) {
           <p className="mt-1 text-xs text-text-2">{t('Members can send one message per this interval. Members who can manage messages or this channel are exempt.')}</p>
         </div>
       )}
-      {(channel.kind === 'text' || channel.kind === 'forum') && (
+      {['text', 'forum', 'voice', 'stage', 'category'].includes(channel.kind) && (
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-nsfw={nsfw ? '1' : '0'}>
-          <span><span className="block text-[15px]">{t('Age-Restricted Channel')}</span><span className="block text-xs text-text-2">{t('Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.')}</span></span>
+          <span><span className="block text-[15px]">{t('Age-Restricted Channel')}</span><span className="block text-xs text-text-2">{channel.kind === 'category' ? t('Only members confirmed as 18 or older can open the channels in this category. Everyone else sees them locked.') : t('Only members confirmed as 18 or older can open it. Everyone else sees it locked, and nothing from it reaches them.')}</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
         </label>
       )}

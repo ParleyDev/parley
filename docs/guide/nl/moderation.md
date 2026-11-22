@@ -2,7 +2,7 @@
 title: Moderatie en veiligheid
 section: Een server runnen
 summary: Houd je server vriendelijk met AutoMod, time-outs, verbanningen, meldingen, raidbescherming en het auditlogboek.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Iemand aanpakken
@@ -46,7 +46,8 @@ Je kunt ook rollen of kanalen uitzonderen, zoals een kanaal waarin je moderators
 - **Verificatieniveau**: wat een nieuwkomer nodig heeft voordat hij of zij iets kan plaatsen. **Laag** vereist een bevestigd e-mailadres. **Gemiddeld** vereist ook een Parley-account dat ouder is dan 5 minuten. **Hoog** vereist ook 10 minuten in je server. Leden met een rol slaan dit over.
 - **Raidbescherming**: merkt een plotselinge toestroom van nieuwe accounts op en waarschuwt je moderators.
 - **Uitnodigingen pauzeren** en **DM's tussen leden pauzeren**: noodremmen tijdens een raid.
-- **Filter voor expliciete afbeeldingen**: scant afbeeldingen die in de server worden geplaatst.
+- **Server alleen voor volwassenen**: vink **Alles in deze server is 18+** aan, en alleen leden van wie is bevestigd dat ze 18 jaar of ouder zijn, kunnen ergens in de server meelezen of meepraten. Wil je alleen bepaalde delen beperken, gebruik dan **Kanaal met leeftijdsbeperking** bij een kanaal of een categorie. Zie [Kanalen en categorieën](server-settings#channels-and-categories).
+- **Filter voor expliciete afbeeldingen**: scant afbeeldingen die in de server worden geplaatst. De app van elk lid doet de controle, en de instantie ook als de beheerders dat hebben ingesteld.
 - **Tweestapsverificatie voor moderators**: moderators moeten 2FA aan hebben staan of een passkey hebben toegevoegd, zodat een gestolen wachtwoord niet tegen de server kan worden gebruikt. Een van beide telt, en je hebt er zelf een nodig om dit aan te zetten.
 - **AI-samenvattingen**: zet de knop Samenvattingen aan of uit.
 

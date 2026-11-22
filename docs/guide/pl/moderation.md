@@ -2,7 +2,7 @@
 title: Moderacja i bezpieczeństwo
 section: Prowadzenie serwera
 summary: Dbaj o przyjazną atmosferę dzięki AutoModowi, przerwom, banom, zgłoszeniom, ochronie przed najazdami i dziennikowi zdarzeń.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Radzenie sobie z kimś
@@ -46,7 +46,8 @@ Możesz też wyłączyć z reguł wybrane role lub kanały, np. kanał, na któr
 - **Poziom weryfikacji**: czego potrzebuje nowa osoba, zanim będzie mogła pisać. **Niski** wymaga potwierdzonego e-maila. **Średni** wymaga też konta Parley starszego niż 5 minut. **Wysoki** wymaga też 10 minut na twoim serwerze. Członkowie z dowolną rolą są z tego zwolnieni.
 - **Ochrona przed najazdami**: zauważa nagły napływ nowych kont i ostrzega moderatorów.
 - **Wstrzymaj zaproszenia** i **Wstrzymaj wiadomości prywatne między członkami**: hamulce awaryjne na czas najazdu.
-- **Filtr obrazów dla dorosłych**: skanuje obrazy publikowane na serwerze.
+- **Serwer tylko dla dorosłych**: zaznacz **Wszystko na tym serwerze jest 18+**, a czytać i brać udział w rozmowach gdziekolwiek na serwerze będą mogli tylko członkowie z potwierdzonym ukończeniem 18 lat. Aby ograniczyć tylko niektóre miejsca, użyj zamiast tego opcji **Kanał z ograniczeniem wiekowym** na kanale lub kategorii. Zobacz [Kanały i kategorie](server-settings#channels-and-categories).
+- **Filtr obrazów dla dorosłych**: skanuje obrazy publikowane na serwerze. Sprawdza je aplikacja każdego członka, a także instancja, jeśli jej administratorzy to skonfigurowali.
 - **Uwierzytelnianie dwuskładnikowe dla moderatorów**: moderatorzy muszą mieć włączone 2FA lub dodany klucz dostępu, żeby skradzione hasło nie mogło zostać użyte przeciw serwerowi. Liczy się jedno albo drugie, a żeby to włączyć, sam musisz mieć jedno z nich.
 - **Podsumowania AI**: włącz lub wyłącz przycisk Podsumowania.
 

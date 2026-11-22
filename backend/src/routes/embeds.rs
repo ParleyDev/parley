@@ -225,6 +225,8 @@ async fn fetch(state: &AppState, mut url: Url) -> Option<Embed> {
 
 /// `GET /embeds?url=` -> the preview (cached 24 h) or `null` when the page has nothing to show (cached 1 h).
 async fn embed(State(state): State<AppState>, AuthUser(_uid): AuthUser, Query(q): Query<EmbedQuery>) -> AppResult<Json<Value>> {
+    // A blocked site gets no preview: nothing is fetched from it and nothing of it is shown.
+    if crate::routes::safety::check_links(&state, q.url.trim()).await.is_err() { return Ok(Json(Value::Null)) }
     let url = check_url(&q.url, &state.config.embed_allow_hosts).map_err(AppError::BadRequest)?;
     let key = url.to_string();
     let cached: Option<(String, Value, i64)> = sqlx::query_as("SELECT status, data, EXTRACT(EPOCH FROM now() - fetched_at)::bigint FROM link_embeds WHERE url = $1")

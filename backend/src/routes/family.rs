@@ -1,4 +1,4 @@
-//! Family Center (Settings → Family Center). A teen (13–17 by their birth date) makes a one-time code, shown as text
+//! Family Center (Settings → Family Center). A teen (an account marked as under 18) makes a one-time code, shown as text
 //! and a QR code; an adult enters it and becomes a linked parent. A parent sees a summary of the teen's last days:
 //! servers joined, friends added, and who they messaged and how many times — never what was said. The teen sees the
 //! same summary, so nothing is hidden from them. Either side can unlink at any time; a teen can have up to 4
@@ -21,9 +21,9 @@ pub fn router() -> Router<AppState> {
 
 const MAX_PARENTS: i64 = 4;
 
-/// 'teen', 'adult' or 'unknown' (no birth date yet), as the account settings have it.
+/// 'teen', 'adult' or 'unknown', as the account settings have it.
 async fn age(db: &sqlx::PgPool, uid: Uuid) -> AppResult<String> {
-    Ok(sqlx::query_as::<_, (String,)>("SELECT CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END FROM users WHERE id = $1")
+    Ok(sqlx::query_as::<_, (String,)>("SELECT CASE WHEN declared_minor THEN 'teen' WHEN age_meets(users.id, 18) THEN 'adult' ELSE 'unknown' END FROM users WHERE id = $1")
         .bind(uid).fetch_one(db).await?.0)
 }
 
@@ -43,7 +43,7 @@ async fn overview(State(state): State<AppState>, AuthUser(uid): AuthUser) -> App
 async fn make_code(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
     match age(&state.db, uid).await?.as_str() {
         "teen" => {}
-        "unknown" => return Err(AppError::BadRequest("Add your birthday in My Account first".into())),
+        "unknown" => return Err(AppError::BadRequest("Family Center is for accounts marked as under 18. You can say so in My Account.".into())),
         _ => return Err(AppError::BadRequest("Family Center links a teen's account to a parent's: the code comes from the teen".into())),
     }
     let (n,): (i64,) = sqlx::query_as("SELECT count(*) FROM family_links WHERE teen_id = $1").bind(uid).fetch_one(&state.db).await?;
@@ -63,7 +63,9 @@ struct LinkReq { code: String }
 
 /// A parent enters the teen's code.
 async fn link(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<LinkReq>) -> AppResult<Json<Value>> {
-    if age(&state.db, uid).await? != "adult" { return Err(AppError::BadRequest("Parents need an adult account with a birthday set".into())) }
+    // The code, handed over by the teen, is what makes someone their parent here. An account that is itself marked
+    // as under 18 cannot be one; a parent does not need to have been confirmed as an adult.
+    if age(&state.db, uid).await? == "teen" { return Err(AppError::BadRequest("An account marked as under 18 cannot be linked as a parent".into())) }
     let code = req.code.trim().to_uppercase().replace([' ', '-'], "");
     let row: Option<(Uuid,)> = sqlx::query_as("DELETE FROM family_codes WHERE code = $1 AND expires_at > now() RETURNING teen_id").bind(&code).fetch_optional(&state.db).await?;
     let (teen,) = row.ok_or_else(|| AppError::BadRequest("That code is wrong or has expired; ask for a new one".into()))?;

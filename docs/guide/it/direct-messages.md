@@ -2,7 +2,7 @@
 title: Amici e messaggi diretti
 section: Conversare
 summary: Aggiungi amici, chatta a tu per tu o in piccoli gruppi e gestisci le richieste di messaggi.
-source: f87d4987eb04
+source: fef9acf4603e
 ---
 
 Fai clic su **Messaggi diretti** in cima all'elenco dei server per vedere i tuoi amici e le conversazioni private.
@@ -46,6 +46,8 @@ Un DM di gruppo è una piccola chat privata per un massimo di 10 persone, senza 
 I messaggi di chi non è tuo amico finiscono in **Richieste di messaggi**, così gli sconosciuti non arrivano dritti nei tuoi DM. Per ogni richiesta scegli **Accetta**, **Ignora** o **Blocca**.
 
 I messaggi che sembrano spam vengono tenuti a parte in **Spam**. Se uno va bene, segnalo come **Non è spam**.
+
+Finché non vieni confermato come maggiorenne, una richiesta mostra solo il testo. Immagini, file e anteprime dei link restano nascosti finché non scegli **Accetta**, e non puoi disattivare le richieste di messaggi. Vedi [La tua età](settings#your-age).
 
 Scegli chi può scriverti in **Impostazioni utente → Contenuti e social**. Vedi [Impostazioni](settings#content-and-social).
 

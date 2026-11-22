@@ -2,7 +2,7 @@
 title: Kanalen, threads en forums
 section: Praten
 summary: De soorten kanalen, threads voor zijgesprekken, forums, community's en evenementen.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Elke server is verdeeld in **kanalen**, elk voor één onderwerp of activiteit. Kanalen zijn gegroepeerd in inklapbare **categorieën**.
@@ -24,7 +24,7 @@ Een klein slotje bij een kanaal betekent dat het **privé** is: alleen bepaalde 
 
 Sommige kanalen tonen een melding voordat je binnengaat:
 
-- **Kanalen met leeftijdsbeperking** vragen je te bevestigen dat je 18 jaar of ouder bent.
+- **Kanalen met leeftijdsbeperking** zijn alleen voor mensen van wie is bevestigd dat ze 18 jaar of ouder zijn. Ben je bevestigd, dan krijg je één keer een waarschuwing en ga je daarna naar binnen. Ben je dat niet, dan toont het kanaal een slot met de manieren om je te laten bevestigen. Zie [Je leeftijd](settings#your-age).
 - **Spoiler**-kanalen houden afbeeldingen en video's verborgen tot je erop klikt.
 - In kanalen met **Langzame modus** mag iedereen maar af en toe iets plaatsen. Het berichtvak zegt hoe lang je moet wachten.
 

@@ -2,7 +2,7 @@
 title: Premiers pas
 section: Premiers pas
 summary: Crée un compte, connecte-toi sur n'importe quel appareil et choisis l'appli Parley qui te convient.
-source: 9e3cf6b58c63
+source: a4675d9c72bd
 ---
 
 Parley est un endroit pour discuter avec tes amis et tes communautés : messages écrits, appels vocaux et vidéo, scènes en direct et un studio de musique. Tout est gratuit, pour tout le monde.
@@ -19,6 +19,10 @@ Un compte invité est supprimé une heure après ton départ. Pour le garder, cl
 2. Saisis ton e-mail et choisis un **nom d'utilisateur** : de 2 à 32 lettres, chiffres, `_` ou `.`. Les gens peuvent te trouver grâce à lui.
 3. Ajoute si tu veux un **nom d'affichage**. C'est le nom que les gens voient, et il peut contenir des espaces et des majuscules.
 4. Choisis un mot de passe d'au moins 8 caractères, puis clique sur **Continuer**.
+
+Si l'équipe qui gère ton Parley publie ses **Conditions d'utilisation** et ses **Règles de la communauté**, les liens se trouvent sous le formulaire. En créant un compte, tu les acceptes.
+
+Parley ne te demande pas ta date de naissance. Certains espaces ne sont ouverts qu'aux personnes confirmées comme majeures ; voir [Ton âge](settings#your-age).
 
 Parley t'envoie un lien par e-mail pour vérifier ton adresse. Tant que tu n'as pas cliqué dessus, tu peux discuter, mais tu ne peux pas créer de serveur ni utiliser Découvrir. Si l'e-mail n'est pas arrivé, utilise **Renvoyer** dans le bandeau en haut de l'appli.
 

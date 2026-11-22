@@ -2,7 +2,7 @@
 title: Configurare un server
 section: Gestire un server
 summary: Nome, icona e banner, inviti, canali, emoji e sticker, benvenuto e onboarding, modelli e altro.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Apri il menu del server facendo clic sul suo nome, poi scegli **Impostazioni server**. Vedi solo le pagine che hai il permesso di modificare. Il proprietario vede tutto. Si apre nella stessa finestra di Impostazioni utente; scrivi nella casella di ricerca in cima all'elenco per trovare una pagina.
@@ -46,7 +46,7 @@ Ogni invito attivo è elencato, con **Revoca** per annullarlo. I server pubblici
 - Trascina canali e categorie per riordinarli.
 - Fai clic destro su un canale e scegli **Modifica canale** per:
   - l'argomento e lo **Slowmode**
-  - le impostazioni **Canale vietato ai minori** e **Spoiler**
+  - le impostazioni **Canale vietato ai minori** e **Spoiler**. Un canale vietato ai minori è aperto solo ai membri confermati come maggiorenni (almeno 18 anni); tutti gli altri lo vedono bloccato. Attivalo su una categoria e tutti i suoi canali diventano vietati ai minori. Solo chi è a sua volta confermato può disattivarlo di nuovo.
   - per i vocali: il **limite di utenti**, la qualità video e audio e la **crittografia end-to-end**
   - i **Tag** dei forum
   - i **Permessi**: vedi [Ruoli e permessi](roles-and-permissions#channel-permissions)

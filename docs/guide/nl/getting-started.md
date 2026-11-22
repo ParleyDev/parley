@@ -2,7 +2,7 @@
 title: Aan de slag
 section: Aan de slag
 summary: Maak een account aan, log in op elk apparaat en kies de Parley-app die bij je past.
-source: 9e3cf6b58c63
+source: a4675d9c72bd
 ---
 
 Parley is een plek om te praten met vrienden en community's: tekstchat, spraak- en videogesprekken, live stages en een muziekstudio. Alles is gratis, voor iedereen.
@@ -19,6 +19,10 @@ Een gastaccount wordt een uur nadat je weggaat verwijderd. Wil je het houden, kl
 2. Vul je e-mailadres in en kies een **gebruikersnaam**: 2 tot 32 letters, cijfers, `_` of `.`. Mensen kunnen je daarop vinden.
 3. Voeg eventueel een **weergavenaam** toe. Dat is de naam die mensen zien, en die mag spaties en hoofdletters bevatten.
 4. Kies een wachtwoord van minstens 8 tekens en klik op **Doorgaan**.
+
+Als de beheerders van je Parley hun **Voorwaarden** en **Communityrichtlijnen** publiceren, staan de links ernaartoe onder het formulier. Door een account aan te maken ga je ermee akkoord.
+
+Parley vraagt niet naar je geboortedatum. Sommige plekken zijn alleen open voor mensen van wie is bevestigd dat ze volwassen zijn; zie [Je leeftijd](settings#your-age).
 
 Parley stuurt je een e-mail met een link om je adres te bevestigen. Zolang je daar niet op hebt geklikt, kun je chatten, maar geen servers maken of Ontdekken gebruiken. Is de e-mail niet aangekomen? Gebruik dan **Opnieuw versturen** in de balk bovenaan de app.
 

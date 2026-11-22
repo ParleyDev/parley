@@ -390,7 +390,16 @@ pub fn audience(ctx: &GuildCtx, channel: &Channel) -> Vec<Uuid> {
         .collect()
 }
 
+/// Who receives this channel's content: everyone who can view it and meets its minimum age (`crate::age`).
 pub async fn channel_audience(db: &PgPool, channel: &Channel) -> AppResult<Target> {
+    let gid = channel.guild_id.ok_or(AppError::Forbidden)?;
+    let ctx = GuildCtx::load(db, gid).await?;
+    Ok(Target::Users(crate::age::filter(db, channel.id, audience(&ctx, channel)).await?))
+}
+
+/// Everyone who has this channel in their list, whether or not they meet its age: for events about the channel
+/// itself (created, renamed, removed), never for its content.
+pub async fn channel_listing_audience(db: &PgPool, channel: &Channel) -> AppResult<Target> {
     let gid = channel.guild_id.ok_or(AppError::Forbidden)?;
     let ctx = GuildCtx::load(db, gid).await?;
     Ok(Target::Users(audience(&ctx, channel)))
@@ -414,6 +423,12 @@ pub async fn visible_channels(db: &PgPool, guild_id: Uuid, user: Uuid) -> AppRes
     let Some(base) = ctx.base(user) else { return Ok(vec![]) };
     let cs = guild_channels(db, guild_id).await?;
     Ok(cs.into_iter().filter(|c| has(ctx.in_channel(user, base, &c.overwrites), VIEW_CHANNEL)).collect())
+}
+
+/// Channels of a guild whose content the user may read: viewable, and its minimum age met.
+pub async fn readable_channels(db: &PgPool, guild_id: Uuid, user: Uuid) -> AppResult<Vec<Channel>> {
+    let blocked = crate::age::blocked_channels(db, guild_id, user).await?;
+    Ok(visible_channels(db, guild_id, user).await?.into_iter().filter(|c| !blocked.contains(&c.id)).collect())
 }
 
 /// channel -> set of users who can see it, for every channel in the guild.
@@ -607,6 +622,7 @@ mod tests {
         let guild = Guild {
             id: gid,
             name: "g".into(),
+            min_age: None,
             icon_url: None,
             owner_id: owner,
             created_at: Utc::now(),

@@ -1,6 +1,8 @@
 // Logged-out invite preview: GET /invites/:code answers without a token (public fields only), still refuses bad tokens.
 import { B, H, S, WEB, PASSWORD, reg, call, raw, ok, finish, login, track, launchBrowser } from '../lib.mjs'
+import { makeAdult as _makeAdult } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
+await _makeAdult(a) // lifting an age restriction needs someone who meets it
 const g = await call(a.token, 'POST', '/guilds', { name: `Public Invite ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, { max_age: 0, max_uses: 0 })
 const anon = (p) => fetch(B + p, { headers: H })

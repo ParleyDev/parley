@@ -10,6 +10,8 @@ import { useStore } from '../store'
 import { can, useAccess } from './adminAccess'
 import { globalName } from '../lib/names'
 import { NetAvatar, networkLink } from './AdminNetwork'
+import { UserAgeCard } from './AdminAge'
+import { UserSanctionsCard } from './AdminBans'
 
 const MIN_WHY = 10
 
@@ -138,13 +140,15 @@ export default function UserDetailPane() {
             <dt className="text-text-2">{t('Email')}</dt><dd className="truncate" data-admin-detail-email>{u.email ?? '—'} {u.email_verified_at ? <span className="text-xs text-success">✓</span> : null}</dd>
             <dt className="text-text-2">{t('Account ID')}</dt><dd className="truncate font-mono text-xs">{u.id}</dd>
             <dt className="text-text-2">{t('Created')}</dt><dd>{when(u.created_at)}</dd>
-            <dt className="text-text-2">{t('Age group')}</dt><dd>{u.age_group}</dd>
             <dt className="text-text-2">{t('Status')}</dt><dd>{u.status}</dd>
             {u.suspended_at && <><dt className="text-text-2">{t('Suspended')}</dt><dd>{when(u.suspended_at)}</dd></>}
             {u.guest && <><dt className="text-text-2">{t('Guest active')}</dt><dd>{when(u.guest_seen_at)}</dd></>}
             {u.deletion_scheduled_for && <><dt className="text-text-2">{t('Deletion')}</dt><dd>{when(u.deletion_scheduled_for)}</dd></>}
           </dl>
         </Card>
+
+        <UserAgeCard userId={u.id} isSelf={u.id === me?.id} />
+        <UserSanctionsCard userId={u.id} isSelf={u.id === me?.id} onChange={() => { void load() }} />
 
         <Card title={t('Messages')} testid="messages">
           <div className="grid grid-cols-3 gap-3">

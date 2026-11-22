@@ -2,7 +2,7 @@
 title: Configurando um servidor
 section: Administrando um servidor
 summary: Nome, ícone e banner, convites, canais, emojis e figurinhas, boas-vindas e integração, modelos e mais.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Abra o menu do servidor clicando no nome dele e depois em **Configurações do servidor**. Você só vê as páginas que tem permissão para alterar. O dono vê tudo. Elas abrem na mesma janela das Configurações de usuário; digite na caixa de busca no topo da lista para encontrar uma página.
@@ -46,7 +46,7 @@ Todos os convites ativos ficam listados, com **Revogar** para cancelar um. Servi
 - Arraste canais e categorias para reorganizá-los.
 - Clique com o botão direito em um canal e escolha **Editar canal** para:
   - o tópico e o **Modo lento**
-  - as configurações de **Restrição de idade** e **Spoiler**
+  - as configurações de **Restrição de idade** e **Spoiler**. Um canal com restrição de idade só está aberto a membros confirmados como maiores de 18 anos; todos os outros o veem trancado. Ative em uma categoria e todos os canais dela ficam restritos. Só alguém que também esteja confirmado pode desativar de novo.
   - em canais de voz: o **limite de usuários**, a qualidade de vídeo e áudio e a **criptografia de ponta a ponta**
   - as **Tags** do fórum
   - **Permissões**: veja [Cargos e permissões](roles-and-permissions#channel-permissions)

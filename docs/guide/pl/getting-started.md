@@ -2,7 +2,7 @@
 title: Pierwsze kroki
 section: Pierwsze kroki
 summary: Załóż konto, zaloguj się na dowolnym urządzeniu i wybierz aplikację Parley, która ci odpowiada.
-source: 9e3cf6b58c63
+source: a4675d9c72bd
 ---
 
 Parley to miejsce do rozmów ze znajomymi i społecznościami: czat tekstowy, rozmowy głosowe i wideo, sceny na żywo i studio muzyczne. Wszystko jest darmowe dla wszystkich.
@@ -19,6 +19,10 @@ Konto gościa jest usuwane godzinę po twoim wyjściu. Aby je zachować, kliknij
 2. Wpisz swój e-mail i wybierz **nazwę użytkownika**: od 2 do 32 liter, cyfr, `_` lub `.`. Po niej inni mogą cię znaleźć.
 3. Opcjonalnie dodaj **nazwę wyświetlaną**. To nazwa, którą widzą inni, i może zawierać spacje oraz wielkie litery.
 4. Wybierz hasło o długości co najmniej 8 znaków, a potem kliknij **Kontynuuj**.
+
+Jeśli osoby prowadzące twój Parley publikują **Regulamin** i **Zasady społeczności**, linki do nich znajdziesz pod formularzem. Zakładając konto, akceptujesz je.
+
+Parley nie pyta o datę urodzenia. Niektóre miejsca są dostępne tylko dla osób z potwierdzoną pełnoletnością; zobacz [Twój wiek](settings#your-age).
 
 Parley wyśle ci e-mailem link do potwierdzenia adresu. Dopóki go nie klikniesz, możesz czatować, ale nie możesz tworzyć serwerów ani korzystać z Odkrywania. Jeśli e-mail nie dotarł, użyj przycisku **Wyślij ponownie** na banerze u góry aplikacji.
 

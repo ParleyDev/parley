@@ -2,7 +2,7 @@
 title: Moderasyon ve güvenlik
 section: Sunucu yönetmek
 summary: AutoMod, zaman aşımları, yasaklar, bildirimler, baskın koruması ve denetim kaydıyla sunucunu dostane tut.
-source: 902efa01e18b
+source: cef706ea7d87
 ---
 
 ## Biriyle ilgilenmek
@@ -46,7 +46,8 @@ Rolleri veya kanalları da muaf tutabilirsin; örneğin moderatörlerin kötü k
 - **Doğrulama düzeyi**: yeni gelen birinin mesaj yazabilmesi için ne gerektiği. **Düşük** doğrulanmış bir e-posta ister. **Orta** ayrıca 5 dakikadan eski bir Parley hesabı ister. **Yüksek** ayrıca sunucunda 10 dakika geçirmeyi ister. Herhangi bir rolü olan üyeler bunu atlar.
 - **Baskın koruması**: ani bir yeni hesap akınını fark eder ve moderatörlerini uyarır.
 - **Davetleri duraklat** ve **Üyeler arası DM'leri duraklat**: baskın sırasında acil frenler.
-- **Müstehcen görsel filtresi**: sunucuda paylaşılan resimleri tarar.
+- **Yalnızca yetişkinlere açık sunucu**: **Bu sunucudaki her şey 18+** kutusunu işaretlersen sunucunun herhangi bir yerinde yalnızca 18 yaşında veya daha büyük olduğu onaylanmış üyeler okuyabilir ya da sohbete katılabilir. Yalnızca bazı alanları kısıtlamak için bunun yerine bir kanalda veya kategoride **Yaş sınırlı**'yı kullan. Bkz. [Kanallar ve kategoriler](server-settings#channels-and-categories).
+- **Müstehcen görsel filtresi**: sunucuda paylaşılan resimleri tarar. Kontrolü her üyenin uygulaması yapar; yöneticileri bunu kurduysa Parley sunucun da yapar.
 - **Moderatörler için iki faktörlü kimlik doğrulama**: moderatörlerin 2FA'yı açmış ya da bir geçiş anahtarı eklemiş olması gerekir; böylece çalınan bir parola sunucuya karşı kullanılamaz. İkisinden biri yeterlidir ve bunu açmak için senin de birine sahip olman gerekir.
 - **Yapay zeka özetleri**: Özetler düğmesini aç veya kapat.
 

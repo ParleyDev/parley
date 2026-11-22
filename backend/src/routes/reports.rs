@@ -185,6 +185,9 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req
     crate::routes::cases::open_for_report(&state, id, &req.kind, subject.unwrap_or(id), cid, mid, &reason).await?;
     // Evidence is taken now, while the message, its files and the profile are as the reporter saw them.
     if let Err(e) = capture_evidence(&state, id).await { tracing::error!(report = %id, error = ?e, "could not capture a report's evidence"); }
+    if let Ok(Some((Some(target),))) = sqlx::query_as::<_, (Option<Uuid>,)>("SELECT target_user_id FROM reports WHERE id = $1 AND kind <> 'guild'").bind(id).fetch_optional(&state.db).await {
+        crate::abuse::after_report(state.clone(), target);
+    }
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
 }
 
@@ -225,6 +228,8 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
         return Err(AppError::BadRequest("status must be open, resolved or dismissed".into()));
     }
     let note: String = req.note.trim().chars().take(500).collect();
+    // Child sexual content and grooming: not closed until the report to the authorities is dealt with on record.
+    if req.status != "open" { crate::routes::authority::may_close(&state.db, id).await?; }
     let res = sqlx::query("UPDATE reports SET status = $2, note = $3, resolved_by = CASE WHEN $2 = 'open' THEN NULL ELSE $4 END, resolved_at = CASE WHEN $2 = 'open' THEN NULL ELSE now() END WHERE id = $1")
         .bind(id).bind(&req.status).bind(&note).bind(uid)
         .execute(&state.db)
@@ -314,7 +319,7 @@ async fn capture_evidence(state: &AppState, id: Uuid) -> AppResult<()> {
     };
     let mut ev = json!({ "captured_at": chrono::Utc::now(), "profile": profile });
     if let (true, Some(mid), Some(cid)) = (kind == "message", mid, cid) {
-        let ch: Option<(Option<Uuid>, bool)> = sqlx::query_as("SELECT guild_id, nsfw FROM channels WHERE id = $1").bind(cid).fetch_optional(&state.db).await?;
+        let ch: Option<(Option<Uuid>, bool)> = sqlx::query_as("SELECT guild_id, channel_min_age(id) IS NOT NULL FROM channels WHERE id = $1").bind(cid).fetch_optional(&state.db).await?;
         let (guild, nsfw) = ch.unwrap_or((None, false));
         ev["channel"] = json!({ "id": cid, "private": guild.is_none(), "age_restricted": nsfw });
         const ROW: &str = "jsonb_build_object('id', m.id, 'author_id', m.author_id, 'author', u.username, 'content', m.content, 'created_at', m.created_at, 'edited_at', m.edited_at,

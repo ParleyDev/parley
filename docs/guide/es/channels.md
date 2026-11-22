@@ -2,7 +2,7 @@
 title: Canales, hilos y foros
 section: Conversar
 summary: Los tipos de canal, los hilos para conversaciones paralelas, los foros, las comunidades y los eventos.
-source: ad6a621a1669
+source: 5112297d9e37
 ---
 
 Cada servidor se divide en **canales**, cada uno para un tema o una actividad. Los canales se agrupan en **categorías** que se pueden contraer.
@@ -24,7 +24,7 @@ Un pequeño candado en un canal significa que es **privado**: solo algunos roles
 
 Algunos canales muestran un aviso antes de entrar:
 
-- Los canales **con restricción de edad** te piden que confirmes que tienes 18 años o más.
+- Los canales **con restricción de edad** son solo para personas confirmadas como mayores de 18 años. Si lo estás, ves un aviso una vez y luego entras. Si no, el canal muestra un candado con las formas de conseguir la confirmación. Consulta [Tu edad](settings#your-age).
 - Los canales de **Spoiler** mantienen ocultas las imágenes y los vídeos hasta que haces clic en ellos.
 - Los canales con **Modo lento** solo dejan publicar a cada persona cada cierto tiempo. El cuadro de mensaje te dice cuánto tienes que esperar.
 

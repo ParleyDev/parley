@@ -12,9 +12,9 @@ const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -
 const PERMS = {
   SUPPORT: ['account_metadata_read', 'account_pii_reveal'],
   MODERATOR: ['account_metadata_read', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_action', 'audit_read_own'],
-  TS_LEAD: ['account_metadata_read', 'account_pii_reveal', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_search_private', 'content_action', 'case_approve', 'audit_read_team', 'safety_match_review'],
+  TS_LEAD: ['account_metadata_read', 'account_pii_reveal', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_search_private', 'content_action', 'case_approve', 'audit_read_team', 'safety_match_review', 'age_attest'],
   LEGAL: ['account_metadata_read', 'account_pii_reveal', 'conversation_metadata_read', 'report_context_read', 'report_context_expand', 'content_search_public', 'content_search_private', 'content_export', 'audit_read_all', 'safety_match_review'],
-  SUPER_ADMIN: ['account_metadata_read', 'admin_roles_manage', 'audit_read_all', 'instance_manage', 'network_read'],
+  SUPER_ADMIN: ['account_metadata_read', 'admin_roles_manage', 'audit_read_all', 'instance_manage', 'network_read', 'age_attest'],
   AUDITOR: ['audit_read_all'],
 }
 const ROLES = Object.keys(PERMS)
@@ -102,6 +102,50 @@ const M = [
   ['DELETE', '/admin/users/:id/uploads', `/admin/users/${X}/uploads`, null, 'content_action'],
   ['POST', '/admin/users/bulk', '/admin/users/bulk', { ids: [X], action: 'suspend' }, 'content_action'],
   ['POST', '/admin/users/bulk', '/admin/users/bulk', { ids: [X], action: 'quota', upload_quota_bytes: null }, 'instance_manage'],
+  // Safety: known-material matching, evidence, the report to the authorities, explicit checks, link feeds.
+  // Writes carry bodies that are refused after the permission check, so the matrix changes nothing.
+  ['GET', '/admin/safety/matching', '/admin/safety/matching', null, 'instance_manage'],
+  ['PUT', '/admin/safety/matching', '/admin/safety/matching', { service_url: 'not-an-address', fail_closed: false }, 'instance_manage'],
+  ['POST', '/admin/safety/matching/hashes', '/admin/safety/matching/hashes', { source: 'rbac', hashes: '' }, 'instance_manage'],
+  ['DELETE', '/admin/safety/matching/hashes', '/admin/safety/matching/hashes?source=rbac-none', null, 'instance_manage'],
+  ['POST', '/admin/safety/matching/test', '/admin/safety/matching/test', null, 'instance_manage'],
+  ['GET', '/admin/safety/matches', '/admin/safety/matches', null, 'safety_match_review'],
+  ['PATCH', '/admin/safety/matches/:id', `/admin/safety/matches/${X}`, { action: 'close' }, 'safety_match_review'],
+  ['GET', '/admin/safety/matches/:id/export', `/admin/safety/matches/${X}/export`, null, 'safety_match_review'],
+  ['GET', '/admin/reports/:id/evidence', `/admin/reports/${X}/evidence`, null, 'report_context_read'],
+  ['POST', '/admin/reports/:id/hold', `/admin/reports/${X}/hold`, { on: true }, 'safety_match_review'],
+  ['GET', '/admin/reports/:id/authority', `/admin/reports/${X}/authority`, null, 'report_context_read'],
+  ['PUT', '/admin/reports/:id/authority', `/admin/reports/${X}/authority`, { decision: 'neither' }, 'safety_match_review'],
+  ['GET', '/admin/reports/:id/authority/export', `/admin/reports/${X}/authority/export`, null, 'safety_match_review'],
+  ['GET', '/admin/safety/explicit', '/admin/safety/explicit', null, 'instance_manage'],
+  ['PUT', '/admin/safety/explicit', '/admin/safety/explicit', { service_url: 'not-an-address', allow_when_down: false }, 'instance_manage'],
+  ['POST', '/admin/safety/explicit/test', '/admin/safety/explicit/test', null, 'instance_manage'],
+  ['GET', '/admin/link-feeds', '/admin/link-feeds', null, 'instance_manage'],
+  ['POST', '/admin/link-feeds', '/admin/link-feeds', { name: '', url: '' }, 'instance_manage'],
+  ['PATCH', '/admin/link-feeds/:id', `/admin/link-feeds/${X}`, { enabled: true }, 'instance_manage'],
+  ['DELETE', '/admin/link-feeds/:id', `/admin/link-feeds/${X}`, null, 'instance_manage'],
+  ['POST', '/admin/link-feeds/:id/refresh', `/admin/link-feeds/${X}/refresh`, null, 'instance_manage'],
+  ['GET', '/admin/policies', '/admin/policies', null, 'instance_manage'],
+  ['PUT', '/admin/policies', '/admin/policies', { terms_url: 'not-an-address' }, 'instance_manage'],
+  // Age checks.
+  ['GET', '/admin/age/settings', '/admin/age/settings', null, 'instance_manage'],
+  ['PUT', '/admin/age/settings', '/admin/age/settings', { accept_level: 'nothing', attestation: true }, 'instance_manage'],
+  ['GET', '/admin/age/requests', '/admin/age/requests', null, 'age_attest'],
+  ['POST', '/admin/age/requests/:id', `/admin/age/requests/${X}`, { approve: false }, 'age_attest'],
+  ['GET', '/admin/age/users/:id', `/admin/age/users/${X}`, null, 'age_attest'],
+  ['POST', '/admin/age/users/:id/attest', `/admin/age/users/${X}/attest`, { note: '' }, 'age_attest'],
+  ['POST', '/admin/age/users/:id/clear-minor', `/admin/age/users/${X}/clear-minor`, { reason: '' }, 'age_attest'],
+  ['POST', '/admin/age/assurances/:id/revoke', `/admin/age/assurances/${X}/revoke`, {}, 'age_attest'],
+  // Bans, limits and the review queue.
+  ['GET', '/admin/users/:id/sanctions', `/admin/users/${X}/sanctions`, null, 'content_action'],
+  ['POST', '/admin/users/:id/sanctions', `/admin/users/${X}/sanctions`, { kind: 'banish', reason: 'spam' }, 'content_action'],
+  ['GET', '/admin/sanctions', '/admin/sanctions', null, 'content_action'],
+  ['POST', '/admin/sanctions/:id/lift', `/admin/sanctions/${X}/lift`, {}, 'content_action'],
+  ['GET', '/admin/abuse/flags', '/admin/abuse/flags', null, 'content_action'],
+  ['POST', '/admin/abuse/flags/:id', `/admin/abuse/flags/${X}`, { outcome: 'shrug' }, 'content_action'],
+  ['GET', '/admin/abuse/settings', '/admin/abuse/settings', null, 'content_action'],
+  ['PUT', '/admin/abuse/settings', '/admin/abuse/settings', { auto_actions: true }, 'instance_manage'],
+  ['POST', '/admin/servers/:id/invites-paused', `/admin/servers/${X}/invites-paused`, { paused: false }, 'content_action'],
 ]
 
 console.log('-- the matrix covers every admin route')
@@ -183,7 +227,7 @@ const navFor = async (u) => {
 let v = await navFor(as.AUDITOR)
 ok('auditors see the audit log only', JSON.stringify(v.nav) === '["audit","overview"]', JSON.stringify(v.nav)); await v.p.close()
 v = await navFor(as.MODERATOR)
-ok('moderators see users, servers, search, reports, cases and audit', JSON.stringify(v.nav) === '["audit","cases","messages","overview","reports","servers","users"]', JSON.stringify(v.nav))
+ok('moderators see users, servers, search, reports, cases, bans and audit', JSON.stringify(v.nav) === '["audit","cases","messages","overview","reports","sanctions","servers","users"]', JSON.stringify(v.nav))
 await v.p.goto(`${WEB}/admin/users`); await v.p.fill('[data-admin-user-search]', `target${S}`); await v.p.waitForSelector(`[data-admin-user="target${S}"]`)
 const tools = async (p) => p.$$eval(`[data-admin-user="target${S}"] [data-admin-action]`, (l) => l.map((x) => x.getAttribute("data-admin-action")))
 let tl = await tools(v.p)

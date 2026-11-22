@@ -131,3 +131,6 @@ export async function closeEditorPanel(p) {
   if (await p.locator('[data-cosmetic-apply]:not([disabled])').count()) { await p.click('[data-cosmetic-apply]'); return }
   if (await p.locator('[data-editor-panel-close]').count()) await p.click('[data-editor-panel-close]')
 }
+
+/** Confirm these accounts as adults (staff attestation), for suites that need age-restricted channels open. */
+export const makeAdult = async (...users) => { const ad = await adminToken(); for (const u of users) await call(ad.token, 'POST', `/admin/age/users/${u.user.id}/attest`, { note: 'e2e fixture' }) }

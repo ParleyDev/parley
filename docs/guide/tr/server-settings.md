@@ -2,7 +2,7 @@
 title: Sunucu kurmak
 section: Sunucu yönetmek
 summary: Ad, simge ve banner, davetler, kanallar, emojiler ve çıkartmalar, karşılama ve ilk katılım, şablonlar ve dahası.
-source: 2fcd60f75ded
+source: 1958fc7c367d
 ---
 
 Sunucunun adına tıklayarak sunucu menüsünü aç, ardından **Sunucu Ayarları**'nı seç. Yalnızca değiştirme iznin olan sayfaları görürsün. Sunucu sahibi her şeyi görür. Kullanıcı Ayarları ile aynı pencerede açılır; bir sayfayı bulmak için listenin üstündeki arama kutusuna yaz.
@@ -46,7 +46,7 @@ Her etkin davet listelenir; birini iptal etmek için **İptal et** var. Keşfet'
 - Sıralarını değiştirmek için kanalları ve kategorileri sürükle.
 - Bir kanala sağ tıkla ve şunlar için **Kanalı Düzenle**'yi seç:
   - konusu ve **Yavaş mod**
-  - **Yaş sınırlı** ve **Spoiler** ayarları
+  - **Yaş sınırlı** ve **Spoiler** ayarları. Yaş sınırlı bir kanal yalnızca 18 yaşında veya daha büyük olduğu onaylanmış üyelere açıktır; diğer herkes onu kilitli görür. Bunu bir kategori için açarsan içindeki her kanal kısıtlanır. Yeniden kapatmayı yalnızca kendisi de onaylanmış biri yapabilir.
   - sesli kanallar için: **kullanıcı sınırı**, görüntü ve ses kalitesi ve **uçtan uca şifreleme**
   - forum **Etiketler**'i
   - **İzinler**: bkz. [Roller ve izinler](roles-and-permissions#channel-permissions)

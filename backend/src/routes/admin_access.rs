@@ -70,6 +70,9 @@ pub enum Perm {
     /// The Network view: who is friends with whom and who is in which server, and friend lists on account pages.
     /// Super admins only; every look is logged.
     NetworkRead,
+    /// Age checks: see an account's age records, attest that someone meets an age, revoke a record, and undo
+    /// "said they are under 18". Trust-and-safety leads and super admins; every look and change is logged.
+    AgeAttest,
 }
 
 use Perm::*;
@@ -79,9 +82,9 @@ pub fn perms_for(role: &str) -> &'static [Perm] {
     match role {
         "SUPPORT" => &[AccountMetadataRead, AccountPiiReveal],
         "MODERATOR" => &[AccountMetadataRead, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentAction, AuditReadOwn],
-        "TS_LEAD" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentAction, CaseApprove, AuditReadTeam, SafetyMatchReview],
+        "TS_LEAD" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentAction, CaseApprove, AuditReadTeam, SafetyMatchReview, AgeAttest],
         "LEGAL" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentExport, AuditReadAll, SafetyMatchReview],
-        "SUPER_ADMIN" => &[AccountMetadataRead, AdminRolesManage, AuditReadAll, InstanceManage, NetworkRead],
+        "SUPER_ADMIN" => &[AccountMetadataRead, AdminRolesManage, AuditReadAll, InstanceManage, NetworkRead, AgeAttest],
         "AUDITOR" => &[AuditReadAll],
         _ => &[],
     }

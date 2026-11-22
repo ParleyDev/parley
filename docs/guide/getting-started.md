@@ -36,6 +36,10 @@ A guest account is removed an hour after you leave. To keep it, click **Sign up 
 3. Optionally add a **display name**. This is the name people see, and it can have spaces and capitals.
 4. Choose a password of at least 8 characters, then click **Continue**.
 
+If the people who run your Parley publish their **Terms** and **Community Guidelines**, links to them are under the form. Creating an account means you agree to them.
+
+Parley doesn't ask for your date of birth. Some places are open only to people confirmed as adults; see [Your age](settings#your-age).
+
 Parley emails you a link to verify your address. Until you click it, you can chat, but you can't create servers or use Discover. If the email didn't arrive, use **Resend** in the banner at the top of the app.
 
 ## Signing in

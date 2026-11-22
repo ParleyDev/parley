@@ -57,6 +57,8 @@ Messages from people who aren't your friends go to **Message Requests**, so stra
 
 Messages that look like spam are kept separately under **Spam**. If one is fine, mark it **Not spam**.
 
+Until you are confirmed as an adult, a request shows only its text. Pictures, files and link previews stay hidden until you **Accept**, and you can't turn message requests off. See [Your age](settings#your-age).
+
 Choose who can message you in **User Settings → Content & Social**. See [Settings](settings#content-and-social).
 
 ## Blocking
