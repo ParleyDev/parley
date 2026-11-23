@@ -431,24 +431,27 @@ export default function ProfileStyle() {
   )
   return (
     <div className="flex min-h-full" data-style-page>
-      <div className="min-w-0 flex-1 px-8 py-6 phone:px-3 phone:py-3">
-        <div className="mb-5 flex flex-wrap items-center gap-3 phone:mb-3 phone:gap-2">
-          <div className="mr-auto flex min-w-0 items-center gap-1"><MobileBack /><h1 className="truncate text-xl font-bold text-text-0">{title} <span data-style-count={count}>({count})</span></h1></div>
-          <div className="relative w-60 phone:order-last phone:w-full">
+      <div className="min-w-0 flex-1 px-8 pb-6 phone:px-3 phone:pb-3">
+        {/* Pinned while the grid scrolls. On a phone: back, title and the filters button, then search and sort. */}
+        <div className="sticky top-0 z-20 -mx-8 mb-5 flex flex-wrap items-center gap-3 border-b border-line/60 bg-bg-2/95 px-8 py-4 backdrop-blur phone:-mx-3 phone:mb-3 phone:gap-2 phone:px-3 phone:py-2.5" data-style-header>
+          <div className="mr-auto flex min-w-0 items-center gap-1 phone:order-1 phone:flex-1"><MobileBack /><h1 className="truncate text-xl font-bold text-text-0">{title} <span data-style-count={count}>({count})</span></h1></div>
+          <div className="relative w-60 phone:order-4 phone:w-auto phone:min-w-0 phone:flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" aria-hidden />
             <input className="input h-10 rounded-lg pl-9" value={f.q} onChange={(e) => patch({ q: e.target.value })} placeholder={t('Search or #tag')} aria-label={t('Search')} data-style-search />
           </div>
-          <label className="flex items-center gap-2.5 text-[15px] font-semibold text-text-0">{t('Sort by')}
+          <label className="flex items-center gap-2.5 text-[15px] font-semibold text-text-0 phone:order-5"><span className="phone:sr-only">{t('Sort by')}</span>
             <span className="relative">
-              <select className="h-10 w-48 cursor-pointer appearance-none rounded-lg border border-line bg-bg-1 pl-3 pr-9 text-[15px] font-normal text-text-0 outline-none hover:border-text-2/50 focus:border-accent phone:w-36" value={sort} onChange={(e) => setSort(e.target.value as Sort)} data-style-sort>
+              <select className="h-10 w-48 cursor-pointer appearance-none rounded-lg border border-line bg-bg-1 pl-3 pr-9 text-[15px] font-normal text-text-0 outline-none hover:border-text-2/50 focus:border-accent phone:w-32" value={sort} onChange={(e) => setSort(e.target.value as Sort)} data-style-sort>
                 <option value="popular">{t('Popular')}</option><option value="newest">{t('Newest')}</option><option value="az">{t('A–Z')}</option>
               </select>
               <ChevronDown size={18} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-1" aria-hidden />
             </span>
           </label>
-          <button type="button" className="flex h-10 items-center gap-2 rounded-lg bg-bg-3 px-4 text-[15px] font-semibold text-text-0 hover:bg-bg-4" onClick={() => setShowFilters((s) => !s)} aria-pressed={showFilters} data-style-toggle-filters>
-            {showFilters ? t('Hide filters') : t('Show filters')}<SlidersHorizontal size={17} />
+          <button type="button" className="flex h-10 items-center gap-2 rounded-lg bg-bg-3 px-4 text-[15px] font-semibold text-text-0 hover:bg-bg-4 phone:order-2 phone:w-10 phone:justify-center phone:px-0" onClick={() => setShowFilters((s) => !s)} aria-pressed={showFilters} title={showFilters ? t('Hide filters') : t('Show filters')} data-style-toggle-filters>
+            <span className="phone:sr-only">{showFilters ? t('Hide filters') : t('Show filters')}</span><SlidersHorizontal size={17} />
           </button>
+          {/* Breaks the phone layout's first row from its second. */}
+          <span className="hidden phone:order-3 phone:block phone:h-0 phone:basis-full" aria-hidden />
         </div>
         {collection && (
           <div className="mb-4 flex flex-wrap gap-2">

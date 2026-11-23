@@ -98,6 +98,16 @@ await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parl
 await p.goto(`${WEB}/discover`); await p.click('[data-discover-style]')
 await p.waitForSelector('[data-style-page] [data-style-card]')
 ok('Discover has Profile Style', p.url().endsWith('/discover/style'))
+{
+  const pin = await p.evaluate(async () => {
+    const h = document.querySelector('[data-style-header]'), sc = h.closest('.overflow-y-auto')
+    const pad = document.createElement('div'); pad.style.height = '3000px'; h.parentElement.appendChild(pad)
+    sc.scrollTop = 1500; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    const r = { after: h.getBoundingClientRect().top, top: sc.getBoundingClientRect().top }
+    pad.remove(); sc.scrollTop = 0; return r
+  })
+  ok('the header stays at the top while scrolling', Math.abs(pin.after - pin.top) <= 1, JSON.stringify(pin))
+}
 await p.fill('[data-style-search]', `${N}`)
 await p.waitForFunction(() => document.querySelectorAll('[data-style-card]').length > 0)
 const cards = async () => p.locator('[data-style-card]').evaluateAll((els) => els.map((e) => e.getAttribute('data-style-card')))
@@ -171,6 +181,19 @@ await ph.locator('[data-style-page] button[title="Channels"]').click()
 await ph.waitForFunction(() => { const l = document.querySelector('[data-discover-style]'); return !!l && l.getBoundingClientRect().width > 0 }, null, { timeout: 5000 }).catch(() => {})
 ok('on a phone, back leads out to the Discover menu', await ph.locator('[data-discover-style]').isVisible())
 await ph.click('[data-discover-style]'); await ph.waitForSelector('[data-style-card]')
+// The header stays put while the grid scrolls (a scroller made long enough to scroll, whatever the fixture holds).
+const pinned = async (pg) => pg.evaluate(async () => {
+  const h = document.querySelector('[data-style-header]'), sc = h.closest('.overflow-y-auto')
+  const pad = document.createElement('div'); pad.style.height = '3000px'; h.parentElement.appendChild(pad)
+  const before = h.getBoundingClientRect().top
+  sc.scrollTop = 1500; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  const after = h.getBoundingClientRect().top, top = sc.getBoundingClientRect().top
+  pad.remove(); sc.scrollTop = 0
+  return { before, after, top, scrolled: sc.scrollTop === 0 }
+})
+let pin = await pinned(ph)
+ok('on a phone the header stays at the top while scrolling', Math.abs(pin.after - pin.top) <= 1 && pin.before <= pin.top + 1, JSON.stringify(pin))
+ok('and is two rows: back, title and filters, then search and sort', await ph.evaluate(() => { const h = document.querySelector('[data-style-header]').getBoundingClientRect(); return h.height < 120 }), String(await ph.evaluate(() => document.querySelector('[data-style-header]').getBoundingClientRect().height)))
 await ph.screenshot({ path: 'profilestyle-phone.png' })
 await ph.click('[data-style-toggle-filters]'); await ph.waitForSelector('[data-style-filters]')
 const sheet = await ph.locator('[data-style-filters]').boundingBox()
