@@ -2,7 +2,7 @@
 title: Tu perfil
 section: Tú
 summary: Tu foto, tu banner, el estilo de tu nombre, la placa de nombre, las decoraciones y los efectos, tu estado y un aspecto distinto en cada servidor.
-source: 7e72688db327
+source: 29cf0268605d
 ---
 
 Tu perfil es lo que ve la gente cuando hace clic en tu nombre. Abre el editor desde tu foto en la esquina inferior izquierda y luego **Editar perfil**.
@@ -48,7 +48,7 @@ La cuadrícula sigue cargando mientras te desplazas, así que lo verás todo. La
 Para ver toda la colección de una vez, abre **Descubrir** (la brújula de la lista de servidores) y elige **Estilo de perfil**. Cada tarjeta muestra cómo queda el artículo en un perfil; abre una para probártelo en el tuyo.
 
 - En **Tipo de artículo**, a la derecha, marca uno o varios tipos de artículo, o **Lotes** (conjuntos que van juntos) o **Colecciones**. Ordena por **Populares**, **Más recientes** o **A–Z**.
-- Los demás filtros acotan la cuadrícula por color, tema y etiqueta. Escribe `#` y una etiqueta en el buscador para buscar solo etiquetas. **Ocultar filtros** los pliega; en el móvil, **Mostrar filtros** los abre a pantalla completa.
+- Los demás filtros acotan la cuadrícula por color, tema y etiqueta. Un color sin muestra aparece con su nombre. Escribe `#` y una etiqueta en el buscador para buscar solo etiquetas. **Ocultar filtros** los pliega; en el móvil, **Mostrar filtros** los abre a pantalla completa.
 - Algunos diseños vienen en varios estilos y comparten tarjeta. Haz clic en una tarjeta para ver sus estilos, probarlo en tu perfil y ver los conjuntos en los que está.
 - **Ponérmelo** pone un artículo en tu perfil al momento, sin tener que guardar. **Probar el conjunto** muestra un lote entero en tu perfil y **Ponerse todo** te pone todo lo que incluye.
 

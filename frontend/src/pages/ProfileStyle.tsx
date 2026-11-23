@@ -11,11 +11,12 @@ import { assetFile } from '../lib/assetCatalog'
 import { decorationUrl } from '../lib/decorations'
 import type { CosmeticKind } from '../lib/cosmetics'
 import {
-  COLORS, FIELD, KINDS, NO_FILTERS, groupVariants, labelOf, matches, sortItems, useExplore, wearPatch,
+  COLORS, FIELD, KINDS, NO_FILTERS, groupVariants, labelOf, matches, plainTags, sortItems, useExplore, wearPatch,
   type ExploreBundle, type ExploreCatalog, type ExploreItem, type Filters, type Group, type Sort,
 } from '../lib/explore'
 import { useT } from '../lib/i18n'
 import type { PrivateUser } from '../lib/types'
+import { usePhone } from '../lib/swipe'
 import { useLazySlice } from '../lib/useLazySlice'
 import { useStore } from '../store'
 
@@ -243,12 +244,12 @@ function ItemDialog({ group, initial, catalog, me, onClose, onFilter }: { group:
               </div>
             </section>
           )}
-          {(collection || !!it.themes?.length || !!it.colors?.length || !!it.tags?.length) && (
+          {(collection || !!it.themes?.length || !!it.colors?.length || plainTags(it.tags).length > 0) && (
             <section className="flex flex-wrap gap-1.5">
               {collection && <button type="button" onClick={() => { onFilter({ collection: collection.id }); onClose() }} className="rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-semibold text-accent hover:bg-accent/25" data-style-see-collection>{t('Collection: {name}', { name: collection.name })}</button>}
               {it.themes?.map((c) => <button key={c} type="button" onClick={() => { onFilter({ themes: [c] }); onClose() }} className="rounded-full bg-bg-3 px-2.5 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0">{t(labelOf(catalog.labels, c))}</button>)}
               {it.colors?.map((c) => <button key={c} type="button" onClick={() => { onFilter({ colors: [c] }); onClose() }} className="flex items-center gap-1 rounded-full bg-bg-3 px-2.5 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0"><span className="h-2.5 w-2.5 rounded-full border border-white/20" style={{ background: COLORS.find((x) => x.code === c)?.hex ?? '#888' }} />{t(labelOf(catalog.labels, c))}</button>)}
-              {it.tags?.map((x) => <button key={x} type="button" onClick={() => { onFilter({ q: `#${x}` }); onClose() }} className="rounded-full bg-bg-3 px-2.5 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0" data-style-tag={x}>#{x}</button>)}
+              {plainTags(it.tags).map((x) => <button key={x} type="button" onClick={() => { onFilter({ q: `#${x}` }); onClose() }} className="rounded-full bg-bg-3 px-2.5 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0" data-style-tag={x}>#{x}</button>)}
             </section>
           )}
         </div>
@@ -307,6 +308,7 @@ export default function ProfileStyle() {
   const setTab = (id: Tab) => setParams((p) => { const n = new URLSearchParams(p); if (id === 'all') n.delete('tab'); else n.set('tab', id); return n }, { replace: true })
   const [f, setF] = useState<Filters>(NO_FILTERS)
   const [sort, setSort] = useState<Sort>('popular')
+  const phone = usePhone()
   const [showFilters, setShowFilters] = useState(() => typeof window === 'undefined' || window.innerWidth > 760)
   const [open, setOpen] = useState<{ group: Group; value?: string } | null>(null)
   const [openBundle, setOpenBundle] = useState<string | null>(null)
@@ -321,8 +323,10 @@ export default function ProfileStyle() {
   const shownItems = useMemo(() => sortItems(scope.filter((it) => matches(it, kindTab ? { ...f, kinds: [] } : f)), sort), [scope, f, sort, kindTab])
   const groups = useMemo(() => groupVariants(shownItems), [shownItems])
   const colorsHere = COLORS.filter((c) => scope.some((it) => it.colors?.includes(c.code)))
+  // Colours without a swatch (a `color:` tag can name any): listed by name after the swatches, so none is lost.
+  const otherColors = useMemo(() => [...new Set(scope.flatMap((it) => it.colors ?? []))].filter((c) => !COLORS.some((x) => x.code === c)).sort(), [scope])
   const themesHere = useMemo(() => [...new Set(scope.flatMap((it) => it.themes ?? []))], [scope])
-  const tagsHere = useMemo(() => tagCounts(scope).slice(0, 16), [scope])
+  const tagsHere = useMemo(() => tagCounts(scope.map((it) => ({ tags: plainTags(it.tags) }))).slice(0, 16), [scope])
   // Sets and collections show when one of their items passes the filters (kind and "part of" aside).
   const itemFilter = useMemo(() => ({ ...f, kinds: [], inBundle: false, inCollection: false, collection: null }), [f])
   const setItems = (list: { kind: CosmeticKind; value: string }[]) => list.map((x) => byValue.get(`${x.kind}|${x.value}`)).filter((x): x is ExploreItem => !!x)
@@ -357,6 +361,73 @@ export default function ProfileStyle() {
   const grid = 'grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-5 phone:grid-cols-2 phone:gap-2.5'
   const countOf = (n: number) => (n === 1 ? t('1 item') : t('{n} items', { n }))
 
+  const filters = (
+        <aside className="sticky top-0 max-h-screen w-72 shrink-0 space-y-6 self-start overflow-y-auto border-l border-line px-5 py-6 phone:fixed phone:inset-0 phone:self-auto phone:z-40 phone:max-h-none phone:w-full phone:border-0 phone:bg-bg-2 phone:pt-[calc(var(--sat)+1rem)] phone:pb-0" data-style-filters>
+          <div className="hidden items-center justify-between phone:flex">
+            <span className="text-lg font-bold text-text-0">{t('Filters')}</span>
+            <button type="button" onClick={() => setShowFilters(false)} className="rounded-md p-2 text-text-2 hover:bg-bg-3 hover:text-text-0" aria-label={t('Close')} data-style-filters-close><X size={22} /></button>
+          </div>
+          <section>
+            <Heading>{t('Item type')}</Heading>
+            {KINDS.map((k) => <Check1 key={k} on={kindsOn.includes(k)} onChange={() => pickKind(k)} testid={{ 'data-style-filter-kind': k }}>{t(KIND_LABEL[k])}</Check1>)}
+            <Check1 on={tab === 'bundles'} onChange={() => pickView('bundles')} testid={{ 'data-style-tab': 'bundles' }}>{t('Bundles')}</Check1>
+            {collections.length > 0 && <Check1 on={tab === 'collections'} onChange={() => pickView('collections')} testid={{ 'data-style-tab': 'collections' }}>{t('Collections')}</Check1>}
+          </section>
+          {((collections.length > 0 && tab !== 'collections') || ((catalog?.bundles.length ?? 0) > 0 && !sets)) && (
+            <section>
+              <Heading>{t('Show only')}</Heading>
+              {collections.length > 0 && <Check1 on={f.inCollection} onChange={(on) => patch({ inCollection: on })} testid={{ 'data-style-filter-only': 'collection' }}>{t('Part of a collection')}</Check1>}
+              {(catalog?.bundles.length ?? 0) > 0 && !sets && <Check1 on={f.inBundle} onChange={(on) => patch({ inBundle: on })} testid={{ 'data-style-filter-only': 'bundle' }}>{t('Part of a set')}</Check1>}
+            </section>
+          )}
+          {(colorsHere.length > 0 || otherColors.length > 0) && (
+            <section>
+              <Heading>{t('Colour')}</Heading>
+              <div className="grid grid-cols-5 gap-2.5 phone:flex phone:flex-wrap">
+                {colorsHere.map((c) => {
+                  const on = f.colors.includes(c.code)
+                  return <button key={c.code} type="button" onClick={() => patch({ colors: toggle(f.colors, c.code) })} aria-pressed={on} title={t(labelOf(catalog?.labels ?? {}, c.code))} aria-label={t(labelOf(catalog?.labels ?? {}, c.code))}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full transition ${on ? 'ring-2 ring-text-0 ring-offset-2 ring-offset-bg-2' : 'ring-1 ring-white/10 hover:scale-110'}`} style={{ background: c.hex }} data-style-filter-color={c.code}>{on && <Check size={16} strokeWidth={3} className={c.code === 'white' || c.code === 'yellow' ? 'text-black' : 'text-white'} />}</button>
+                })}
+              </div>
+              {otherColors.length > 0 && (
+                <div className={`flex flex-wrap gap-2 ${colorsHere.length ? 'mt-2.5' : ''}`}>
+                  {otherColors.map((c) => {
+                    const on = f.colors.includes(c)
+                    return <button key={c} type="button" onClick={() => patch({ colors: toggle(f.colors, c) })} aria-pressed={on}
+                      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-semibold transition ${on ? 'border-accent bg-accent/20 text-text-0' : 'border-line text-text-1 hover:border-text-2/60 hover:text-text-0'}`} data-style-filter-color={c}>
+                      <span className="h-3 w-3 rounded-full border border-white/20 bg-text-2/60" aria-hidden />{t(labelOf(catalog?.labels ?? {}, c))}</button>
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+          {themesHere.length > 0 && (
+            <section>
+              <Heading>{t('Theme')}</Heading>
+              <div className="flex flex-wrap gap-2">
+                {themesHere.map((c) => {
+                  const on = f.themes.includes(c)
+                  const Icon = THEME_ICON[c] ?? Sparkles
+                  return <button key={c} type="button" onClick={() => patch({ themes: toggle(f.themes, c) })} aria-pressed={on}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-semibold transition ${on ? 'border-accent bg-accent/20 text-text-0' : 'border-line text-text-1 hover:border-text-2/60 hover:text-text-0'}`} data-style-filter-theme={c}><Icon size={15} />{t(labelOf(catalog?.labels ?? {}, c))}</button>
+                })}
+              </div>
+            </section>
+          )}
+          {tagsHere.length > 0 && (
+            <section>
+              <Heading>{t('Tags')}</Heading>
+              <div className="flex flex-wrap gap-1.5">
+                {tagsHere.map(([x]) => <button key={x} type="button" onClick={() => patch({ q: f.q === `#${x}` ? '' : `#${x}` })} aria-pressed={f.q === `#${x}`}
+                  className={`rounded-lg border px-2 py-1 text-xs font-semibold ${f.q === `#${x}` ? 'border-accent bg-accent/20 text-text-0' : 'border-line text-text-1 hover:text-text-0'}`} data-style-filter-tag={x}>#{x}</button>)}
+              </div>
+            </section>
+          )}
+          <button type="button" className="h-10 w-full rounded-lg bg-bg-3 text-[15px] font-semibold text-text-0 hover:bg-bg-4 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-bg-3" disabled={!filtered} onClick={() => setF(NO_FILTERS)} data-style-clear>{t('Clear all filters')}</button>
+          <div className="hidden phone:sticky phone:bottom-0 phone:-mx-5 phone:block phone:border-t phone:border-line phone:bg-bg-2 phone:px-5 phone:pb-[calc(var(--sab)+1rem)] phone:pt-3"><button type="button" className="btn-primary w-full" onClick={() => setShowFilters(false)} data-style-filters-done>{t('Show {n}', { n: count })}</button></div>
+        </aside>
+  )
   return (
     <div className="flex min-h-full" data-style-page>
       <div className="min-w-0 flex-1 px-8 py-6 phone:px-3 phone:py-3">
@@ -408,63 +479,8 @@ export default function ProfileStyle() {
           </div>
         )}
       </div>
-      {showFilters && (
-        <aside className="sticky top-0 max-h-screen w-72 shrink-0 space-y-6 self-start overflow-y-auto border-l border-line px-5 py-6 phone:fixed phone:inset-0 phone:z-40 phone:max-h-none phone:w-full phone:border-0 phone:bg-bg-2 phone:pt-[calc(var(--sat)+1rem)] phone:pb-[calc(var(--sab)+1rem)]" data-style-filters>
-          <div className="hidden items-center justify-between phone:flex">
-            <span className="text-lg font-bold text-text-0">{t('Filters')}</span>
-            <button type="button" onClick={() => setShowFilters(false)} className="rounded-md p-2 text-text-2 hover:bg-bg-3 hover:text-text-0" aria-label={t('Close')} data-style-filters-close><X size={22} /></button>
-          </div>
-          <section>
-            <Heading>{t('Item type')}</Heading>
-            {KINDS.map((k) => <Check1 key={k} on={kindsOn.includes(k)} onChange={() => pickKind(k)} testid={{ 'data-style-filter-kind': k }}>{t(KIND_LABEL[k])}</Check1>)}
-            <Check1 on={tab === 'bundles'} onChange={() => pickView('bundles')} testid={{ 'data-style-tab': 'bundles' }}>{t('Bundles')}</Check1>
-            {collections.length > 0 && <Check1 on={tab === 'collections'} onChange={() => pickView('collections')} testid={{ 'data-style-tab': 'collections' }}>{t('Collections')}</Check1>}
-          </section>
-          {((collections.length > 0 && tab !== 'collections') || ((catalog?.bundles.length ?? 0) > 0 && !sets)) && (
-            <section>
-              <Heading>{t('Show only')}</Heading>
-              {collections.length > 0 && <Check1 on={f.inCollection} onChange={(on) => patch({ inCollection: on })} testid={{ 'data-style-filter-only': 'collection' }}>{t('Part of a collection')}</Check1>}
-              {(catalog?.bundles.length ?? 0) > 0 && !sets && <Check1 on={f.inBundle} onChange={(on) => patch({ inBundle: on })} testid={{ 'data-style-filter-only': 'bundle' }}>{t('Part of a set')}</Check1>}
-            </section>
-          )}
-          {colorsHere.length > 0 && (
-            <section>
-              <Heading>{t('Colour')}</Heading>
-              <div className="grid grid-cols-5 gap-2.5 phone:flex phone:flex-wrap">
-                {colorsHere.map((c) => {
-                  const on = f.colors.includes(c.code)
-                  return <button key={c.code} type="button" onClick={() => patch({ colors: toggle(f.colors, c.code) })} aria-pressed={on} title={t(labelOf(catalog?.labels ?? {}, c.code))} aria-label={t(labelOf(catalog?.labels ?? {}, c.code))}
-                    className={`flex h-9 w-9 items-center justify-center rounded-full transition ${on ? 'ring-2 ring-text-0 ring-offset-2 ring-offset-bg-2' : 'ring-1 ring-white/10 hover:scale-110'}`} style={{ background: c.hex }} data-style-filter-color={c.code}>{on && <Check size={16} strokeWidth={3} className={c.code === 'white' || c.code === 'yellow' ? 'text-black' : 'text-white'} />}</button>
-                })}
-              </div>
-            </section>
-          )}
-          {themesHere.length > 0 && (
-            <section>
-              <Heading>{t('Theme')}</Heading>
-              <div className="flex flex-wrap gap-2">
-                {themesHere.map((c) => {
-                  const on = f.themes.includes(c)
-                  const Icon = THEME_ICON[c] ?? Sparkles
-                  return <button key={c} type="button" onClick={() => patch({ themes: toggle(f.themes, c) })} aria-pressed={on}
-                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-semibold transition ${on ? 'border-accent bg-accent/20 text-text-0' : 'border-line text-text-1 hover:border-text-2/60 hover:text-text-0'}`} data-style-filter-theme={c}><Icon size={15} />{t(labelOf(catalog?.labels ?? {}, c))}</button>
-                })}
-              </div>
-            </section>
-          )}
-          {tagsHere.length > 0 && (
-            <section>
-              <Heading>{t('Tags')}</Heading>
-              <div className="flex flex-wrap gap-1.5">
-                {tagsHere.map(([x]) => <button key={x} type="button" onClick={() => patch({ q: f.q === `#${x}` ? '' : `#${x}` })} aria-pressed={f.q === `#${x}`}
-                  className={`rounded-lg border px-2 py-1 text-xs font-semibold ${f.q === `#${x}` ? 'border-accent bg-accent/20 text-text-0' : 'border-line text-text-1 hover:text-text-0'}`} data-style-filter-tag={x}>#{x}</button>)}
-              </div>
-            </section>
-          )}
-          <button type="button" className="h-10 w-full rounded-lg bg-bg-3 text-[15px] font-semibold text-text-0 hover:bg-bg-4 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-bg-3" disabled={!filtered} onClick={() => setF(NO_FILTERS)} data-style-clear>{t('Clear all filters')}</button>
-          <div className="hidden phone:block"><button type="button" className="btn-primary w-full" onClick={() => setShowFilters(false)} data-style-filters-done>{t('Show {n}', { n: count })}</button></div>
-        </aside>
-      )}
+      {/* On a phone the filters are a full-screen sheet, on the body: inside the page they'd scroll away with it. */}
+      {showFilters && (phone ? createPortal(filters, document.body) : filters)}
       {open && catalog && <ItemDialog key={open.group.key + (open.value ?? '')} group={open.group} initial={open.value} catalog={catalog} me={me} onClose={() => setOpen(null)} onFilter={filterFrom} />}
       {openBundle && catalog && (() => { const b = catalog.bundles.find((x) => x.id === openBundle); return b ? <BundleDialog bundle={b} byValue={byValue} me={me} onClose={() => setOpenBundle(null)} onOpenItem={openItem} /> : null })()}
     </div>

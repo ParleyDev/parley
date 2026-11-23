@@ -2,7 +2,7 @@
 title: Ton profil
 section: Toi
 summary: Ta photo, ta bannière, le style de ton nom, ta plaque de nom, tes décorations et effets, ton statut, et un look différent par serveur.
-source: 7e72688db327
+source: 29cf0268605d
 ---
 
 Ton profil, c'est ce que les gens voient quand ils cliquent sur ton nom. Ouvre l'éditeur depuis ta photo en bas à gauche, puis **Modifier le profil**.
@@ -48,7 +48,7 @@ La grille continue de se charger quand tu fais défiler, donc tu verras tout. Le
 Pour voir toute la collection d'un coup, ouvre **Découvrir** (la boussole dans la liste des serveurs) et choisis **Style de profil**. Chaque carte montre l'article tel qu'il apparaît sur un profil ; ouvre-en une pour l'essayer sur le tien.
 
 - Sous **Type d'article**, à droite, coche un ou plusieurs types d'article, ou **Lots** (des ensembles qui vont ensemble) ou **Collections**. Trie par **Populaires**, **Plus récents** ou **A–Z**.
-- Les autres filtres affinent la grille par couleur, thème et tag. Tape `#` et un tag dans la recherche pour ne chercher que dans les tags. **Masquer les filtres** les replie ; sur un téléphone, **Afficher les filtres** les ouvre en plein écran.
+- Les autres filtres affinent la grille par couleur, thème et tag. Une couleur sans pastille est listée par son nom. Tape `#` et un tag dans la recherche pour ne chercher que dans les tags. **Masquer les filtres** les replie ; sur un téléphone, **Afficher les filtres** les ouvre en plein écran.
 - Certains designs existent en plusieurs styles et partagent une carte. Clique sur une carte pour voir ses styles, l'essayer sur ton profil et voir les ensembles dont il fait partie.
 - **Le porter** met un article sur ton profil tout de suite, sans avoir à enregistrer. **Essayer l'ensemble** montre un lot entier sur ton profil, et **Tout porter** met tout ce qu'il contient.
 

@@ -2,7 +2,7 @@
 title: Seu perfil
 section: Você
 summary: Sua foto, banner, estilo do nome, placa de identificação, decorações e efeitos, status e um visual diferente em cada servidor.
-source: 7e72688db327
+source: 29cf0268605d
 ---
 
 Seu perfil é o que as pessoas veem quando clicam no seu nome. Abra o editor pela sua foto no canto inferior esquerdo e depois em **Editar perfil**.
@@ -48,7 +48,7 @@ A grade continua carregando enquanto você rola, então você vê tudo. As opç�
 Para ver a coleção inteira de uma vez, abra **Descobrir** (a bússola na lista de servidores) e escolha **Estilo de perfil**. Cada cartão mostra como o item fica em um perfil; abra um para experimentar no seu.
 
 - Em **Tipo de item**, à direita, marque um ou mais tipos de item, ou **Pacotes** (conjuntos que combinam) ou **Coleções**. Ordene por **Populares**, **Mais recentes** ou **A–Z**.
-- Os outros filtros restringem a grade por cor, tema e tag. Digite `#` e uma tag na busca para procurar só nas tags. **Ocultar filtros** os recolhe; no celular, **Mostrar filtros** os abre em tela cheia.
+- Os outros filtros restringem a grade por cor, tema e tag. Uma cor sem amostra aparece pelo nome. Digite `#` e uma tag na busca para procurar só nas tags. **Ocultar filtros** os recolhe; no celular, **Mostrar filtros** os abre em tela cheia.
 - Alguns designs vêm em vários estilos e dividem um cartão. Clique num cartão para ver os estilos, experimentar no seu perfil e ver os conjuntos de que ele faz parte.
 - **Usar** coloca o item no seu perfil na hora, sem precisar salvar. **Experimentar o conjunto** mostra um pacote inteiro no seu perfil, e **Usar tudo** coloca tudo o que ele tem.
 

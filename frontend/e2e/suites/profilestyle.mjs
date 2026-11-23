@@ -34,7 +34,7 @@ deco.items.push(
   { file: `moon_${N}.png`, name: `Moon ${N}`, description: 'A pale moon.', shop_item_id: `11${N}`, collection_id: `c1_${N}`, base_name: `Moon ${N}`, variant_label: 'Blue', colors: ['blue', 'white'], themes: ['cute_cozy', 'sci_fi'], bundles: [{ id: `b1_${N}`, name: 'Night Bundle' }], tags: ['night'], price: { amount: 5.99 }, in_shop: true },
   { file: `moonred_${N}.png`, name: `Moon ${N}`, description: null, base_name: `Moon ${N}`, variant_label: 'Red', colors: ['red'], themes: 'not a list' },
   { file: `star_${N}.png`, name: `Star ${N}`, shop_item_id: `12${N}`, collection_id: `c2_${N}`, themes: ['fantasy'], bundles: [{ id: `b2_${N}`, name: 'Day Bundle' }] },
-  { file: `halo_${N}.png`, name: `Halo ${N}`, tags: ['halo'] },
+  { file: `halo_${N}.png`, name: `Halo ${N}`, tags: ['halo', 'color:Light Blue', 'theme:holiday', 'foo:bar'] },
 )
 write(FILES[0], deco)
 const plates = meta(FILES[1]); plates.items.push({ file: `sky_${N}.webm`, name: `Sky ${N}`, shop_item_id: `21${N}`, palette: 'cobalt', bundles: [{ id: `b1_${N}`, name: 'Night Bundle' }] }); write(FILES[1], plates)
@@ -77,6 +77,8 @@ ok('a null description and a wrong-typed field are fine', it(`moonred_${N}`) && 
 ok('theme labels come from tag_labels', cat.labels.cute_cozy === 'Cute & Cozy' && cat.labels.sci_fi === 'Sci-Fi')
 const bundle = (id) => cat.bundles.find((b) => b.id === id)
 ok('the local file renames and refills a bundle', bundle(`b1_${N}`)?.name === `Night Pack ${N}` && bundle(`b1_${N}`).items.map((x) => x.value).join() === [`asset:moon_${N}`, `asset:star_${N}`, `asset:halo_${N}`].join(), JSON.stringify(bundle(`b1_${N}`)))
+const halo = cat.items.find((x) => x.value === `asset:halo_${N}`)
+ok('color: and theme: tags give a hand-made item its colours and themes', JSON.stringify(halo?.colors) === '["light_blue"]' && JSON.stringify(halo?.themes) === '["holiday"]' && halo.tags.includes('foo:bar'), JSON.stringify(halo))
 ok('keeps the rest from bundles.json', bundle(`b1_${N}`).collection_id === `c1_${N}` && bundle(`b3_${N}`)?.items[0].value === `asset:rain_${N}`)
 ok('hides a deleted one, even from its items', !bundle(`b2_${N}`) && !it(`star_${N}`).bundles?.includes(`b2_${N}`))
 ok('and adds its own sets', bundle(`local_${N}`)?.items.map((x) => x.kind).join() === 'nameplate,frame')
@@ -111,6 +113,16 @@ ok('a colour filters', (await cards())[0] === `asset:moonred_${N}`)
 await p.click('[data-style-clear]'); await p.fill('[data-style-search]', '#halo')
 await p.waitForFunction(() => document.querySelectorAll('[data-style-card]').length >= 1)
 ok('#tag searches tags', (await cards()).includes(`asset:halo_${N}`))
+await p.fill('[data-style-search]', `${N}`)
+await p.click('[data-style-filter-theme="holiday"]')
+await p.waitForFunction(() => document.querySelectorAll('[data-style-card]').length === 1, null, { timeout: 5000 }).catch(() => {})
+ok('a theme from a tag is a filter, labelled from its code', (await cards()).join() === `asset:halo_${N}` && (await p.locator('[data-style-filter-theme="holiday"]').textContent()).trim() === 'Holiday', (await cards()).join())
+await p.click('[data-style-clear]'); await p.fill('[data-style-search]', `${N}`)
+await p.click('[data-style-filter-color="light_blue"]')
+await p.waitForFunction(() => document.querySelectorAll('[data-style-card]').length === 1, null, { timeout: 5000 }).catch(() => {})
+ok('a colour without a swatch is listed by name and filters', (await cards()).join() === `asset:halo_${N}` && (await p.locator('[data-style-filter-color="light_blue"]').textContent()).trim() === 'Light Blue')
+ok('and color:/theme: tags are not in the tag list', await p.locator('[data-style-filter-tag^="color:"], [data-style-filter-tag^="theme:"]').count() === 0 && await p.locator('[data-style-filter-tag="foo:bar"]').count() === 1)
+await p.click('[data-style-clear]')
 await p.fill('[data-style-search]', `${N}`)
 const countIs = (n) => p.waitForFunction((n) => document.querySelector('[data-style-count]')?.getAttribute('data-style-count') === n, n, { timeout: 5000 }).catch(() => {})
 const kindsShown = () => p.locator('[data-style-card]').evaluateAll((els) => [...new Set(els.map((e) => e.getAttribute('data-style-kind')))].sort().join())

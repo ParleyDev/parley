@@ -71,11 +71,24 @@ fn codes(v: &Value) -> Vec<String> {
     out
 }
 
+/// The codes the entry's special tags add: `color:<x>` or `theme:<x>` (tags are already lower case), each made a code
+/// as labels are ("theme:Cute & Cozy" → `cute_cozy`). Other tags, and other prefixes, stay plain tags.
+fn tagged(entry: &Value, prefix: &str, mut out: Vec<String>) -> Vec<String> {
+    for t in assets::entry_tags(entry) {
+        let Some(rest) = t.strip_prefix(prefix) else { continue };
+        let c = code(rest);
+        if !c.is_empty() && !out.contains(&c) && out.len() < 20 { out.push(c) }
+    }
+    out
+}
+
 impl Facets {
+    /// Colours and themes are the entry's own (a shop sync's) and then those its `color:` / `theme:` tags add: items
+    /// made by hand get into Discover's filters that way. Tags never take a synced value away.
     pub fn of(entry: &Value) -> Facets {
         Facets {
-            colors: codes(&entry["colors"]),
-            themes: codes(&entry["themes"]),
+            colors: tagged(entry, "color:", codes(&entry["colors"])),
+            themes: tagged(entry, "theme:", codes(&entry["themes"])),
             collection_id: id_of(&entry["collection_id"]),
             base_name: text_of(&entry["base_name"], 80),
             variant_label: text_of(&entry["variant_label"], 80),
@@ -345,6 +358,15 @@ async fn wear(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(body)
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn special_tags_add_colours_and_themes() {
+        let e = serde_json::json!({ "colors": ["blue"], "themes": ["anime"], "tags": ["Color:Light Blue", "color:blue", "theme:Cute & Cozy", "theme:holiday", "theme:", "foo:bar", "blue"] });
+        let f = Facets::of(&e);
+        assert_eq!(f.colors, vec!["blue", "light_blue"]);
+        assert_eq!(f.themes, vec!["anime", "cute_cozy", "holiday"]);
+        assert_eq!(Facets::of(&serde_json::json!({ "tags": ["blue", "foo:bar"] })).colors, Vec::<String>::new());
+    }
+
     use super::*;
 
     #[test]

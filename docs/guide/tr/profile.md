@@ -2,7 +2,7 @@
 title: Profilin
 section: Sen
 summary: Resmin, banner'ın, ad stilin, ad plakan, süslemelerin ve efektlerin, durumun ve her sunucu için farklı bir görünüm.
-source: 7e72688db327
+source: 29cf0268605d
 ---
 
 Profilin, insanların adına tıkladığında gördükleri şeydir. Düzenleyiciyi sol alt köşedeki resminden, ardından **Profili Düzenle** ile aç.
@@ -48,7 +48,7 @@ Izgara sen kaydırdıkça yüklenmeye devam eder, böylece her şeyi görürsün
 Koleksiyonun tamamını bir kerede görmek için **Keşfet**'i (sunucu listesindeki pusula) açıp **Profil stili**'ni seç. Her kart öğenin bir profilde nasıl göründüğünü gösterir; kendi profilinde denemek için birini aç.
 
 - Sağdaki **Öğe türü** altında bir veya daha fazla öğe türünü ya da **Paketler**'i (birlikte giden setler) veya **Koleksiyonlar**'ı işaretle. **Popüler**, **En yeni** veya **A–Z**'ye göre sırala.
-- Diğer filtreler ızgarayı renge, temaya ve etikete göre daraltır. Yalnızca etiketlerde aramak için arama kutusuna `#` ve bir etiket yaz. **Filtreleri gizle** onları kapatır; telefonda **Filtreleri göster** onları tam ekran açar.
+- Diğer filtreler ızgarayı renge, temaya ve etikete göre daraltır. Örneği olmayan bir renk adıyla listelenir. Yalnızca etiketlerde aramak için arama kutusuna `#` ve bir etiket yaz. **Filtreleri gizle** onları kapatır; telefonda **Filtreleri göster** onları tam ekran açar.
 - Bazı tasarımların birkaç stili vardır ve tek bir kartı paylaşır. Stillerini görmek, profilinde denemek ve bulunduğu setleri görmek için karta tıkla.
 - **Kullan** öğeyi kaydetmene gerek kalmadan hemen profiline ekler. **Seti dene** bir paketin tamamını profilinde önizler, **Hepsini kullan** ise içindeki her şeyi kullanır.
 

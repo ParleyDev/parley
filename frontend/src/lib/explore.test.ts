@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NO_FILTERS, groupVariants, labelOf, matches, sortItems, wearPatch, type ExploreItem } from './explore'
+import { NO_FILTERS, groupVariants, labelOf, matches, plainTags, sortItems, wearPatch, type ExploreItem } from './explore'
 
 const item = (p: Partial<ExploreItem> & { value: string }): ExploreItem => ({ kind: 'decoration', name: p.value, added: 0, ...p })
 const moonBlue = item({ value: 'asset:moon_blue', name: 'Moon', base_name: 'Moon', variant_label: 'Blue', colors: ['blue'], themes: ['sci_fi'], collection_id: 'c1', bundles: ['b1'], tags: ['night'], rank: 2, added: 5 })
@@ -43,5 +43,12 @@ describe('explore', () => {
     expect(labelOf({ cute_cozy: 'Cozy!' }, 'cute_cozy')).toBe('Cozy!')
     expect(labelOf({}, 'sci_fi')).toBe('Sci-Fi')
     expect(labelOf({}, 'space_opera')).toBe('Space Opera')
+  })
+})
+
+describe('plainTags', () => {
+  it('leaves out color: and theme: tags, which count as colours and themes', () => {
+    expect(plainTags(['halo', 'color:light_blue', 'theme:holiday', 'foo:bar'])).toEqual(['halo', 'foo:bar'])
+    expect(plainTags(undefined)).toEqual([])
   })
 })

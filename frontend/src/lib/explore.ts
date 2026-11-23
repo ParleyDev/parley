@@ -29,6 +29,10 @@ export const THEMES: { code: string; label: string }[] = [
   { code: 'food_drinks', label: 'Food & Drinks' }, { code: 'fantasy', label: 'Fantasy' }, { code: 'animals_pets', label: 'Animals & Pets' },
   { code: 'nature', label: 'Nature' }, { code: 'movies_tv', label: 'Movies & TV' }, { code: 'dark_moody', label: 'Dark & Moody' },
 ]
+/** `color:<x>` and `theme:<x>` tags: the server already counts them as the item's colours and themes (explore.rs
+ *  Facets::of), so Discover shows them as those, not as tags. */
+export const isFacetTag = (tag: string) => tag.startsWith('color:') || tag.startsWith('theme:')
+export const plainTags = (tags?: string[]) => (tags ?? []).filter((t) => !isFacetTag(t))
 /** A theme or colour's label: the folder's own (`tag_labels`), else the usual one, else the code made readable. */
 export function labelOf(labels: Record<string, string>, code: string): string {
   return labels[code] ?? THEMES.find((x) => x.code === code)?.label ?? COLORS.find((x) => x.code === code)?.label ?? code.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')

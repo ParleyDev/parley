@@ -2,7 +2,7 @@
 title: Il tuo profilo
 section: Tu
 summary: La tua immagine, il banner, lo stile del nome, la targhetta, le decorazioni e gli effetti, lo stato e un aspetto diverso per ogni server.
-source: 7e72688db327
+source: 29cf0268605d
 ---
 
 Il tuo profilo è quello che vedono le persone quando fanno clic sul tuo nome. Apri l'editor dalla tua immagine nell'angolo in basso a sinistra, poi scegli **Modifica profilo**.
@@ -48,7 +48,7 @@ La griglia continua a caricarsi mentre scorri, così vedi tutto. Le opzioni **In
 Per vedere tutta la collezione in una volta, apri **Esplora** (la bussola nell'elenco dei server) e scegli **Stile profilo**. Ogni scheda mostra come appare l'oggetto su un profilo; aprine una per provarlo sul tuo.
 
 - In **Tipo di oggetto**, a destra, spunta uno o più tipi di oggetto, oppure **Pacchetti** (set che stanno insieme) o **Collezioni**. Ordina per **Popolari**, **Più recenti** o **A–Z**.
-- Gli altri filtri restringono la griglia per colore, tema e tag. Scrivi `#` e un tag nella ricerca per cercare solo tra i tag. **Nascondi filtri** li chiude; sul telefono, **Mostra filtri** li apre a schermo intero.
+- Gli altri filtri restringono la griglia per colore, tema e tag. Un colore senza campione è elencato per nome. Scrivi `#` e un tag nella ricerca per cercare solo tra i tag. **Nascondi filtri** li chiude; sul telefono, **Mostra filtri** li apre a schermo intero.
 - Alcuni design esistono in più stili e condividono una scheda. Fai clic su una scheda per vederne gli stili, provarlo sul tuo profilo e vedere i set di cui fa parte.
 - **Indossalo** mette subito un oggetto sul tuo profilo, senza bisogno di salvare. **Prova il set** mostra un pacchetto intero sul tuo profilo e **Indossa tutto** indossa tutto quello che contiene.
 

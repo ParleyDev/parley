@@ -184,6 +184,8 @@ The folder is mounted read-only. Still frames are cached under `uploads/asset-ca
   - `tag_labels`: the colours' and themes' display names. "Cute & Cozy" becomes the code `cute_cozy`.
   - `collections`: `{id: {items: [file or folder]}}`. When the file has this key, Parley keeps it in step with the entries' `collection_id`s whenever it writes the file.
 
+**Special tags.** An item a sync doesn't know about (made by hand) has no `colors` or `themes`, so it would never show under Discover's colour and theme filters. Give it tags instead: `color:<x>` adds a colour and `theme:<x>` a theme, for example `color:light_blue` or `theme:holiday`. The part after the prefix becomes a code the same way labels do (`theme:Cute & Cozy` is `cute_cozy`). Tags only add to the entry's own `colors` and `themes`, never remove one. A theme's label comes from `tag_labels`, else from its code ("holiday" shows as "Holiday"). A colour other than the ten above is listed by name, without a swatch. Discover shows these tags as the item's colours and themes rather than in its tag list; other prefixes, such as `foo:bar`, are plain tags.
+
 Sets (bundles) span kinds and live at the assets root. `bundles.json` has the shape `{"bundles": [{"id", "name", "collection_id", "items": [{"shop_item_id", "type"}]}]}`, where `type` is `avatar_decoration`, `nameplate`, `profile_effect` or `profile_frame`. An optional `bundles.local.json` is laid over it:
 - An entry whose `id` is in `bundles.json` overrides that bundle's fields: `items` replaces the whole list, and `deleted: true` hides the bundle.
 - Any other id is a set of its own. Its items may name a file or folder as `{"type", "key"}`.
