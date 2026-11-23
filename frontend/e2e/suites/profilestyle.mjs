@@ -149,6 +149,14 @@ await ph.goto(`${WEB}/discover/style`); await ph.waitForSelector('[data-style-ca
 ok('on a phone the filters start folded', await ph.locator('[data-style-filters]').count() === 0)
 ok('and nothing scrolls sideways', await ph.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
 await ph.screenshot({ path: 'profilestyle-phone.png' })
+// A phone's status bar (the app's WebView reports it as --safe-area-inset-top): the dialog's close button stays below it.
+await ph.evaluate(() => document.documentElement.style.setProperty('--safe-area-inset-top', '47px'))
+await ph.click('[data-style-card]'); await ph.waitForSelector('[data-style-dialog]')
+const closeBox = await ph.locator('[data-style-close]').boundingBox()
+await ph.screenshot({ path: 'profilestyle-phone-dialog.png' })
+ok('on a phone the dialog\'s close button sits below the status bar', closeBox && closeBox.y >= 47 && closeBox.height >= 40, JSON.stringify(closeBox))
+await ph.click('[data-style-close]')
+ok('and closes it', await ph.locator('[data-style-dialog]').count() === 0)
 await browser.close()
 
 console.log('-- never written')

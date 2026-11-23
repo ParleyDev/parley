@@ -111,8 +111,11 @@ function Modal({ label, onClose, children, testid }: { label: string; onClose: (
   }, [onClose])
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm phone:p-0" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div role="dialog" aria-modal aria-label={label} className="pop relative flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-bg-1 shadow-2xl phone:h-full phone:rounded-none" {...{ [testid]: '' }}>
-        <button type="button" onClick={onClose} className="absolute right-3 top-3 z-10 rounded-md p-1 text-text-2 hover:bg-bg-3 hover:text-text-0" aria-label={t('Close')} data-style-close><X size={20} /></button>
+      {/* Full screen on phones: below the status bar, with the close button in its own bar rather than over the preview. */}
+      <div role="dialog" aria-modal aria-label={label} className="pop relative flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-bg-1 shadow-2xl phone:h-full phone:rounded-none phone:border-0 phone:pt-[var(--sat)] phone:pb-[var(--sab)]" {...{ [testid]: '' }}>
+        <div className="phone:flex phone:shrink-0 phone:items-center phone:justify-end phone:border-b phone:border-line phone:px-2 phone:py-1">
+          <button type="button" onClick={onClose} className="absolute right-3 top-3 z-10 rounded-md p-1 text-text-2 hover:bg-bg-3 hover:text-text-0 phone:static phone:p-2.5" aria-label={t('Close')} data-style-close><X size={22} /></button>
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-5 phone:p-3">{children}</div>
       </div>
     </div>,
