@@ -11,7 +11,8 @@
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::{get, patch, post},
     Json, Router,
 };
@@ -38,6 +39,9 @@ pub fn router() -> Router<AppState> {
         .route("/admin/cosmetics/:kind/folder/:id", patch(edit))
         .route("/admin/cosmetics/:kind/import/check", post(import_check))
         .route("/admin/cosmetics/:kind/import", post(import))
+        .route("/admin/cosmetics/bundles", get(bundles_get))
+        .route("/admin/cosmetics/bundles/:file", axum::routing::put(bundles_put).delete(bundles_delete))
+        .route("/admin/cosmetics/:kind/metadata", get(metadata_get).patch(metadata_patch))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
 }
 
@@ -84,28 +88,75 @@ async fn put_file(path: &FsPath, bytes: &[u8]) -> AppResult<()> {
     tokio::fs::rename(&tmp, path).await.map_err(|e| { let _ = std::fs::remove_file(&tmp); io(e) })
 }
 
-/// A kind's `metadata.json` as it is (an empty `{items: []}` when the folder has none yet).
-async fn read_meta(dir: &FsPath) -> AppResult<Value> {
+/// How a `metadata.json` was laid out, so a rewrite keeps it: its indent (`None`: all on one line) and whether it
+/// ended with a newline. A new file gets one space and a newline.
+#[derive(Debug, Clone, PartialEq)]
+struct Layout { indent: Option<Vec<u8>>, newline: bool }
+impl Default for Layout { fn default() -> Self { Layout { indent: Some(b" ".to_vec()), newline: true } } }
+
+fn layout_of(text: &str) -> Layout {
+    let body = text.trim_end();
+    let indent = body.lines().nth(1).map(|l| l.bytes().take_while(|b| *b == b' ' || *b == b'\t').collect::<Vec<u8>>());
+    Layout { indent: match indent { Some(i) if !i.is_empty() => Some(i), Some(_) => Some(b" ".to_vec()), None => None }, newline: text.ends_with('\n') }
+}
+
+/// A kind's `metadata.json` as it is (an empty `{items: []}` when the folder has none yet), and its layout.
+async fn read_meta(dir: &FsPath) -> AppResult<(Value, Layout)> {
     match tokio::fs::read_to_string(dir.join("metadata.json")).await {
         Ok(text) => {
             let v: Value = serde_json::from_str(&text).map_err(|_| AppError::Conflict("metadata.json isn't valid JSON; fix it in the folder first".into()))?;
             if !v.is_object() || !v["items"].is_array() { return Err(AppError::Conflict("metadata.json has no items list; fix it in the folder first".into())) }
-            Ok(v)
+            Ok((v, layout_of(&text)))
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!({ "items": [] })),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((json!({ "items": [] }), Layout::default())),
         Err(e) => Err(io(e)),
     }
 }
 
-/// Write it back, laid out like the files Parley reads (one-space indent), keeping `item_count` true.
-async fn write_meta(dir: &FsPath, mut meta: Value) -> AppResult<()> {
+fn render_meta(meta: &Value, layout: &Layout) -> AppResult<Vec<u8>> {
+    let mut out = Vec::new();
+    match &layout.indent {
+        Some(i) => { let mut ser = serde_json::Serializer::with_formatter(&mut out, serde_json::ser::PrettyFormatter::with_indent(i)); serde::Serialize::serialize(meta, &mut ser) }
+        None => serde_json::to_writer(&mut out, meta),
+    }.map_err(|e| AppError::Other(e.into()))?;
+    if layout.newline { out.push(b'\n'); }
+    Ok(out)
+}
+
+/// Write it back laid out as it was, keeping `item_count` true.
+async fn write_meta(dir: &FsPath, mut meta: Value, layout: &Layout) -> AppResult<()> {
     let n = meta["items"].as_array().map(|a| a.len()).unwrap_or(0);
     if meta.get("item_count").is_some() { meta["item_count"] = n.into() }
-    let mut out = Vec::new();
-    let mut ser = serde_json::Serializer::with_formatter(&mut out, serde_json::ser::PrettyFormatter::with_indent(b" "));
-    serde::Serialize::serialize(&meta, &mut ser).map_err(|e| AppError::Other(e.into()))?;
-    out.push(b'\n');
-    put_file(&dir.join("metadata.json"), &out).await
+    recount_collections(&mut meta);
+    put_file(&dir.join("metadata.json"), &render_meta(&meta, layout)?).await
+}
+
+/// When the file has a top-level `collections`, make it follow the entries' `collection_id`s (the rule Profile Studio
+/// keeps too): `{id: {items: [file or folder, in entry order]}}`, each collection's other keys kept.
+fn recount_collections(meta: &mut Value) {
+    let Some(old) = meta.get("collections").and_then(Value::as_object).cloned() else { return };
+    let mut out = Map::new();
+    for it in meta["items"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        let Some(cid) = it.get("collection_id").and_then(|c| match c { Value::String(s) if !s.trim().is_empty() => Some(s.clone()), Value::Number(n) => Some(n.to_string()), _ => None }) else { continue };
+        let Some(key) = it["file"].as_str().or_else(|| it["folder"].as_str()) else { continue };
+        let c = out.entry(cid.clone()).or_insert_with(|| { let mut m = old.get(&cid).and_then(Value::as_object).cloned().unwrap_or_default(); m.insert("items".into(), json!([])); Value::Object(m) });
+        if let Some(list) = c["items"].as_array_mut() { list.push(key.into()) }
+    }
+    meta["collections"] = Value::Object(out);
+}
+
+/// A file's version for If-Match: the SHA-256 of its bytes, in hex.
+fn etag_of(bytes: &[u8]) -> String { use sha2::Digest; sha2::Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect() }
+
+/// Is the caller's If-Match / If-None-Match satisfied by the file as it is (`None`: missing)? Neither header: yes.
+fn precondition(headers: &HeaderMap, current: Option<&str>) -> bool {
+    let h = |n: &str| headers.get(n).and_then(|v| v.to_str().ok()).map(|v| v.trim().to_string());
+    if let Some(m) = h("if-none-match") { if m == "*" && current.is_some() { return false } }
+    match h("if-match") {
+        None => true,
+        Some(m) if m == "*" => current.is_some(),
+        Some(m) => m.split(',').map(|t| t.trim().trim_start_matches("W/").trim_matches('"')).any(|t| Some(t) == current),
+    }
 }
 
 /// A file name that is safe to write in the folder, with an extension this kind may use.
@@ -221,6 +272,8 @@ fn apply(kind: &str, entry: &mut Map<String, Value>, sent: &Map<String, Value>) 
         }
         Some(_) => return Err(AppError::BadRequest("tags must be a list of text".into())),
     }
+    // Fields Parley doesn't manage (a shop sync's colours, themes, collection, bundles...), as Profile Studio sends them.
+    if let Some(f) = sent.get("fields") { set_fields(entry, f, &["file", "folder", "layers", "layout", "items", "name", "description", "tags"])?; }
     if layered(kind) {
         if let Some(l) = sent.get("layers") { let v = clean_layers(kind, l, entry.get("layers"))?; entry.insert("layers".into(), v.into()); }
         if kind == "frame" {
@@ -258,6 +311,7 @@ async fn fresh_stem(dir: &FsPath, name: &str, taken: impl Fn(&str) -> bool) -> S
 }
 
 fn refresh(kind: &str) {
+    super::explore::forget();
     if layered(kind) { asset_layers::forget(dir_name(kind).unwrap_or_default()) } else { assets::forget(dir_name(kind).unwrap_or_default()) }
 }
 
@@ -273,7 +327,7 @@ async fn add(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kind):
     let _guard = LOCK.lock().await;
     if !writable(&state.config.assets_dir).await { return Err(read_only()) }
     tokio::fs::create_dir_all(&dir).await.map_err(io)?;
-    let mut meta = read_meta(&dir).await?;
+    let (mut meta, layout) = read_meta(&dir).await?;
     let id;
     if layered(&kind) {
         let names: Vec<String> = meta["items"].as_array().unwrap().iter().filter_map(|i| i["folder"].as_str().map(assets::asset_id)).collect();
@@ -305,7 +359,7 @@ async fn add(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kind):
         meta["items"].as_array_mut().unwrap().push(Value::Object(entry));
         id = assets::asset_id(&stem);
     }
-    write_meta(&dir, meta).await?;
+    write_meta(&dir, meta, &layout).await?;
     refresh(&kind);
     let value = format!("{}{id}", assets::ASSET_PREFIX);
     crate::audit::record(&state, uid, "cosmetic.folder_add", "cosmetic", None, &name, json!({ "kind": kind, "value": value, "files": up.files.iter().map(|f| &f.0).collect::<Vec<_>>() })).await;
@@ -320,7 +374,7 @@ async fn edit(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((kind
     let up = read_form(&kind, form).await?;
     let _guard = LOCK.lock().await;
     if !writable(&state.config.assets_dir).await { return Err(read_only()) }
-    let mut meta = read_meta(&dir).await?;
+    let (mut meta, layout) = read_meta(&dir).await?;
     let label;
     if layered(&kind) {
         let items = meta["items"].as_array_mut().unwrap();
@@ -360,7 +414,7 @@ async fn edit(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((kind
         label = entry.get("name").and_then(Value::as_str).unwrap_or(&id).to_string();
         match pos { Some(p) => items[p] = Value::Object(entry), None => items.push(Value::Object(entry)) }
     }
-    write_meta(&dir, meta).await?;
+    write_meta(&dir, meta, &layout).await?;
     refresh(&kind);
     let value = format!("{}{id}", assets::ASSET_PREFIX);
     crate::audit::record(&state, uid, "cosmetic.folder_edit", "cosmetic", None, &label, json!({ "kind": kind, "value": value, "fields": up.meta.keys().collect::<Vec<_>>(), "files": up.files.iter().map(|f| &f.0).collect::<Vec<_>>() })).await;
@@ -401,7 +455,7 @@ async fn import_check(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     let dir: PathBuf = state.config.assets_dir.join(dir_name(&kind)?);
     let keys = body["keys"].as_array().ok_or_else(|| AppError::BadRequest("keys must be a list".into()))?;
     if keys.len() > 5000 { return Err(AppError::BadRequest("At most 5000 items at a time".into())) }
-    let meta = read_meta(&dir).await?;
+    let (meta, _) = read_meta(&dir).await?;
     let mut out = Map::new();
     for k in keys.iter().filter_map(Value::as_str) {
         out.insert(k.to_string(), standing(&state, &kind, &dir, &meta, k).await.into());
@@ -438,7 +492,7 @@ async fn import(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kin
     let _guard = LOCK.lock().await;
     if !writable(&state.config.assets_dir).await { return Err(read_only()) }
     tokio::fs::create_dir_all(&dir).await.map_err(io)?;
-    let mut meta = read_meta(&dir).await?;
+    let (mut meta, layout) = read_meta(&dir).await?;
     match standing(&state, &kind, &dir, &meta, &key).await {
         "missing" => {}
         "present" => return Err(AppError::Conflict(format!("{key} is already in the assets folder"))),
@@ -458,11 +512,123 @@ async fn import(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kin
         key.rsplit_once('.').map(|(s, _)| s.to_string()).unwrap_or_else(|| key.clone())
     };
     meta["items"].as_array_mut().unwrap().push(Value::Object(entry));
-    write_meta(&dir, meta).await?;
+    write_meta(&dir, meta, &layout).await?;
     refresh(&kind);
     let value = format!("{}{}", assets::ASSET_PREFIX, assets::asset_id(&stem));
     crate::audit::record(&state, uid, "cosmetic.folder_import", "cosmetic", None, &label, json!({ "kind": kind, "value": value, "files": files.iter().map(|f| &f.0).collect::<Vec<_>>() })).await;
     Ok((StatusCode::CREATED, Json(json!({ "value": value }))))
+}
+
+// --- Profile Studio's sync: the bundle files, whole entries, and each kind's top-level fields -------------------------
+
+const BUNDLE_FILES: [&str; 2] = ["bundles.json", "bundles.local.json"];
+
+/// A bundles file's slot for GET: null when missing, `{json, etag}`, or `{error, etag}` when it isn't valid JSON.
+async fn bundle_slot(path: &FsPath) -> AppResult<Value> {
+    match tokio::fs::read(path).await {
+        Ok(bytes) => Ok(match serde_json::from_slice::<Value>(&bytes) {
+            Ok(v) => json!({ "json": v, "etag": etag_of(&bytes) }),
+            Err(e) => json!({ "error": format!("Not valid JSON: {e}"), "etag": etag_of(&bytes) }),
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Value::Null),
+        Err(e) => Err(io(e)),
+    }
+}
+
+/// `GET /admin/cosmetics/bundles`: both bundle files at the assets root, as they are.
+async fn bundles_get(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
+    require_perm(&state, uid, Perm::InstanceManage).await?;
+    let mut files = Map::new();
+    for f in BUNDLE_FILES { files.insert(f.into(), bundle_slot(&state.config.assets_dir.join(f)).await?); }
+    Ok(Json(json!({ "files": files })))
+}
+
+fn bundle_file(file: &str) -> AppResult<&'static str> {
+    BUNDLE_FILES.iter().copied().find(|f| *f == file).ok_or_else(|| AppError::NotFound("Only bundles.json and bundles.local.json".into()))
+}
+
+fn conflict(current: Value) -> Response { (StatusCode::PRECONDITION_FAILED, Json(current)).into_response() }
+
+/// `PUT /admin/cosmetics/bundles/:file`: replace (If-Match) or create (If-None-Match: *) a bundles file. Every field
+/// is kept as sent; only the shape is checked. The file keeps its layout; a new one gets two spaces and a newline.
+async fn bundles_put(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(file): Path<String>, headers: HeaderMap, Json(doc): Json<Value>) -> AppResult<Response> {
+    require_perm(&state, uid, Perm::InstanceManage).await?;
+    let file = bundle_file(&file)?;
+    let ok = doc.is_object() && doc["bundles"].as_array().is_some_and(|l| l.iter().all(|b| b.is_object() && b["id"].is_string()));
+    if !ok { return Err(AppError::BadRequest("A bundles file is an object whose bundles is a list of objects, each with a text id".into())) }
+    let path = state.config.assets_dir.join(file);
+    let _guard = LOCK.lock().await;
+    if !writable(&state.config.assets_dir).await { return Err(read_only()) }
+    let before = match tokio::fs::read(&path).await { Ok(b) => Some(b), Err(e) if e.kind() == std::io::ErrorKind::NotFound => None, Err(e) => return Err(io(e)) };
+    if !precondition(&headers, before.as_deref().map(etag_of).as_deref()) { return Ok(conflict(bundle_slot(&path).await?)) }
+    let layout = before.as_deref().map(|b| layout_of(&String::from_utf8_lossy(b))).unwrap_or(Layout { indent: Some(b"  ".to_vec()), newline: true });
+    let out = render_meta(&doc, &layout)?;
+    put_file(&path, &out).await?;
+    super::explore::forget();
+    crate::audit::record(&state, uid, "cosmetic.bundles_write", "cosmetic", None, file, json!({ "bundles": doc["bundles"].as_array().map(Vec::len) })).await;
+    super::cosmetics::announce(&state).await;
+    Ok(Json(json!({ "etag": etag_of(&out) })).into_response())
+}
+
+/// `DELETE /admin/cosmetics/bundles/:file` (If-Match): Studio drops an empty bundles.local.json.
+async fn bundles_delete(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(file): Path<String>, headers: HeaderMap) -> AppResult<Response> {
+    require_perm(&state, uid, Perm::InstanceManage).await?;
+    let file = bundle_file(&file)?;
+    let path = state.config.assets_dir.join(file);
+    let _guard = LOCK.lock().await;
+    let before = match tokio::fs::read(&path).await { Ok(b) => b, Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(AppError::NotFound(format!("There is no {file}"))), Err(e) => return Err(io(e)) };
+    if !precondition(&headers, Some(&etag_of(&before))) { return Ok(conflict(bundle_slot(&path).await?)) }
+    tokio::fs::remove_file(&path).await.map_err(io)?;
+    super::explore::forget();
+    crate::audit::record(&state, uid, "cosmetic.bundles_delete", "cosmetic", None, file, json!({})).await;
+    super::cosmetics::announce(&state).await;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+/// A kind's metadata.json bytes (None when it has none yet).
+async fn meta_bytes(dir: &FsPath) -> AppResult<Option<Vec<u8>>> {
+    match tokio::fs::read(dir.join("metadata.json")).await { Ok(b) => Ok(Some(b)), Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None), Err(e) => Err(io(e)) }
+}
+fn top_fields(meta: &Value) -> Value {
+    Value::Object(meta.as_object().map(|m| m.iter().filter(|(k, _)| *k != "items").map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default())
+}
+
+/// `GET /admin/cosmetics/:kind/metadata`: the file's top-level fields (everything but items) and its etag.
+async fn metadata_get(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kind): Path<String>) -> AppResult<Json<Value>> {
+    require_perm(&state, uid, Perm::InstanceManage).await?;
+    let dir = state.config.assets_dir.join(dir_name(&kind)?);
+    let (meta, _) = read_meta(&dir).await?;
+    Ok(Json(json!({ "fields": top_fields(&meta), "etag": meta_bytes(&dir).await?.as_deref().map(etag_of) })))
+}
+
+/// Shallow set (null removes) of a map's keys, refusing the ones that have their own handling.
+fn set_fields(target: &mut Map<String, Value>, fields: &Value, refused: &[&str]) -> AppResult<()> {
+    let fields = fields.as_object().ok_or_else(|| AppError::BadRequest("fields must be an object".into()))?;
+    if let Some(k) = fields.keys().find(|k| refused.contains(&k.as_str())) { return Err(AppError::BadRequest(format!("{k} can't be set through fields"))) }
+    for (k, v) in fields { if v.is_null() { target.remove(k); } else { target.insert(k.clone(), v.clone()); } }
+    Ok(())
+}
+
+/// `PATCH /admin/cosmetics/:kind/metadata {fields}` (If-Match): set or remove top-level fields (`items` refused;
+/// `item_count` stays true).
+async fn metadata_patch(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kind): Path<String>, headers: HeaderMap, Json(body): Json<Value>) -> AppResult<Response> {
+    require_perm(&state, uid, Perm::InstanceManage).await?;
+    let dir = state.config.assets_dir.join(dir_name(&kind)?);
+    let _guard = LOCK.lock().await;
+    if !writable(&state.config.assets_dir).await { return Err(read_only()) }
+    tokio::fs::create_dir_all(&dir).await.map_err(io)?;
+    let (mut meta, layout) = read_meta(&dir).await?;
+    let current = meta_bytes(&dir).await?.as_deref().map(etag_of);
+    if !precondition(&headers, current.as_deref()) { return Ok(conflict(json!({ "fields": top_fields(&meta), "etag": current }))) }
+    let mut fields = body.get("fields").cloned().ok_or_else(|| AppError::BadRequest("Send fields".into()))?;
+    if let Some(f) = fields.as_object_mut() { f.remove("item_count"); }
+    set_fields(meta.as_object_mut().expect("checked by read_meta"), &fields, &["items"])?;
+    write_meta(&dir, meta, &layout).await?;
+    refresh(&kind);
+    let etag = meta_bytes(&dir).await?.as_deref().map(etag_of);
+    crate::audit::record(&state, uid, "cosmetic.metadata_edit", "cosmetic", None, &kind, json!({ "kind": kind, "fields": body["fields"].as_object().map(|f| f.keys().cloned().collect::<Vec<_>>()) })).await;
+    super::cosmetics::announce(&state).await;
+    Ok(Json(json!({ "etag": etag })).into_response())
 }
 
 #[cfg(test)]
@@ -495,6 +661,52 @@ mod tests {
         assert!(entry["layers"][0].get("width").is_none());
         let keys: Vec<&String> = entry.as_object().unwrap().keys().collect();
         assert_eq!(keys, ["folder", "name", "description", "in_shop", "price", "layers"]);
+    }
+
+    /// A rewrite keeps the file's layout: a sync script's two spaces and no final newline, or Parley's own one space.
+    #[test]
+    fn rewrites_keep_the_layout() {
+        let v = json!({ "source": "x", "tag_labels": ["Cute & Cozy"], "items": [{ "file": "a.png", "name": "Été", "description": null, "price": { "amount": 5.99 }, "colors": [] }], "item_count": 1 });
+        for (indent, newline) in [("  ", false), (" ", true), ("\t", true)] {
+            let mut bytes = Vec::new();
+            let mut ser = serde_json::Serializer::with_formatter(&mut bytes, serde_json::ser::PrettyFormatter::with_indent(indent.as_bytes()));
+            serde::Serialize::serialize(&v, &mut ser).unwrap();
+            let mut text = String::from_utf8(bytes).unwrap();
+            if newline { text.push('\n') }
+            let layout = layout_of(&text);
+            assert_eq!(String::from_utf8(render_meta(&v, &layout).unwrap()).unwrap(), text, "{indent:?} {newline}");
+        }
+        let compact = v.to_string();
+        assert_eq!(String::from_utf8(render_meta(&v, &layout_of(&compact)).unwrap()).unwrap(), compact);
+    }
+
+    #[test]
+    fn fields_pass_through_and_collections_follow() {
+        let mut entry = json!({ "file": "moon.png", "name": "Moon", "price": 1 }).as_object().unwrap().clone();
+        apply("decoration", &mut entry, json!({ "fields": { "colors": ["blue"], "collection_id": "c1", "price": null } }).as_object().unwrap()).unwrap();
+        assert_eq!(entry["colors"], json!(["blue"]));
+        assert!(!entry.contains_key("price"));
+        for k in ["file", "layers", "name", "tags"] {
+            assert!(apply("decoration", &mut entry, json!({ "fields": { k: 1 } }).as_object().unwrap()).is_err(), "{k}");
+        }
+        let mut meta = json!({ "collections": { "c1": { "items": ["old.png"], "note": "kept" }, "gone": { "items": [] } },
+            "items": [{ "file": "a.png", "collection_id": "c2" }, { "file": "b.png", "collection_id": "c1" }, { "folder": "c", "collection_id": "c1" }, { "file": "d.png" }] });
+        recount_collections(&mut meta);
+        assert_eq!(meta["collections"], json!({ "c2": { "items": ["a.png"] }, "c1": { "items": ["b.png", "c"], "note": "kept" } }));
+        let mut none = json!({ "items": [{ "file": "a.png", "collection_id": "c2" }] });
+        recount_collections(&mut none);
+        assert!(none.get("collections").is_none(), "only when the file has the key");
+    }
+
+    #[test]
+    fn preconditions() {
+        let mut h = HeaderMap::new();
+        assert!(precondition(&h, None) && precondition(&h, Some("abc")));
+        h.insert("if-match", "\"abc\"".parse().unwrap());
+        assert!(precondition(&h, Some("abc")) && !precondition(&h, Some("def")) && !precondition(&h, None));
+        let mut h = HeaderMap::new();
+        h.insert("if-none-match", "*".parse().unwrap());
+        assert!(precondition(&h, None) && !precondition(&h, Some("abc")));
     }
 
     #[test]

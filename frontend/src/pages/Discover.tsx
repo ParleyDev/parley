@@ -1,4 +1,5 @@
-import { BadgeCheck, Handshake, ChevronDown, Compass, Radio, Search, Server } from 'lucide-react'
+import { BadgeCheck, Handshake, ChevronDown, Compass, Palette, Radio, Search, Server } from 'lucide-react'
+import ProfileStyle from './ProfileStyle'
 import { bgUrl } from '../lib/crop'
 import CropImg, { CropLayer } from '../components/CropImg'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -18,6 +19,7 @@ import { useLanguage, useT } from '../lib/i18n'
 export default function DiscoverPage() {
   const t = useT()
   const isStages = !!useMatch('/discover/stages')
+  const isStyle = !!useMatch('/discover/style')
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
   const showContent = useShowContent()
   return (
@@ -27,11 +29,12 @@ export default function DiscoverPage() {
             <nav className="p-2 space-y-0.5">
               <NavLink to="/discover" end onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> {t('Servers')}</NavLink>
               <NavLink to="/discover/stages" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-stages><Radio size={20} /> {t('Stages')}</NavLink>
+              <NavLink to="/discover/style" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-style><Palette size={20} /> {t('Profile Style')}</NavLink>
             </nav>
           </aside>
     }>
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {isStages ? <LiveStages /> : <Browse />}
+        {isStages ? <LiveStages /> : isStyle ? <ProfileStyle /> : <Browse />}
       </div>
     </SplitLayout>
   )

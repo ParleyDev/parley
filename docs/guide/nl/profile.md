@@ -2,7 +2,7 @@
 title: Je profiel
 section: Jij
 summary: Je profielfoto, banner, naamstijl, naamplaatje, decoraties en effecten, status, en een andere look per server.
-source: 5fbc51dc9fa1
+source: 1e055d57e7e0
 ---
 
 Je profiel is wat mensen zien als ze op je naam klikken. Open de editor via je profielfoto in de hoek linksonder en dan **Profiel bewerken**.
@@ -42,6 +42,15 @@ Klik in de editor op een van deze tegels om de kiezer te openen:
 3. Klik op **Toepassen**, of dubbelklik op een optie. Daarna **Wijzigingen opslaan** om het te houden.
 
 Het raster blijft laden terwijl je scrolt, dus je ziet alles. Opties onder **Ingebouwd** horen bij Parley; die onder **Van deze server** zijn extra's die de host van je Parley-server heeft toegevoegd.
+
+### Alles bekijken in Ontdekken
+
+Om de hele collectie in één keer te zien, open je **Ontdekken** (het kompas in de serverlijst) en kies je **Profielstijl**. Elke kaart toont het item op je eigen foto en naam.
+
+- De tabbladen bovenaan tonen één soort item, **Bundels** (sets die bij elkaar horen) of **Collecties**. Sorteer op **Populair**, **Nieuwste** of **A–Z**.
+- De filters rechts beperken het raster op soort item, kleur, thema en tag. Typ `#` en een tag in het zoekvak om alleen tags te doorzoeken. **Filters verbergen** klapt ze weg.
+- Sommige ontwerpen zijn er in meerdere stijlen en delen één kaart. Klik op een kaart om de stijlen te zien, het op je profiel te passen en te zien in welke sets het zit.
+- **Dragen** zet een item meteen op je profiel, zonder opslaan. **Set passen** toont een hele bundel op je profiel en **Alles dragen** doet alles uit de bundel aan.
 
 ## Stijl van je weergavenaam
 

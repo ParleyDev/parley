@@ -56,6 +56,12 @@ pub struct Decoration {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
     pub animated: bool,
+    /// Browse fields (colours, themes, collection, variants, bundles) for Discover → Profile Style (explore.rs).
+    #[serde(skip)]
+    pub facets: super::explore::Facets,
+    /// When its file last changed (Unix seconds): "Newest" in Discover.
+    #[serde(skip)]
+    pub added: u64,
     #[serde(skip)]
     path: PathBuf,
     #[serde(skip)]
@@ -203,7 +209,8 @@ pub fn scan_kind(dir: &FsPath, video: bool) -> Index {
         let title = m.and_then(|m| m["name"].as_str()).map(str::trim).filter(|n| !n.is_empty()).map(|n| { let mut c = n.chars(); c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default() });
         let description = m.and_then(|m| m["description"].as_str()).map(str::trim).filter(|d| !d.is_empty()).map(str::to_string);
         let tags = m.map(entry_tags).unwrap_or_default();
-        let d = Decoration { animated: is_animated(&path, ct), name: title.unwrap_or_else(|| display_name(&stem)), description, tags, tag: format!("{mtime:x}-{:x}", meta.len()), id: id.clone(), path, content_type: ct };
+        let facets = m.map(super::explore::Facets::of).unwrap_or_default();
+        let d = Decoration { animated: is_animated(&path, ct), name: title.unwrap_or_else(|| display_name(&stem)), description, tags, facets, added: mtime, tag: format!("{mtime:x}-{:x}", meta.len()), id: id.clone(), path, content_type: ct };
         idx.by_id.insert(id, idx.list.len());
         idx.list.push(d);
     }

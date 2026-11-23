@@ -101,6 +101,8 @@ const REST_ALLOW: &[(&str, &str, &str)] = &[
     ("PATCH", "/guilds/*/members/*", "mcp.manage"),
     // Server settings; deleting the server or handing it to someone else stays in the app.
     ("PATCH", "/guilds/*", "mcp.manage"),
+    ("GET", "/cosmetics/explore", "mcp.read"),
+    ("PATCH", "/users/@me/cosmetics", "mcp.profile"),
     ("POST", "/admin/announce", "mcp.admin"),
     // Profile Studio: the assets folder's cosmetics (the routes still check the user can manage the instance).
     ("GET", "/admin/cosmetics-folder", "cosmetics.manage"),
@@ -108,6 +110,10 @@ const REST_ALLOW: &[(&str, &str, &str)] = &[
     ("POST", "/admin/cosmetics/*/import/check", "cosmetics.manage"),
     ("POST", "/admin/cosmetics/*/import", "cosmetics.manage"),
     ("PATCH", "/admin/cosmetics/*/folder/*", "cosmetics.manage"),
+    ("PUT", "/admin/cosmetics/bundles/*", "cosmetics.manage"),
+    ("DELETE", "/admin/cosmetics/bundles/*", "cosmetics.manage"),
+    ("GET", "/admin/cosmetics/*/metadata", "cosmetics.manage"),
+    ("PATCH", "/admin/cosmetics/*/metadata", "cosmetics.manage"),
 ];
 
 /// Whether an MCP token with `scopes` may make this REST call. Paths with or without the `/api` prefix.

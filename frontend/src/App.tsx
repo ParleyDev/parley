@@ -78,6 +78,7 @@ export default function App() {
         />
         <Route path="/admin/*" element={token ? (ready ? (isAdmin ? <AdminPage /> : <Navigate to="/channels/@me" replace />) : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/discover/stages" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
+        <Route path="/discover/style" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         {/* The review queue moved to the Admin Console; old links still land there. */}
         <Route path="/discover/review/*" element={<Navigate to="/admin/discovery" replace />} />
         <Route path="/discover/:guildId/:channelId?" element={token ? (ready ? <GuildPreviewPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />

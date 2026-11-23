@@ -2,7 +2,7 @@
 title: Tu perfil
 section: Tú
 summary: Tu foto, tu banner, el estilo de tu nombre, la placa de nombre, las decoraciones y los efectos, tu estado y un aspecto distinto en cada servidor.
-source: 5fbc51dc9fa1
+source: 1e055d57e7e0
 ---
 
 Tu perfil es lo que ve la gente cuando hace clic en tu nombre. Abre el editor desde tu foto en la esquina inferior izquierda y luego **Editar perfil**.
@@ -42,6 +42,15 @@ Haz clic en cualquiera de estos recuadros del editor para abrir su selector:
 3. Haz clic en **Aplicar** o haz doble clic en una opción. Después, **Guardar cambios** para conservarla.
 
 La cuadrícula sigue cargando mientras te desplazas, así que lo verás todo. Las opciones de **Integrado** vienen con Parley; las de **De este servidor** son extras que ha añadido quien aloja tu servidor de Parley.
+
+### Explorar todo en Descubrir
+
+Para ver toda la colección de una vez, abre **Descubrir** (la brújula de la lista de servidores) y elige **Estilo de perfil**. Cada tarjeta muestra el artículo con tu propia imagen y tu nombre.
+
+- Las pestañas de arriba muestran un tipo de artículo, **Lotes** (conjuntos que combinan) o **Colecciones**. Ordena por **Populares**, **Más recientes** o **A–Z**.
+- Los filtros de la derecha acotan la cuadrícula por tipo de artículo, color, tema y etiqueta. Escribe `#` y una etiqueta en el buscador para buscar solo en las etiquetas. **Ocultar filtros** los pliega.
+- Algunos diseños vienen en varios estilos y comparten tarjeta. Haz clic en una tarjeta para ver sus estilos, probarlo en tu perfil y ver los conjuntos en los que está.
+- **Ponérmelo** pone un artículo en tu perfil al momento, sin tener que guardar. **Probar el conjunto** muestra un lote entero en tu perfil y **Ponerse todo** te pone todo lo que incluye.
 
 ## Estilo del nombre
 

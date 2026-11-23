@@ -2,7 +2,7 @@
 title: Profilin
 section: Sen
 summary: Resmin, banner'ın, ad stilin, ad plakan, süslemelerin ve efektlerin, durumun ve her sunucu için farklı bir görünüm.
-source: 5fbc51dc9fa1
+source: 1e055d57e7e0
 ---
 
 Profilin, insanların adına tıkladığında gördükleri şeydir. Düzenleyiciyi sol alt köşedeki resminden, ardından **Profili Düzenle** ile aç.
@@ -42,6 +42,15 @@ Seçicisini açmak için düzenleyicide bu kutucuklardan herhangi birine tıkla:
 3. **Uygula**'ya tıkla ya da bir seçeneğe çift tıkla. Sonra korumak için **Değişiklikleri Kaydet**.
 
 Izgara sen kaydırdıkça yüklenmeye devam eder, böylece her şeyi görürsün. **Yerleşik** seçenekler Parley ile gelir; **Bu sunucudan** olanlar Parley sunucunu barındıran kişinin eklediği ekstralardır.
+
+### Keşfet'te her şeye göz atma
+
+Koleksiyonun tamamını bir kerede görmek için **Keşfet**'i (sunucu listesindeki pusula) açıp **Profil stili**'ni seç. Her kart öğeyi kendi resminde ve adında gösterir.
+
+- Üstteki sekmeler tek bir öğe türünü, **Paketler**'i (birbirine uyan setler) ya da **Koleksiyonlar**'ı gösterir. **Popüler**, **En yeni** veya **A–Z** sırasına göre sırala.
+- Sağdaki filtreler ızgarayı öğe türüne, renge, temaya ve etikete göre daraltır. Yalnızca etiketlerde aramak için arama kutusuna `#` ve bir etiket yaz. **Filtreleri gizle** onları katlar.
+- Bazı tasarımların birkaç stili vardır ve tek bir kartı paylaşır. Stillerini görmek, profilinde denemek ve bulunduğu setleri görmek için karta tıkla.
+- **Kullan** öğeyi kaydetmene gerek kalmadan hemen profiline ekler. **Seti dene** bir paketin tamamını profilinde önizler, **Hepsini kullan** ise içindeki her şeyi kullanır.
 
 ## Görünen ad stili
 

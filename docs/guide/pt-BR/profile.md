@@ -2,7 +2,7 @@
 title: Seu perfil
 section: Você
 summary: Sua foto, banner, estilo do nome, placa de identificação, decorações e efeitos, status e um visual diferente em cada servidor.
-source: 5fbc51dc9fa1
+source: 1e055d57e7e0
 ---
 
 Seu perfil é o que as pessoas veem quando clicam no seu nome. Abra o editor pela sua foto no canto inferior esquerdo e depois em **Editar perfil**.
@@ -42,6 +42,15 @@ Clique em qualquer um desses blocos no editor para abrir o seletor:
 3. Clique em **Aplicar**, ou clique duas vezes em uma opção. Depois em **Salvar alterações** para manter.
 
 A grade continua carregando enquanto você rola, então você vê tudo. As opções **Integrado** vêm com o Parley; as **Deste servidor** são extras que quem hospeda o seu servidor Parley adicionou.
+
+### Explorar tudo em Descobrir
+
+Para ver a coleção inteira de uma vez, abra **Descobrir** (a bússola na lista de servidores) e escolha **Estilo de perfil**. Cada cartão mostra o item na sua própria foto e no seu nome.
+
+- As abas no topo mostram um tipo de item, os **Pacotes** (conjuntos que combinam) ou as **Coleções**. Ordene por **Populares**, **Mais recentes** ou **A–Z**.
+- Os filtros à direita restringem a grade por tipo de item, cor, tema e tag. Digite `#` e uma tag na pesquisa para buscar só nas tags. **Ocultar filtros** recolhe os filtros.
+- Alguns designs vêm em vários estilos e dividem um cartão. Clique num cartão para ver os estilos, experimentar no seu perfil e ver os conjuntos de que ele faz parte.
+- **Usar** coloca o item no seu perfil na hora, sem precisar salvar. **Experimentar o conjunto** mostra um pacote inteiro no seu perfil, e **Usar tudo** coloca tudo o que ele tem.
 
 ## Estilo do nome de exibição
 

@@ -24,11 +24,12 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 /// What a client may be allowed to do, with the wording the consent page shows.
-pub const SCOPES: [(&str, &str); 6] = [
+pub const SCOPES: [(&str, &str); 7] = [
     ("mcp.read", "Read your servers, channels, DMs and messages, and search them"),
     ("mcp.notifications", "See your unread messages and mentions, and mark channels as read"),
     ("mcp.send", "Send, edit and react to messages and DMs as you"),
     ("mcp.manage", "Manage servers as you: create and edit channels, pin and delete messages, time out, kick and ban (only where you already have permission)"),
+    ("mcp.profile", "Change what you wear on your profile: avatar decorations, nameplates, profile effects and frames"),
     ("mcp.admin", "Post announcements as the Parley account (only if you are an instance admin)"),
     ("cosmetics.manage", "Add and edit the instance's profile cosmetics (only if you can manage the instance)"),
 ];
@@ -387,7 +388,7 @@ mod tests {
     #[test]
     fn tool_scopes_are_offered_only_when_asked_for() {
         let ask = |s: &str| offered(&parse_scopes(Some(s)).unwrap());
-        assert_eq!(ask("mcp.read"), ["mcp.read", "mcp.notifications", "mcp.send", "mcp.manage", "mcp.admin"]);
+        assert_eq!(ask("mcp.read"), ["mcp.read", "mcp.notifications", "mcp.send", "mcp.manage", "mcp.profile", "mcp.admin"]);
         assert_eq!(ask("cosmetics.manage"), ["cosmetics.manage"]);
         assert_eq!(ask("cosmetics.manage mcp.read"), ["mcp.read", "cosmetics.manage"]);
     }

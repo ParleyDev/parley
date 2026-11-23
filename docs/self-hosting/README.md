@@ -171,6 +171,28 @@ The folder is mounted read-only. Still frames are cached under `uploads/asset-ca
 
 `name` and `description` replace the ones taken from the file name. `tags` group items: people can search for a tag in the profile editor's pickers or click it to see only the items that have it, and the admin console's Cosmetics list filters by them the same way. Tags are shown in lower case without a leading `#`; an item keeps at most 20, each up to 32 characters, and repeats are dropped. Adding or editing an item in the admin console writes its tags here too.
 
+**Browsing: colours, themes, collections, styles and sets.** Members browse everything under Discover → **Profile Style**, sort it by popularity, newness or name, and wear an item or a whole set in one click. The page also uses these optional fields, which a shop sync script or Profile Studio can add. A value of the wrong type is ignored, and prices and availability are never shown.
+
+- On each entry:
+  - `colors`: any of purple, blue, green, brown, yellow, orange, red, pink, white, black.
+  - `themes`: codes such as `cute_cozy` or `sci_fi`.
+  - `collection_id`: groups related items, across kinds.
+  - `base_name` and `variant_label`: styles of one design, which share a card, for example "Crystals" and "Amethyst".
+  - `bundles`: a list of `[{id, name}]`.
+  - `shop_item_id`: what the bundle files refer to an item by.
+- At the top of the file:
+  - `tag_labels`: the colours' and themes' display names. "Cute & Cozy" becomes the code `cute_cozy`.
+  - `collections`: `{id: {items: [file or folder]}}`. When the file has this key, Parley keeps it in step with the entries' `collection_id`s whenever it writes the file.
+
+Sets (bundles) span kinds and live at the assets root. `bundles.json` has the shape `{"bundles": [{"id", "name", "collection_id", "items": [{"shop_item_id", "type"}]}]}`, where `type` is `avatar_decoration`, `nameplate`, `profile_effect` or `profile_frame`. An optional `bundles.local.json` is laid over it:
+- An entry whose `id` is in `bundles.json` overrides that bundle's fields: `items` replaces the whole list, and `deleted: true` hides the bundle.
+- Any other id is a set of its own. Its items may name a file or folder as `{"type", "key"}`.
+- A bundle that neither file defines takes its members from the entries' own `bundles` lists.
+
+Members never see items that are missing or turned off. Parley changes neither bundle file on its own. Profile Studio reads and writes them, and each kind's top-level fields, through the admin API (`/api/admin/cosmetics/bundles` and `/api/admin/cosmetics/{kind}/metadata`, with etags), and sets entry fields Parley doesn't manage through `fields`.
+
+When Parley rewrites a `metadata.json` file, it keeps the file's indentation and whether it ends with a newline.
+
 **Importing from another folder.** With the assets folder mounted read-write, Admin Console → Cosmetics → **Import from folder** takes a folder laid out the same way (`avatar-decorations/`, `nameplates/`, `profile-effects/`, `profile-frames/`, each with its `metadata.json`), picked in the browser. It lists, per kind, how many items that folder has, how many this server already has (matched by file or folder name) and how many are new, then adds only the new ones: their files, and their `metadata.json` entries copied as they are. Items whose id clashes with one already here, whose names have characters other than letters, digits, `.`, `_` and `-`, whose files are missing, or with a file over 8 MB are listed and skipped. Nothing already in the folder is changed.
 
 ## AI assistants (MCP)

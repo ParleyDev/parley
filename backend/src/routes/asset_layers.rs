@@ -67,6 +67,12 @@ pub struct Layered {
     /// Effects: the shop thumbnail, the picker's resting picture.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thumbnail: Option<String>,
+    /// Browse fields for Discover → Profile Style (explore.rs).
+    #[serde(skip)]
+    pub facets: super::explore::Facets,
+    /// When its newest file last changed (Unix seconds).
+    #[serde(skip)]
+    pub added: u64,
     #[serde(skip)]
     dir: PathBuf,
     #[serde(skip)]
@@ -79,6 +85,10 @@ pub struct Layered {
 pub struct LayerIndex {
     pub list: Vec<Layered>,
     by_id: HashMap<String, usize>,
+}
+impl Layered {
+    /// Its folder's name in the assets folder.
+    pub fn folder_name(&self) -> String { self.dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default() }
 }
 impl LayerIndex {
     pub fn get(&self, id: &str) -> Option<&Layered> { self.by_id.get(id).map(|&i| &self.list[i]) }
@@ -162,6 +172,7 @@ pub fn scan_layered(dir: &std::path::Path) -> LayerIndex {
         idx.by_id.insert(id.clone(), idx.list.len());
         idx.list.push(Layered {
             id, name, description: m["description"].as_str().unwrap_or_default().trim().to_string(), tags: super::assets::entry_tags(&m), layers, layout: m["layout"].clone(),
+            facets: super::explore::Facets::of(&m), added: newest,
             still: pick("static.png"), reduced_motion: pick("reduced_motion.png"), thumbnail: pick("thumbnail.png"), tag: format!("{newest:x}-{total:x}"), dir: path, files,
         });
     }

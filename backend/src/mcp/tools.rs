@@ -177,6 +177,25 @@ Names not given keep their current setting; list a name in reset to go back to t
         schema: || obj(json!({ "server_id": id("Server id"),
             "max_uses": { "type": "integer", "enum": [1, 5, 10, 25, 50, 100], "description": "How many people can use it" },
             "max_age": { "type": "integer", "enum": [1800, 3600, 21600, 43200, 86400, 604800, 2592000], "description": "Seconds until it expires (30 minutes to 30 days)" } }), &["server_id"]) },
+    // ---- profile style ----
+    Tool { name: "browse_profile_style", title: "Browse profile style", scope: "mcp.read", read_only: true, destructive: false,
+        description: "What this server offers to wear on a profile (Discover → Profile Style): avatar decorations, nameplates, profile effects and frames, with their colours, themes, collection, styles of one design and the sets (bundles) they belong to. show=bundles lists sets and show=collections lists collections instead of items. Each item's `value` is what wear_profile_items takes; `wearing` marks what the user has on.",
+        schema: || obj(json!({
+            "show": { "type": "string", "enum": ["items", "bundles", "collections"], "description": "What to list (default items)" },
+            "kind": { "type": "string", "enum": ["decoration", "nameplate", "effect", "frame"], "description": "Only this kind of item" },
+            "query": { "type": "string", "description": "Words in a name or description, or #tag for a tag" },
+            "color": { "type": "string", "description": "A colour code: purple, blue, green, brown, yellow, orange, red, pink, white, black" },
+            "theme": { "type": "string", "description": "A theme code, e.g. anime, gaming, cute_cozy, sci_fi, food_drinks, fantasy, animals_pets, nature, movies_tv, dark_moody" },
+            "collection_id": { "type": "string", "description": "Only this collection's items" },
+            "sort": { "type": "string", "enum": ["popular", "newest", "az"], "description": "Order (default popular)" },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 100, "description": "How many (default 30)" },
+            "offset": { "type": "integer", "minimum": 0, "description": "Skip this many (paging)" } }), &[]) },
+    Tool { name: "wear_profile_items", title: "Wear profile items", scope: "mcp.profile", read_only: false, destructive: false,
+        description: "Put items on the user's profile at once (no save step): `values` from browse_profile_style (one per kind; a later one of the same kind wins), or every item of a set with `bundle_id`. `take_off` removes what the user wears of those kinds. Everyone sees the change.",
+        schema: || obj(json!({
+            "values": { "type": "array", "items": { "type": "string" }, "maxItems": 4, "description": "Item values (asset:…) to wear" },
+            "bundle_id": { "type": "string", "description": "Wear the whole set" },
+            "take_off": { "type": "array", "items": { "type": "string", "enum": ["decoration", "nameplate", "effect", "frame"] }, "description": "Kinds to take off" } }), &[]) },
     Tool { name: "announce", title: "Post an announcement as Parley", scope: "mcp.admin", read_only: false, destructive: false,
         description: "Instance admins only: post a message as the official Parley account in a server's text or announcement channel (release notes and the like). @everyone pings. In an announcement channel it is also published to following channels unless publish is false.",
         schema: || obj(json!({ "channel_id": id("Text or announcement channel id"), "content": { "type": "string", "minLength": 1, "maxLength": 2000, "description": "Text (Markdown, links, @everyone)" }, "publish": { "type": "boolean", "description": "Publish to following channels (default true)" } }), &["channel_id", "content"]) },
@@ -324,6 +343,8 @@ async fn run(c: &Caller, name: &str, a: &Value) -> Result<Value, String> {
                     "allow": perm_names(o["allow"].as_i64().unwrap_or(0) as u64), "deny": perm_names(o["deny"].as_i64().unwrap_or(0) as u64),
                 })).collect::<Vec<_>>() })
         }
+        "browse_profile_style" => browse_profile_style(c, a).await?,
+        "wear_profile_items" => wear_profile_items(c, a).await?,
         "list_threads" => {
             let v = api(c, Method::GET, &format!("/channels/{}/threads", uuid(a, "channel_id")?), None).await?;
             let list = v.as_array().cloned().or_else(|| v["threads"].as_array().cloned()).unwrap_or_default();
@@ -518,4 +539,82 @@ mod tests {
         assert!(perm_bits(&json!({ "p": ["FLY"] }), "p").is_err());
         assert_eq!(perm_bits(&json!({}), "p").unwrap(), 0);
     }
+}
+
+// ---- profile style --------------------------------------------------------------------------------------------
+
+const FIELD_OF: [(&str, &str); 4] = [("decoration", "avatar_decoration"), ("nameplate", "nameplate"), ("effect", "profile_effect"), ("frame", "profile_frame")];
+fn field_of(kind: &str) -> Option<&'static str> { FIELD_OF.iter().find(|(k, _)| *k == kind).map(|(_, f)| *f) }
+
+async fn browse_profile_style(c: &Caller, a: &Value) -> Result<Value, String> {
+    let cat = api(c, Method::GET, "/cosmetics/explore", None).await?;
+    let me = api(c, Method::GET, "/users/@me", None).await?;
+    let limit = int(a, "limit", 30, 1, 100) as usize;
+    let offset = int(a, "offset", 0, 0, 100_000) as usize;
+    let items: Vec<Value> = cat["items"].as_array().cloned().unwrap_or_default();
+    let name_of = |kind: &Value, value: &Value| items.iter().find(|i| i["kind"] == *kind && i["value"] == *value).map(|i| i["name"].clone()).unwrap_or(Value::Null);
+    let page = |list: Vec<Value>| { let total = list.len(); json!({ "total": total, "offset": offset, "results": list.into_iter().skip(offset).take(limit).collect::<Vec<_>>() }) };
+    match opt_text(a, "show").as_deref() {
+        Some("bundles") => {
+            let list = cat["bundles"].as_array().cloned().unwrap_or_default().iter().map(|b| json!({ "id": b["id"], "name": b["name"], "collection_id": b["collection_id"],
+                "items": b["items"].as_array().cloned().unwrap_or_default().iter().map(|x| json!({ "kind": x["kind"], "value": x["value"], "name": name_of(&x["kind"], &x["value"]) })).collect::<Vec<_>>() })).collect();
+            return Ok(page(list));
+        }
+        Some("collections") => return Ok(page(cat["collections"].as_array().cloned().unwrap_or_default())),
+        _ => {}
+    }
+    let q = opt_text(a, "query").map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty());
+    let has = |i: &Value, k: &str, v: &str| i[k].as_array().is_some_and(|l| l.iter().any(|x| x.as_str() == Some(v)));
+    let mut hits: Vec<&Value> = items.iter().filter(|i| {
+        opt_text(a, "kind").is_none_or(|k| i["kind"] == k.as_str())
+            && opt_text(a, "color").is_none_or(|v| has(i, "colors", &v.to_lowercase()))
+            && opt_text(a, "theme").is_none_or(|v| has(i, "themes", &v.to_lowercase()))
+            && opt_text(a, "collection_id").is_none_or(|v| i["collection_id"] == v.as_str())
+            && q.as_ref().is_none_or(|q| match q.strip_prefix('#') {
+                Some(tag) => i["tags"].as_array().is_some_and(|l| l.iter().filter_map(Value::as_str).any(|t| t.starts_with(tag))),
+                None => ["name", "description", "base_name", "variant_label"].iter().any(|k| i[*k].as_str().is_some_and(|s| s.to_lowercase().contains(q.as_str())))
+                    || i["tags"].as_array().is_some_and(|l| l.iter().filter_map(Value::as_str).any(|t| t.contains(q.as_str()))),
+            })
+    }).collect();
+    match opt_text(a, "sort").as_deref() {
+        Some("az") => hits.sort_by(|x, y| x["name"].as_str().cmp(&y["name"].as_str())),
+        Some("newest") => hits.sort_by(|x, y| y["added"].as_u64().cmp(&x["added"].as_u64())),
+        _ => hits.sort_by_key(|i| i["rank"].as_u64().unwrap_or(u64::MAX)),
+    }
+    let list = hits.into_iter().map(|i| {
+        let mut o = pick(i, &["kind", "value", "name", "description", "variant_label", "base_name", "colors", "themes", "collection_id", "bundles", "tags"]);
+        if field_of(i["kind"].as_str().unwrap_or_default()).is_some_and(|f| me[f] == i["value"]) { o["wearing"] = json!(true) }
+        o
+    }).collect();
+    Ok(page(list))
+}
+
+async fn wear_profile_items(c: &Caller, a: &Value) -> Result<Value, String> {
+    let mut body = Map::new();
+    if let Some(kinds) = a.get("take_off").and_then(Value::as_array) {
+        for k in kinds { let f = field_of(k.as_str().unwrap_or_default()).ok_or(format!("Unknown kind {k}"))?; body.insert(f.into(), json!("")); }
+    }
+    let values: Vec<String> = a.get("values").and_then(Value::as_array).map(|l| l.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+    let bundle = opt_text(a, "bundle_id").filter(|s| !s.trim().is_empty());
+    if values.is_empty() && bundle.is_none() && body.is_empty() { return Err("Give values, a bundle_id or take_off".into()) }
+    if !values.is_empty() || bundle.is_some() {
+        let cat = api(c, Method::GET, "/cosmetics/explore", None).await?;
+        let mut wanted: Vec<(String, String)> = Vec::new();
+        if let Some(id) = &bundle {
+            let b = cat["bundles"].as_array().and_then(|l| l.iter().find(|b| b["id"].as_str() == Some(id.trim()))).ok_or(format!("No set {id:?}: list them with browse_profile_style show=bundles"))?;
+            for x in b["items"].as_array().cloned().unwrap_or_default() {
+                let k = x["kind"].as_str().unwrap_or_default().to_string();
+                if !wanted.iter().any(|(wk, _)| *wk == k) { wanted.push((k, x["value"].as_str().unwrap_or_default().to_string())) }
+            }
+        }
+        for v in &values {
+            let it = cat["items"].as_array().and_then(|l| l.iter().find(|i| i["value"].as_str() == Some(v.trim()))).ok_or(format!("No item {v:?}: find values with browse_profile_style"))?;
+            let k = it["kind"].as_str().unwrap_or_default().to_string();
+            wanted.retain(|(wk, _)| *wk != k);
+            wanted.push((k, v.trim().to_string()));
+        }
+        for (k, v) in wanted { if let Some(f) = field_of(&k) { body.insert(f.into(), json!(v)); } }
+    }
+    let out = api(c, Method::PATCH, "/users/@me/cosmetics", Some(Value::Object(body))).await?;
+    Ok(json!({ "wearing": out }))
 }

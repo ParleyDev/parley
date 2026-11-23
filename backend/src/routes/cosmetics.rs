@@ -160,6 +160,9 @@ struct AdminItem {
     data: Value,
     /// How many people have it on their profile.
     users: i64,
+    /// Folder items: their whole metadata.json entry, as stored (Profile Studio compares and pulls it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entry: Option<Value>,
 }
 
 async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kind): Path<String>) -> AppResult<Json<Vec<AdminItem>>> {
@@ -170,7 +173,9 @@ async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     let counts: HashMap<String, i64> = sqlx::query_as::<_, (String, i64)>(&format!("SELECT {c}, COUNT(*) FROM users WHERE {c} <> '' GROUP BY 1", c = column(&kind)))
         .fetch_all(&state.db).await?.into_iter().collect();
     let mut out = Vec::new();
-    let mut push = |value: String, source: &'static str, name: Option<String>, description: Option<String>, tags: Vec<String>, data: Value| {
+    let dir = state.config.assets_dir.join(match kind.as_str() { "decoration" => assets::DECORATIONS_DIR, "nameplate" => assets::NAMEPLATES_DIR, "effect" => asset_layers::EFFECTS_DIR, _ => asset_layers::FRAMES_DIR });
+    let entries = tokio::task::spawn_blocking(move || assets::read_metadata(&dir)).await.unwrap_or_default();
+    let mut push = |value: String, source: &'static str, name: Option<String>, description: Option<String>, tags: Vec<String>, data: Value, key: Option<String>| {
         let r = rows.get(&value);
         let own = source != "folder";
         out.push(AdminItem {
@@ -181,19 +186,20 @@ async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             deleted: r.map(|r| r.deleted).unwrap_or(false),
             data: if source == "custom" { r.map(|r| r.data.clone()).unwrap_or(json!({})) } else { data },
             users: counts.get(&value).copied().unwrap_or(0),
+            entry: key.and_then(|k| entries.get(&k).cloned()),
             value, source,
         });
     };
-    for b in builtins(&kind) { push(b.to_string(), "builtin", None, None, vec![], json!({})) }
+    for b in builtins(&kind) { push(b.to_string(), "builtin", None, None, vec![], json!({}), None) }
     let p = assets::ASSET_PREFIX;
     let some = |s: &str| Some(s.to_string()).filter(|s| !s.is_empty());
     match kind.as_str() {
-        "decoration" => for d in &assets::decorations(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), d.tags.clone(), json!({ "file": d.file_name() })) },
-        "nameplate" => for d in &assets::nameplates(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), d.tags.clone(), json!({ "file": d.file_name() })) },
-        "effect" => for d in &asset_layers::effects(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), d.tags.clone(), json!({ "layers": d.layers, "still": d.still, "thumbnail": d.thumbnail, "reduced_motion": d.reduced_motion })) },
-        _ => for d in &asset_layers::frames(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), d.tags.clone(), json!({ "layers": d.layers, "layout": d.layout })) },
+        "decoration" => for d in &assets::decorations(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), d.tags.clone(), json!({ "file": d.file_name() }), Some(d.file_name())) },
+        "nameplate" => for d in &assets::nameplates(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), d.description.clone(), d.tags.clone(), json!({ "file": d.file_name() }), Some(d.file_name())) },
+        "effect" => for d in &asset_layers::effects(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), d.tags.clone(), json!({ "layers": d.layers, "still": d.still, "thumbnail": d.thumbnail, "reduced_motion": d.reduced_motion }), Some(d.folder_name())) },
+        _ => for d in &asset_layers::frames(&state.config).await.list { push(format!("{p}{}", d.id), "folder", Some(d.name.clone()), some(&d.description), d.tags.clone(), json!({ "layers": d.layers, "layout": d.layout }), Some(d.folder_name())) },
     }
-    for r in rows.values().filter(|r| r.custom) { push(r.value.clone(), "custom", None, None, vec![], json!({})) }
+    for r in rows.values().filter(|r| r.custom) { push(r.value.clone(), "custom", None, None, vec![], json!({}), None) }
     Ok(Json(out))
 }
 

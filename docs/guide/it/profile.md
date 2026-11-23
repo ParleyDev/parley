@@ -2,7 +2,7 @@
 title: Il tuo profilo
 section: Tu
 summary: La tua immagine, il banner, lo stile del nome, la targhetta, le decorazioni e gli effetti, lo stato e un aspetto diverso per ogni server.
-source: 5fbc51dc9fa1
+source: 1e055d57e7e0
 ---
 
 Il tuo profilo è quello che vedono le persone quando fanno clic sul tuo nome. Apri l'editor dalla tua immagine nell'angolo in basso a sinistra, poi scegli **Modifica profilo**.
@@ -42,6 +42,15 @@ Fai clic su uno di questi riquadri nell'editor per aprire il relativo selettore:
 3. Fai clic su **Applica** o doppio clic su un'opzione. Poi **Salva modifiche** per tenerla.
 
 La griglia continua a caricarsi mentre scorri, così vedi tutto. Le opzioni **Integrato** sono incluse in Parley; quelle **Da questo server** sono extra aggiunti da chi gestisce il tuo server Parley.
+
+### Sfogliare tutto in Esplora
+
+Per vedere tutta la collezione in una volta, apri **Esplora** (la bussola nell'elenco dei server) e scegli **Stile profilo**. Ogni scheda mostra l'oggetto sulla tua immagine e sul tuo nome.
+
+- Le schede in alto mostrano un tipo di oggetto, i **Pacchetti** (set abbinati) o le **Collezioni**. Ordina per **Popolari**, **Più recenti** o **A–Z**.
+- I filtri a destra restringono la griglia per tipo di oggetto, colore, tema e tag. Scrivi `#` e un tag nella ricerca per cercare solo tra i tag. **Nascondi filtri** li richiude.
+- Alcuni design esistono in più stili e condividono una scheda. Fai clic su una scheda per vederne gli stili, provarlo sul tuo profilo e vedere i set di cui fa parte.
+- **Indossalo** mette subito un oggetto sul tuo profilo, senza bisogno di salvare. **Prova il set** mostra un pacchetto intero sul tuo profilo e **Indossa tutto** indossa tutto quello che contiene.
 
 ## Stile del nome visualizzato
 

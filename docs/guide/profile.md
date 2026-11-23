@@ -26,6 +26,8 @@ covers:
   - frontend/src/components/NowPlaying.tsx
   - frontend/src/lib/cosmetics.ts
   - frontend/src/lib/decorations.ts
+  - frontend/src/pages/ProfileStyle.tsx
+  - frontend/src/lib/explore.ts
 ---
 
 Your profile is what people see when they click your name. Open the editor from your picture in the bottom-left corner, then **Edit Profile**.
@@ -65,6 +67,15 @@ Click any of these tiles in the editor to open its picker:
 3. Click **Apply**, or double-click an option. Then **Save Changes** to keep it.
 
 The grid keeps loading as you scroll, so you'll see everything. **Built in** options come with Parley; **From this server** are extras your Parley server's host has added.
+
+### Browse everything in Discover
+
+To see the whole collection at once, open **Discover** (the compass in the server list) and choose **Profile Style**. Every card shows the item on your own picture and name.
+
+- The tabs at the top show one kind of item, **Bundles** (sets that go together) or **Collections**. Sort by **Popular**, **Newest** or **A–Z**.
+- The filters on the right narrow the grid by item type, colour, theme and tag. Type `#` and a tag in the search box to search tags only. **Hide filters** folds them away.
+- Some designs come in several styles and share one card. Click a card to see its styles, preview it on your profile, and see the sets it's in.
+- **Wear it** puts an item on your profile straight away, with no need to save. **Try the set** previews a whole bundle on your profile, and **Wear all** puts on everything in it.
 
 ## Display name style
 

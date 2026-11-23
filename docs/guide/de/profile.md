@@ -2,7 +2,7 @@
 title: Dein Profil
 section: Du
 summary: Dein Bild, Banner, Namensstil, Namensschild, Dekorationen und Effekte, dein Status und ein eigener Look pro Server.
-source: 5fbc51dc9fa1
+source: 1e055d57e7e0
 ---
 
 Dein Profil ist das, was andere sehen, wenn sie auf deinen Namen klicken. Öffne den Editor über dein Bild in der Ecke unten links und dann **Profil bearbeiten**.
@@ -42,6 +42,15 @@ Klicke im Editor auf eine dieser Kacheln, um ihre Auswahl zu öffnen:
 3. Klicke auf **Anwenden** oder doppelklicke eine Option. Dann **Änderungen speichern**, um sie zu behalten.
 
 Das Raster lädt beim Scrollen weiter, du siehst also alles. **Integriert**-Optionen gehören zu Parley; **Von diesem Server** sind Extras, die der Betreiber deines Parley-Servers hinzugefügt hat.
+
+### Alles unter Entdecken durchstöbern
+
+Um die ganze Sammlung auf einmal zu sehen, öffne **Entdecken** (den Kompass in der Serverliste) und wähle **Profil-Style**. Jede Karte zeigt das Item an deinem eigenen Bild und Namen.
+
+- Die Tabs oben zeigen eine Art von Item, **Bundles** (zusammenpassende Sets) oder **Kollektionen**. Sortiere nach **Beliebt**, **Neueste** oder **A–Z**.
+- Die Filter rechts grenzen das Raster nach Art, Farbe, Thema und Tag ein. Tippe `#` und einen Tag ins Suchfeld, um nur Tags zu durchsuchen. **Filter ausblenden** klappt sie weg.
+- Manche Designs gibt es in mehreren Varianten, die sich eine Karte teilen. Klicke auf eine Karte, um ihre Varianten zu sehen, sie an deinem Profil auszuprobieren und die Sets zu sehen, zu denen sie gehört.
+- **Tragen** setzt ein Item sofort in dein Profil, ganz ohne Speichern. **Set anprobieren** zeigt ein ganzes Bundle an deinem Profil, und **Alles tragen** legt alles daraus an.
 
 ## Anzeigenamen-Stil
 

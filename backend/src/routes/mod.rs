@@ -1,6 +1,7 @@
 pub mod account;
 pub mod themes;
 pub mod cosmetics;
+pub mod explore;
 pub mod custom_badges;
 pub mod guests;
 pub mod admin_user;
@@ -94,6 +95,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(auth::router())
         .merge(themes::router())
         .merge(cosmetics::router())
+        .merge(explore::router())
         .merge(scheduled::router())
         .merge(guests::router())
         .merge(admin_user::router())
