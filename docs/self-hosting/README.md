@@ -149,7 +149,7 @@ Besides the built-in frames, people can pick image decorations that you provide.
 
 - **Formats:** PNG, APNG, GIF or WebP, up to 8 MB each. Animated files play when someone hovers an avatar and on profile cards; lists show the first frame. Reduced motion keeps them still.
 - **Shape:** square, with a transparent middle where the avatar shows through. The image is drawn at 1.2× the avatar size, centred, so a 288×288 file suits Discord-style decorations.
-- **Names:** the file name is the name people see (`a_hint_of_clove.png` → "A Hint Of Clove") and, lower-cased, the id saved on profiles. Renaming a file therefore removes it from the people using it.
+- **Names:** the file name is the name people see (`a_hint_of_clove.png` → "A Hint Of Clove") and, lower-cased with anything other than letters, digits, `_` and `-` turned into `_` (`all_bark,_all_bite.webm` → `all_bark__all_bite`), the id saved on profiles. Names added through the admin console or Import may use letters, digits, spaces and `. _ - ! & ' ( ) ,`. Renaming a file therefore removes it from the people using it.
 - **Changes:** adding or removing files needs no restart; the list refreshes within 30 seconds. A removed decoration simply stops showing.
 
 The folder is mounted read-only. Still frames are cached under `uploads/asset-cache/`, which is safe to delete.
@@ -193,7 +193,7 @@ Members never see items that are missing or turned off. Parley changes neither b
 
 When Parley rewrites a `metadata.json` file, it keeps the file's indentation and whether it ends with a newline.
 
-**Importing from another folder.** With the assets folder mounted read-write, Admin Console → Cosmetics → **Import from folder** takes a folder laid out the same way (`avatar-decorations/`, `nameplates/`, `profile-effects/`, `profile-frames/`, each with its `metadata.json`), picked in the browser. It lists, per kind, how many items that folder has, how many this server already has (matched by file or folder name) and how many are new, then adds only the new ones: their files, and their `metadata.json` entries copied as they are. Items whose id clashes with one already here, whose names have characters other than letters, digits, `.`, `_` and `-`, whose files are missing, or with a file over 8 MB are listed and skipped. Nothing already in the folder is changed.
+**Importing from another folder.** With the assets folder mounted read-write, Admin Console → Cosmetics → **Import from folder** takes a folder laid out the same way (`avatar-decorations/`, `nameplates/`, `profile-effects/`, `profile-frames/`, each with its `metadata.json`), picked in the browser. It lists, per kind, how many items that folder has, how many this server already has (matched by file or folder name) and how many are new, then adds only the new ones: their files, and their `metadata.json` entries copied as they are. Items whose id clashes with one already here, whose file or folder names have characters other than letters, digits, spaces and `. _ - ! & ' ( ) ,` (or start with `.` or a space, end with a space, run past 100 characters; folder names also leave out `.`), whose files are missing, or with a file over 8 MB are listed and skipped. Nothing already in the folder is changed.
 
 ## AI assistants (MCP)
 

@@ -160,13 +160,22 @@ fn precondition(headers: &HeaderMap, current: Option<&str>) -> bool {
 }
 
 /// A file name that is safe to write in the folder, with an extension this kind may use.
+/// Characters a name may have besides ASCII letters and digits. The punctuation is what Discord profile sync tools
+/// write (e.g. "all_bark,_all_bite.webm"); `/ \ : * ? " < > |` and control characters stay out, so a name is
+/// never a path. Folder names take the same set without '.'.
+const NAME_PUNCT: &str = "._- !&'(),";
+
+/// A name made of `allowed` characters, 1 to 100 long, with no leading or trailing space.
+fn tidy_name(name: &str, allowed: &str) -> bool {
+    !name.is_empty() && name.len() <= 100 && name.trim() == name && name.chars().all(|c| c.is_ascii_alphanumeric() || allowed.contains(c))
+}
+
 fn clean_file_name(kind: &str, name: &str) -> AppResult<String> {
-    let name = name.trim();
-    let ok = !name.is_empty() && name.len() <= 100 && !name.starts_with('.') && name.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
+    let ok = tidy_name(name, NAME_PUNCT) && !name.starts_with('.');
     let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
     let exts: &[&str] = match kind { "nameplate" => &["png", "apng", "gif", "webp", "webm", "mp4"], _ => &["png", "apng", "gif", "webp"] };
     if !ok || !exts.contains(&ext.as_str()) {
-        return Err(AppError::BadRequest(format!("{name}: file names are letters, digits, '.', '_' and '-', ending in {}", exts.join(", "))));
+        return Err(AppError::BadRequest(format!("{name}: file names are letters, digits, spaces and . _ - ! & ' ( ) , (not starting with '.' or a space), ending in {}", exts.join(", "))));
     }
     Ok(name.to_string())
 }
@@ -424,9 +433,7 @@ async fn edit(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((kind
 
 /// A layered item's folder name as it may be written: letters, digits, '_' and '-'.
 fn clean_folder_name(name: &str) -> AppResult<String> {
-    let name = name.trim();
-    let ok = !name.is_empty() && name.len() <= 100 && name.chars().all(|c| c.is_ascii_alphanumeric() || "_-".contains(c));
-    if !ok { return Err(AppError::BadRequest(format!("{name}: folder names are letters, digits, '_' and '-'"))) }
+    if !tidy_name(name, &NAME_PUNCT.replace('.', "")) { return Err(AppError::BadRequest(format!("{name}: folder names are letters, digits, spaces and _ - ! & ' ( ) , (not starting or ending with a space)"))) }
     Ok(name.to_string())
 }
 
@@ -642,9 +649,19 @@ mod tests {
         assert!(clean_file_name("effect", ".hidden.png").is_err());
         assert!(clean_file_name("effect", "clip.webm").is_err());
         assert!(clean_file_name("nameplate", "clip.webm").is_ok());
+        assert!(clean_file_name("nameplate", "all_bark,_all_bite.webm").is_ok());
+        assert!(clean_file_name("effect", "Rock & Roll (Don't Stop)!.png").is_ok());
+        for bad in [" lead.png", "trail.png ", "a/b.png", "a\\b.png", "a:b.png", "a*.png", "a?.png", "a\".png", "a<b>.png", "a|b.png", "a\tb.png", "é.png"] {
+            assert!(clean_file_name("effect", bad).is_err(), "{bad}");
+        }
+        assert!(clean_file_name("effect", &format!("{}.png", "a".repeat(97))).is_err());
+        assert!(clean_folder_name("all_bark,_all_bite (alt)").is_ok());
+        assert!(clean_folder_name("a.b").is_err());
+        assert!(clean_folder_name("..").is_err());
+        assert!(clean_folder_name(" x").is_err());
         assert!(clean_folder_name("alt_raccoon").is_ok());
         assert!(clean_folder_name("../up").is_err());
-        assert!(clean_folder_name("a b").is_err());
+        assert!(clean_folder_name("a b").is_ok());
     }
 
     #[test]

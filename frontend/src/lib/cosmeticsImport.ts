@@ -20,12 +20,17 @@ const FILE_EXTS: Record<CosmeticKind, string[]> = {
   frame: ['png', 'apng', 'gif', 'webp'],
 }
 /** A file name the server writes as it is (asset_admin.rs clean_file_name). */
+/** Names the server takes (asset_admin.rs NAME_PUNCT): ASCII letters, digits and these, 1 to 100 long, no leading or
+ * trailing space. Folders don't take '.'. */
+const NAME_RE = /^[A-Za-z0-9._\- !&'(),]+$/
+const FOLDER_RE = /^[A-Za-z0-9_\- !&'(),]+$/
+const tidyName = (name: string, re: RegExp) => name.length > 0 && name.length <= 100 && name.trim() === name && re.test(name)
 export function okFileName(kind: CosmeticKind, name: string) {
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
-  return name.length > 0 && name.length <= 100 && !name.startsWith('.') && /^[A-Za-z0-9._-]+$/.test(name) && FILE_EXTS[kind].includes(ext)
+  return tidyName(name, NAME_RE) && !name.startsWith('.') && FILE_EXTS[kind].includes(ext)
 }
 /** A layered item's folder name the server takes (asset_admin.rs clean_folder_name). */
-export const okFolderName = (name: string) => name.length > 0 && name.length <= 100 && /^[A-Za-z0-9_-]+$/.test(name)
+export const okFolderName = (name: string) => tidyName(name, FOLDER_RE)
 
 /** A picked file, by its path inside the picked folder (`webkitRelativePath`). */
 export interface PickedFile { path: string; file: File }

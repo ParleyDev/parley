@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "Oddal (−)",
 "Zoom to the selection, or to the whole song (Z)": "Przybliż do zaznaczenia lub całego utworu (Z)",
 "a file is over {n} MB": "plik przekracza {n} MB",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "nazwa pliku lub folderu zawiera znaki inne niż litery, cyfry, '.', '_' i '-'",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "nazwa pliku lub folderu zawiera niedozwolony znak (używaj liter, cyfr, spacji i . _ - ! & ' ( ) ,)",
 "active sessions": "aktywne sesje",
 "attachments": "załączniki",
 "authorized apps": "autoryzowane aplikacje",

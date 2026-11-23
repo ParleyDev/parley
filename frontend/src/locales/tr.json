@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "Uzaklaştır (−)",
 "Zoom to the selection, or to the whole song (Z)": "Seçime veya tüm şarkıya yakınlaştır (Z)",
 "a file is over {n} MB": "bir dosya {n} MB'ı aşıyor",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "bir dosya veya klasör adında harf, rakam, '.', '_' ve '-' dışında karakterler var",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "bir dosya veya klasör adında izin verilmeyen bir karakter var (harf, rakam, boşluk ve . _ - ! & ' ( ) , kullanın)",
 "active sessions": "aktif oturumlar",
 "attachments": "ekler",
 "authorized apps": "yetkili uygulamalar",

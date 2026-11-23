@@ -43,7 +43,7 @@ export default function CosmeticsImport({ onClose, onImported }: { onClose: () =
   const KIND_LABEL: Record<CosmeticKind, string> = { decoration: t('Avatar decorations'), nameplate: t('Nameplates'), effect: t('Profile effects'), frame: t('Profile frames') }
   const PROBLEM: Record<NonNullable<ImportItem['problem']>, string> = {
     'no-files': t('its files aren\'t in the folder'),
-    'bad-name': t('a file or folder name has characters other than letters, digits, \'.\', \'_\' and \'-\''),
+    'bad-name': t('a file or folder name has a character that isn\'t allowed (use letters, digits, spaces and . _ - ! & \' ( ) ,)'),
     'too-big': t('a file is over {n} MB', { n: MAX_IMPORT_FILE / 1024 / 1024 }),
   }
 

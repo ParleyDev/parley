@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "Uitzoomen (−)",
 "Zoom to the selection, or to the whole song (Z)": "Zoomen naar de selectie, of naar het hele nummer (Z)",
 "a file is over {n} MB": "een bestand is groter dan {n} MB",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "een bestands- of mapnaam bevat andere tekens dan letters, cijfers, '.', '_' en '-'",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "een bestands- of mapnaam bevat een teken dat niet is toegestaan (gebruik letters, cijfers, spaties en . _ - ! & ' ( ) ,)",
 "active sessions": "actieve sessies",
 "attachments": "bijlagen",
 "authorized apps": "geautoriseerde apps",

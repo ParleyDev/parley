@@ -4462,7 +4462,7 @@
 "a DM",
 "a direct message",
 "a file is over {n} MB",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)",
 "a message",
 "a server",
 "a suspicious link",

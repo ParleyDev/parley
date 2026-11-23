@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "缩小（−）",
 "Zoom to the selection, or to the whole song (Z)": "缩放到所选内容或整首歌（Z）",
 "a file is over {n} MB": "有文件超过 {n} MB",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "文件或文件夹名称中含有字母、数字、'.'、'_' 和 '-' 以外的字符",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "文件或文件夹名称含有不允许的字符（可使用字母、数字、空格和 . _ - ! & ' ( ) ,）",
 "active sessions": "活跃会话",
 "attachments": "附件",
 "authorized apps": "已授权应用",

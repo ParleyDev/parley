@@ -39,12 +39,12 @@ describe('planImport', () => {
 
   it('flags names the server would refuse, files over its limit, and repeated entries', async () => {
     const plans = await planImport([
-      { path: 'avatar-decorations/metadata.json', file: meta([{ file: 'two words.png' }, { file: 'big.png' }, { file: 'ok.png' }, { file: 'ok.png' }]) },
-      { path: 'avatar-decorations/two words.png', file: file() },
+      { path: 'avatar-decorations/metadata.json', file: meta([{ file: 'two?words.png' }, { file: 'big.png' }, { file: 'ok.png' }, { file: 'ok.png' }]) },
+      { path: 'avatar-decorations/two?words.png', file: file() },
       { path: 'avatar-decorations/big.png', file: file(MAX_IMPORT_FILE + 1) },
       { path: 'avatar-decorations/ok.png', file: file() },
     ])
-    expect(plans[0].items.map((i) => [i.key, i.problem])).toEqual([['two words.png', 'bad-name'], ['big.png', 'too-big'], ['ok.png', undefined]])
+    expect(plans[0].items.map((i) => [i.key, i.problem])).toEqual([['two?words.png', 'bad-name'], ['big.png', 'too-big'], ['ok.png', undefined]])
   })
 })
 
@@ -55,5 +55,10 @@ describe('names', () => {
     expect(okFileName('decoration', '.hidden.png')).toBe(false)
     expect(okFolderName('alt_raccoon')).toBe(true)
     expect(okFolderName('a.b')).toBe(false)
+    expect(okFileName('nameplate', 'all_bark,_all_bite.webm')).toBe(true)
+    expect(okFileName('effect', "Rock & Roll (Don't Stop)!.png")).toBe(true)
+    for (const bad of [' lead.png', 'trail.png ', 'a:b.png', 'a*b.png', 'a"b.png', 'a<b>.png', 'a|b.png', 'é.png']) expect(okFileName('effect', bad)).toBe(false)
+    expect(okFolderName('all_bark,_all_bite (alt)')).toBe(true)
+    expect(okFolderName(' x')).toBe(false)
   })
 })

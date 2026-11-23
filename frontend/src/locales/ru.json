@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "Отдалить (−)",
 "Zoom to the selection, or to the whole song (Z)": "Масштаб по выделению или по всей песне (Z)",
 "a file is over {n} MB": "файл больше {n} МБ",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "в имени файла или папки есть символы, кроме букв, цифр, «.», «_» и «-»",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "в имени файла или папки есть недопустимый символ (можно буквы, цифры, пробелы и . _ - ! & ' ( ) ,)",
 "active sessions": "активные сеансы",
 "attachments": "вложения",
 "authorized apps": "авторизованные приложения",

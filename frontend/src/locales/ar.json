@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "تصغير (−)",
 "Zoom to the selection, or to the whole song (Z)": "تكبير إلى التحديد، أو إلى الأغنية كاملة (Z)",
 "a file is over {n} MB": "حجم أحد الملفات يتجاوز {n} MB",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "يحتوي اسم ملف أو مجلد على رموز غير الحروف والأرقام و'.' و'_' و'-'",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "يحتوي اسم ملف أو مجلد على حرف غير مسموح به (استخدم الحروف والأرقام والمسافات و . _ - ! & ' ( ) ,)",
 "active sessions": "الجلسات النشطة",
 "attachments": "المرفقات",
 "authorized apps": "التطبيقات المصرّح لها",

@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "ズームアウト (−)",
 "Zoom to the selection, or to the whole song (Z)": "選択範囲、または曲全体にズーム (Z)",
 "a file is over {n} MB": "{n} MBを超えるファイルがあります",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "ファイル名またはフォルダー名に英字、数字、「.」「_」「-」以外の文字が含まれています",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "ファイル名またはフォルダー名に使えない文字が含まれています（英字、数字、スペース、. _ - ! & ' ( ) , が使えます）",
 "active sessions": "アクティブなセッション",
 "attachments": "添付ファイル",
 "authorized apps": "認証済みアプリ",

@@ -32,8 +32,8 @@ const BUILTIN_LABELS: Record<CosmeticKind, Record<string, string>> = {
 }
 const FOLDER: Record<CosmeticKind, string> = { decoration: 'avatar-decorations', nameplate: 'nameplates', effect: 'profile-effects', frame: 'profile-frames' }
 const assetId = (value: string) => value.slice('asset:'.length)
-/** A file name the folder accepts: letters, digits, '.', '_' and '-'. */
-const safeName = (name: string) => name.trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^\.+/, '') || 'file.png'
+/** A file name the folder accepts (asset_admin.rs NAME_PUNCT): letters, digits, spaces and . _ - ! & ' ( ) , */
+const safeName = (name: string) => name.trim().replace(/[^A-Za-z0-9._\- !&'(),]+/g, '_').replace(/^\.+/, '').trim().slice(-100) || 'file.png'
 
 /** Multipart to the admin API (folder items: their fields as `meta`, each file under its own name). */
 async function sendForm(method: 'POST' | 'PATCH', path: string, meta: object, files: [string, File][]) {

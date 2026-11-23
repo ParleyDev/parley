@@ -4395,7 +4395,7 @@
 "Zoom out (−)": "축소 (−)",
 "Zoom to the selection, or to the whole song (Z)": "선택 영역 또는 노래 전체로 확대/축소 (Z)",
 "a file is over {n} MB": "{n} MB가 넘는 파일이 있어요",
-"a file or folder name has characters other than letters, digits, '.', '_' and '-'": "파일 또는 폴더 이름에 문자, 숫자, '.', '_', '-' 외의 글자가 있어요",
+"a file or folder name has a character that isn't allowed (use letters, digits, spaces and . _ - ! & ' ( ) ,)": "파일 또는 폴더 이름에 허용되지 않는 문자가 있어요 (영문자, 숫자, 공백, . _ - ! & ' ( ) , 사용 가능)",
 "active sessions": "활성 세션",
 "attachments": "첨부 파일",
 "authorized apps": "승인된 앱",

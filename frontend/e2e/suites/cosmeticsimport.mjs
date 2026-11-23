@@ -25,7 +25,8 @@ let restored = false
 const restoreFolder = () => {
   if (restored) return
   restored = true
-  for (const p of made) inAssets(`rm -rf '${p}'`)
+  // Names may hold quotes and spaces: pass them as an argument, never inside the command.
+  for (const p of made) execFileSync('docker', ['exec', C, 'sh', '-c', 'cd "${ASSETS_DIR:-./assets}" && rm -rf -- "$1"', 'sh', p])
   for (const [k, text] of Object.entries(before)) { if (text === null) inAssets(`rm -f '${metaFile(k)}'`); else inAssets(`cat > '${metaFile(k)}'`, text) }
 }
 process.on('exit', restoreFolder)
@@ -41,10 +42,10 @@ writeFileSync(join(DEC, 'metadata.json'), JSON.stringify({ source: 'elsewhere', 
   { file: 'e2e_ring.png', name: 'Already here, renamed', description: 'must not overwrite' },
   newDec,
   { file: 'E2E_Ring.png', name: 'Same id as e2e_ring' },
-  { file: `Imp Bad ${n}.png`, name: 'Bad name' },
+  { file: `Imp:Bad ${n}.png`, name: 'Bad name' },
   { file: `imp_missing_${n}.png`, name: 'No file' },
 ], item_count: 5 }))
-for (const f of ['e2e_ring.png', newDec.file, 'E2E_Ring.png', `Imp Bad ${n}.png`]) copyFileSync(png, join(DEC, f))
+for (const f of ['e2e_ring.png', newDec.file, 'E2E_Ring.png', `Imp:Bad ${n}.png`]) copyFileSync(png, join(DEC, f))
 const newFx = { folder: `imp_fx_${n}`, name: `Imp FX ${n}`, description: 'layers', dynamic: true, layers: [{ start_ms: 0, duration_ms: 1000, loop: false, loop_delay_ms: 0, z_index: 100, file: 'layer_01.png' }] }
 writeFileSync(join(FX, 'metadata.json'), JSON.stringify({ items: [newFx] }))
 copyFileSync(png, join(FX, newFx.folder, 'layer_01.png')); copyFileSync(png, join(FX, newFx.folder, 'static.png'))
@@ -73,6 +74,32 @@ r = await send('effect', { ...newFx, layers: [...newFx.layers, { ...newFx.layers
 ok('a layered item needs every file its layers name, and leaves nothing behind without', r.status === 400 && /layer_02/.test(r.body?.error) && !has(`${DIRS.effect}/${newFx.folder}`), JSON.stringify(r.body))
 r = await send('effect', { ...newFx, folder: '../up' }, [['layer_01.png', png]])
 ok('a folder name must be safe', r.status === 400, JSON.stringify(r.body))
+
+// Names as profile sync tools write them: spaces and ! & ' ( ) , are taken as they are, and served by their encoded URLs.
+const oddDec = `it's (a) test!, ok & go ${n}.png`
+const oddFile = "Rock & Roll (Don't Stop)!.png", oddVariant = 'v, 1 (b).png'
+const oddFx = { folder: `all_bark,_all_bite (alt) ${n}`, name: `Odd FX ${n}`, layers: [{ start_ms: 0, duration_ms: 1000, loop: false, loop_delay_ms: 0, z_index: 100, file: oddFile, random_variants: [oddVariant] }] }
+made.push(`${DIRS.decoration}/${oddDec}`, `${DIRS.effect}/${oddFx.folder}`)
+r = await send('decoration', { file: oddDec }, [[oddDec, png]])
+ok('a decoration named with spaces and ! & \' ( ) , imports', r.status === 201, JSON.stringify(r.body))
+const decId = r.body?.value?.slice('asset:'.length)
+ok('its id is the name with those turned into _', decId === `it_s__a__test___ok___go_${n}`, decId)
+ok('and it is served', (await fetch(`${B}/assets/avatar-decorations/${encodeURIComponent(decId)}`)).status === 200)
+r = await send('effect', oddFx, [[oddFile, png], [oddVariant, png]])
+ok('an effect whose folder, layer and variant have those characters imports', r.status === 201, JSON.stringify(r.body))
+const fxId = r.body?.value?.slice('asset:'.length)
+const strict = (x) => encodeURIComponent(x).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+for (const f of [oddFile, oddVariant]) {
+  const a = await fetch(`${B}/assets/profile-effects/${encodeURIComponent(fxId)}/${encodeURIComponent(f)}`)
+  const b = await fetch(`${B}/assets/profile-effects/${encodeURIComponent(fxId)}/${strict(f)}`)
+  ok(`${f} is served whether ' ( ) ! are percent-encoded or not`, a.status === 200 && b.status === 200, `${a.status} ${b.status}`)
+}
+for (const bad of ['a:b.png', 'a*b.png', 'a?b.png', 'a"b.png', 'a<b>.png', 'a|b.png', ' lead.png', 'trail.png ', '.hidden.png']) {
+  r = await send('decoration', { file: bad }, [[bad, png]])
+  ok(`${JSON.stringify(bad)} is still refused`, r.status === 400, `${r.status} ${JSON.stringify(r.body)}`)
+}
+r = await send('effect', { ...oddFx, folder: `a.b ${n}` }, [[oddFile, png], [oddVariant, png]])
+ok("a folder name still can't have '.'", r.status === 400, JSON.stringify(r.body))
 if (B2) {
   const ro = await send('decoration', newDec, [[newDec.file, png]], B2)
   ok('a read-only folder refuses', ro.status === 409 && /read-only|writable/i.test(ro.body?.error), JSON.stringify(ro.body))
@@ -90,7 +117,7 @@ const counts = (k) => p.locator(`[data-cosmetics-import-kind="${k}"] [data-cosme
 ok('decorations: 5 in the folder, 1 already here, 1 new', await counts('decoration') === '5/1/1', await counts('decoration'))
 ok('effects: 1 new', await counts('effect') === '1/0/1', await counts('effect'))
 const dt = await p.locator('[data-cosmetics-import-kind="decoration"]').textContent()
-ok('the clash, the bad name and the missing file are each said', /E2E_Ring\.png/.test(dt) && /Imp Bad/.test(dt) && new RegExp(`imp_missing_${n}`).test(dt), dt)
+ok('the clash, the bad name and the missing file are each said', /E2E_Ring\.png/.test(dt) && /Imp:Bad/.test(dt) && new RegExp(`imp_missing_${n}`).test(dt), dt)
 ok('the button adds the 2 new items', /Add 2 items/.test(await p.locator('[data-cosmetics-import-go]').textContent()))
 await p.click('[data-cosmetics-import-go]')
 await p.waitForFunction(() => /Done|Stopped/.test(document.querySelector('[data-cosmetics-import-progress]')?.textContent ?? ''), null, { timeout: 30000 })
