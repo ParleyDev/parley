@@ -2,7 +2,7 @@
 title: Servers joinen en maken
 section: Aan de slag
 summary: Word lid met een uitnodiging, vind community's in Ontdekken, of start een eigen server.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 Een **server** is het thuis van een community: de kanalen, de leden en hun rollen. Je kunt in zoveel servers zitten als je wilt.
@@ -25,7 +25,7 @@ Klik op het kompas onderaan de serverlijst:
 - **Servers** laat je zoeken in alles wat openbaar vermeld staat.
 - **Stages** toont live stage-evenementen waar je kunt binnenlopen en luisteren.
 
-Klik op een server om rond te kijken in voorbeeldmodus. Je kunt de openbare kanalen lezen voordat je je vastlegt. Ben je er klaar voor, klik dan op **Deelnemen** in de balk bovenaan.
+Klik op een server om rond te kijken in voorbeeldmodus. Je kunt de openbare kanalen lezen voordat je je vastlegt. Ben je er klaar voor, klik dan op **Deelnemen** in de balk bovenaan. De kanalen zijn gegroepeerd zoals in de server zelf, en de community's staan apart onder **Community's**: open er een om de kanalen te zien.
 
 Sommige servers hebben een **gidskanaal** met andere servers waar je lid van kunt worden, zoals de clubservers van een school.
 

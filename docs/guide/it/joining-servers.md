@@ -2,7 +2,7 @@
 title: Entrare in un server e crearne uno
 section: Per iniziare
 summary: Entra con un invito, trova community in Esplora o crea un server tutto tuo.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 Un **server** è la casa di una community: i suoi canali, i suoi membri e i loro ruoli. Puoi stare in quanti ne vuoi.
@@ -25,7 +25,7 @@ Fai clic sulla bussola in fondo all'elenco dei server:
 - **Server** ti permette di cercare tra tutto ciò che è elencato pubblicamente.
 - **Stage** mostra gli eventi stage in diretta in cui puoi entrare ad ascoltare.
 
-Fai clic su un server per dare un'occhiata in modalità anteprima. Puoi leggere i suoi canali pubblici prima di deciderti. Quando sei pronto, fai clic su **Unisciti** nella barra in alto.
+Fai clic su un server per dare un'occhiata in modalità anteprima. Puoi leggere i suoi canali pubblici prima di deciderti. Quando sei pronto, fai clic su **Unisciti** nella barra in alto. I suoi canali sono raggruppati come nel server, e le sue community sono elencate a parte sotto **Community**: aprine una per vederne i canali.
 
 Alcuni server hanno un **canale directory** che elenca altri server in cui puoi entrare, come i server dei club di una scuola.
 

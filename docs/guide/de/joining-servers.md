@@ -2,7 +2,7 @@
 title: Server beitreten und erstellen
 section: Erste Schritte
 summary: Tritt per Einladung bei, finde Communities unter Entdecken oder starte deinen eigenen Server.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 Ein **Server** ist das Zuhause einer Community: ihre Kanäle, ihre Mitglieder und deren Rollen. Du kannst auf so vielen sein, wie du willst.
@@ -25,7 +25,7 @@ Klicke auf den Kompass unten in der Serverliste:
 - **Server** durchsucht alles, was öffentlich gelistet ist.
 - **Stages** zeigt laufende Stage-Events, bei denen du reinschauen und zuhören kannst.
 
-Klicke auf einen Server, um dich im Vorschaumodus umzusehen. Du kannst seine öffentlichen Kanäle lesen, bevor du dich festlegst. Wenn du so weit bist, klicke in der Leiste oben auf **Beitreten**.
+Klicke auf einen Server, um dich im Vorschaumodus umzusehen. Du kannst seine öffentlichen Kanäle lesen, bevor du dich festlegst. Wenn du so weit bist, klicke in der Leiste oben auf **Beitreten**. Seine Kanäle sind gruppiert wie im Server selbst, und seine Communities stehen gesondert unter **Communities**: Öffne eine, um ihre Kanäle zu sehen.
 
 Manche Server haben einen **Verzeichniskanal**, der andere Server auflistet, denen du beitreten kannst, zum Beispiel die Server der AGs einer Schule.
 

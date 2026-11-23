@@ -2,7 +2,7 @@
 title: Entrar e criar servidores
 section: Primeiros passos
 summary: Entre com um convite, encontre comunidades no Descobrir ou crie um servidor só seu.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 Um **servidor** é a casa de uma comunidade: seus canais, seus membros e os cargos deles. Você pode estar em quantos quiser.
@@ -25,7 +25,7 @@ Clique na bússola embaixo da lista de servidores:
 - **Servidores** deixa você buscar tudo o que está listado publicamente.
 - **Palcos** mostra eventos ao vivo em palcos onde você pode entrar e ouvir.
 
-Clique em um servidor para dar uma olhada no modo de prévia. Você pode ler os canais públicos antes de decidir. Quando estiver pronto, clique em **Entrar** na barra do topo.
+Clique em um servidor para dar uma olhada no modo de prévia. Você pode ler os canais públicos antes de decidir. Quando estiver pronto, clique em **Entrar** na barra do topo. Os canais aparecem agrupados como no servidor, e as comunidades ficam listadas à parte em **Comunidades**: abra uma para ver os canais dela.
 
 Alguns servidores têm um **canal de diretório** que lista outros servidores em que você pode entrar, como os servidores dos clubes de uma escola.
 

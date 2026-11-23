@@ -2,7 +2,7 @@
 title: Sunuculara katılmak ve sunucu oluşturmak
 section: Başlarken
 summary: Bir davetle katıl, Keşfet'te topluluklar bul ya da kendi sunucunu başlat.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 Bir **sunucu** bir topluluğun evidir: kanalları, üyeleri ve onların rolleri. İstediğin kadar sunucuda olabilirsin.
@@ -25,7 +25,7 @@ Sunucu listesinin en altındaki pusulaya tıkla:
 - **Sunucular** herkese açık listelenen her şeyde arama yapmanı sağlar.
 - **Sahneler** uğrayıp dinleyebileceğin canlı sahne etkinliklerini gösterir.
 
-Önizleme modunda etrafa bakmak için bir sunucuya tıkla. Karar vermeden önce herkese açık kanallarını okuyabilirsin. Hazır olduğunda üstteki çubukta **Katıl**'a tıkla.
+Önizleme modunda etrafa bakmak için bir sunucuya tıkla. Karar vermeden önce herkese açık kanallarını okuyabilirsin. Hazır olduğunda üstteki çubukta **Katıl**'a tıkla. Kanalları sunucudaki gibi gruplanır, toplulukları ise **Topluluklar** altında ayrıca listelenir: kanallarını görmek için birini aç.
 
 Bazı sunucularda bir okulun kulüp sunucuları gibi katılabileceğin diğer sunucuları listeleyen bir **dizin kanalı** bulunur.
 

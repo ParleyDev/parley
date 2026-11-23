@@ -2,7 +2,7 @@
 title: Unirse a servidores y crearlos
 section: Primeros pasos
 summary: Únete con una invitación, encuentra comunidades en Descubrir o crea tu propio servidor.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 Un **servidor** es el hogar de una comunidad: sus canales, sus miembros y sus roles. Puedes estar en todos los que quieras.
@@ -25,7 +25,7 @@ Haz clic en la brújula de la parte inferior de la lista de servidores:
 - **Servidores** te permite buscar entre todos los que aparecen públicamente.
 - **Escenarios** muestra eventos en directo en escenarios en los que puedes entrar a escuchar.
 
-Haz clic en un servidor para echar un vistazo en modo de vista previa. Puedes leer sus canales públicos antes de decidirte. Cuando estés listo, haz clic en **Unirse** en la barra superior.
+Haz clic en un servidor para echar un vistazo en modo de vista previa. Puedes leer sus canales públicos antes de decidirte. Cuando estés listo, haz clic en **Unirse** en la barra superior. Sus canales aparecen agrupados como en el servidor, y sus comunidades se listan aparte en **Comunidades**: abre una para ver sus canales.
 
 Algunos servidores tienen un **canal de directorio** con una lista de otros servidores a los que puedes unirte, como los servidores de los clubes de un colegio.
 

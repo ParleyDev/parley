@@ -242,8 +242,24 @@ pub fn everyone_perms(ctx: &perms::GuildCtx, c: &crate::models::Channel) -> u64 
 async fn preview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
     if crate::age::guild_blocked(&state.db, gid, uid).await? { return Err(AppError::NotFound("Server not found in Discover".into())) }
     let (ctx, channels) = public_channels(&state.db, gid).await?;
+    // The categories the public channels sit in, so the preview lists them grouped as the server does (a server with a
+    // "chat" and "media" per category would otherwise read as one long run of repeats). A category that backs a
+    // community carries the community's name and icon: the preview lists those under Communities, as the sidebar does.
+    let parents: std::collections::HashSet<Uuid> = channels.iter().filter_map(|c| c.parent_id).collect();
+    let communities: std::collections::HashMap<Uuid, (Uuid, String, Option<String>)> =
+        sqlx::query_as::<_, (Uuid, Uuid, String, Option<String>)>("SELECT category_id, id, name, icon_url FROM communities WHERE guild_id = $1")
+            .bind(gid).fetch_all(&state.db).await?
+            .into_iter().map(|(cat, id, name, icon)| (cat, (id, name, icon))).collect();
+    let categories: Vec<Value> = perms::guild_channels(&state.db, gid).await?
+        .into_iter()
+        .filter(|c| c.kind == "category" && parents.contains(&c.id))
+        .map(|c| {
+            let community = communities.get(&c.id).map(|(id, name, icon)| json!({ "id": id, "name": name, "icon_url": icon }));
+            json!({ "id": c.id, "name": c.name, "position": c.position, "community": community })
+        })
+        .collect();
     let listing = listing_for(&state, uid, gid).await?;
-    Ok(Json(json!({ "guild": ctx.guild, "channels": channels, "listing": listing, "joined": ctx.is_member(uid) })))
+    Ok(Json(json!({ "guild": ctx.guild, "channels": channels, "categories": categories, "listing": listing, "joined": ctx.is_member(uid) })))
 }
 
 #[derive(Deserialize)]

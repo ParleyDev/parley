@@ -39,7 +39,7 @@ Click the compass at the bottom of the server list:
 - **Servers** lets you search everything that's listed publicly.
 - **Stages** shows live stage events you can drop in on and listen to.
 
-Click a server to look around in preview mode. You can read its public channels before you commit. When you're ready, click **Join** in the bar at the top.
+Click a server to look around in preview mode. You can read its public channels before you commit. When you're ready, click **Join** in the bar at the top. Its channels are grouped as they are in the server, and its communities are listed apart under **Communities**: open one to see its channels.
 
 Some servers have a **directory channel** listing other servers you can join, such as a school's club servers.
 

@@ -2,7 +2,7 @@
 title: Rejoindre et créer des serveurs
 section: Premiers pas
 summary: Rejoins un serveur avec une invitation, trouve des communautés dans Découvrir, ou crée ton propre serveur.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 Un **serveur** est la maison d'une communauté : ses salons, ses membres et leurs rôles. Tu peux en rejoindre autant que tu veux.
@@ -25,7 +25,7 @@ Clique sur la boussole en bas de la liste des serveurs :
 - **Serveurs** te permet de chercher parmi tout ce qui est publié publiquement.
 - **Scènes** affiche les événements de scène en direct que tu peux rejoindre pour écouter.
 
-Clique sur un serveur pour le visiter en mode aperçu. Tu peux lire ses salons publics avant de t'engager. Quand tu es prêt, clique sur **Rejoindre** dans la barre du haut.
+Clique sur un serveur pour le visiter en mode aperçu. Tu peux lire ses salons publics avant de t'engager. Quand tu es prêt, clique sur **Rejoindre** dans la barre du haut. Ses salons sont regroupés comme dans le serveur, et ses communautés sont listées à part sous **Communautés** : ouvre-en une pour voir ses salons.
 
 Certains serveurs ont un **salon répertoire** qui liste d'autres serveurs à rejoindre, comme les serveurs des clubs d'une école.
 

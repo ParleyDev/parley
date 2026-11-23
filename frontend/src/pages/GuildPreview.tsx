@@ -1,8 +1,8 @@
-import { ChevronLeft, Compass, Hash, Users } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Compass, Hash, Users } from 'lucide-react'
 import { CropLayer } from '../components/CropImg'
 import CropImg from '../components/CropImg'
 import { bgUrl } from '../lib/crop'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import MessageItem from '../components/MessageItem'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -16,7 +16,34 @@ import { useStore } from '../store'
 import { markJoined } from '../lib/welcome'
 import { useT } from '../lib/i18n'
 
-interface Preview { guild: Guild; channels: Channel[]; listing: Listing | null; joined: boolean }
+interface PreviewCommunity { id: string; name: string; icon_url: string | null }
+interface PreviewCategory { id: string; name: string; position: number; community?: PreviewCommunity | null }
+interface Preview { guild: Guild; channels: Channel[]; categories?: PreviewCategory[]; listing: Listing | null; joined: boolean }
+interface ChannelGroup { category: PreviewCategory | null; channels: Channel[] }
+
+/**
+ * The public channels as the server's own list has them: those outside a category, then each category's, and the
+ * categories that back a community apart, for the Communities section (a server with a "chat" and "media" in each of
+ * a hundred communities would otherwise read as one long run of repeats).
+ */
+function groupChannels(pv: Preview): { plain: ChannelGroup[]; communities: ChannelGroup[] } {
+  const byPos = (a: { position: number }, b: { position: number }) => a.position - b.position
+  const cats = [...(pv.categories ?? [])].sort(byPos)
+  const known = new Set(cats.map((c) => c.id))
+  const loose = pv.channels.filter((c) => !c.parent_id || !known.has(c.parent_id)).sort(byPos)
+  const of = (category: PreviewCategory): ChannelGroup => ({ category, channels: pv.channels.filter((c) => c.parent_id === category.id).sort(byPos) })
+  const some = (g: ChannelGroup) => g.channels.length > 0
+  return {
+    plain: [{ category: null, channels: loose }, ...cats.filter((c) => !c.community).map(of)].filter(some),
+    communities: cats.filter((c) => c.community).map(of).filter(some),
+  }
+}
+
+function CommunityIcon({ community }: { community: PreviewCommunity }) {
+  return community.icon_url
+    ? <CropImg src={community.icon_url} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />
+    : <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white" style={{ background: colorFor(community.id) }}>{initials(community.name)}</span>
+}
 
 /**
  * Discord's server preview: a non-member can browse the public channels and read history, with a
@@ -32,10 +59,19 @@ export default function GuildPreviewPage() {
   const [pv, setPv] = useState<Preview | null | undefined>(undefined)
   const [joining, setJoining] = useState(false)
   const showContent = useShowContent()
+  // Ordinary categories start open and communities folded, as in the server's own list; this holds the ones toggled.
+  const [toggled, setToggled] = useState<Set<string>>(new Set())
   useEffect(() => { api.get<Preview>(`/discover/${guildId}/preview`).then(setPv).catch(() => setPv(null)) }, [guildId])
+  const groups = useMemo(() => (pv ? groupChannels(pv) : { plain: [], communities: [] }), [pv])
   if (member) return <Navigate to={`/channels/${guildId}`} replace />
   if (pv === null) return <Navigate to="/discover" replace />
-  const channel = pv?.channels.find((c) => c.id === channelId) ?? pv?.channels[0]
+  const channel = pv?.channels.find((c) => c.id === channelId) ?? (groups.plain[0] ?? groups.communities[0])?.channels[0]
+  const toggle = (id: string) => setToggled((f) => { const n = new Set(f); if (!n.delete(id)) n.add(id); return n })
+  const channelRow = (c: Channel) => (
+    <button key={c.id} type="button" onClick={() => { navigate(`/discover/${guildId}/${c.id}`); showContent() }} data-preview-channel={c.name} className={`w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] text-left ${c.id === channel?.id ? 'bg-bg-4 text-text-0' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+      <Hash size={18} className="text-text-2" /><span className="truncate">{c.name}</span>
+    </button>
+  )
   if (pv && channel && channel.id !== channelId) return <Navigate to={`/discover/${guildId}/${channel.id}`} replace />
   const join = async () => {
     setJoining(true)
@@ -54,15 +90,41 @@ export default function GuildPreviewPage() {
                 ) : <div className="h-12 px-4 flex items-center font-bold border-b border-line truncate">{pv.guild.name}</div>}
                 <div className="px-4 py-3 border-b border-line flex items-center gap-2 text-xs text-text-2" data-preview-badge><Compass size={14} /> {t('Previewing from Discover')}</div>
                 <div className="flex-1 overflow-y-auto px-2 pt-3">
-                  <div className="px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Text Channels')}</div>
-                  <div className="space-y-0.5">
-                    {pv.channels.map((c) => (
-                      <button key={c.id} type="button" onClick={() => { navigate(`/discover/${guildId}/${c.id}`); showContent() }} data-preview-channel={c.name} className={`w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] text-left ${c.id === channel?.id ? 'bg-bg-4 text-text-0' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
-                        <Hash size={18} className="text-text-2" /><span className="truncate">{c.name}</span>
-                      </button>
-                    ))}
-                    {pv.channels.length === 0 && <p className="px-2 py-4 text-sm text-text-2">{t('This server has no public channels to preview.')}</p>}
-                  </div>
+                  {groups.plain.map(({ category, channels }) => {
+                    const shut = !!category && toggled.has(category.id)
+                    return (
+                      <div key={category?.id ?? 'loose'} className="mb-3" data-preview-category={category?.name ?? ''}>
+                        {category
+                          ? <button type="button" onClick={() => toggle(category.id)} aria-expanded={!shut}
+                              className="flex w-full items-center gap-0.5 px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1" data-preview-category-toggle>
+                              <ChevronDown size={12} className={`shrink-0 transition-transform ${shut ? '-rotate-90' : ''}`} /><span className="truncate">{category.name}</span>
+                            </button>
+                          : <div className="px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Text Channels')}</div>}
+                        {/* A folded category still shows the channel being read, as the server's own list does. */}
+                        <div className="space-y-0.5">{channels.filter((c) => !shut || c.id === channel?.id).map(channelRow)}</div>
+                      </div>
+                    )
+                  })}
+                  {groups.communities.length > 0 && (
+                    <div className="mb-3 space-y-0.5" data-preview-communities>
+                      <div className="px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Communities')} · {groups.communities.length}</div>
+                      {groups.communities.map(({ category, channels }) => {
+                        const community = category!.community!
+                        const open = toggled.has(category!.id)
+                        return (
+                          <div key={category!.id} data-preview-community={community.name}>
+                            <button type="button" onClick={() => toggle(category!.id)} aria-expanded={open} data-preview-community-toggle
+                              className={`flex w-full items-center gap-1.5 rounded-md py-1.5 pl-1.5 pr-2 text-left text-[15px] ${channels.some((c) => c.id === channel?.id) ? 'text-text-0' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+                              <ChevronDown size={12} className={`shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden />
+                              <CommunityIcon community={community} /><span className="min-w-0 flex-1 truncate">{community.name}</span>
+                            </button>
+                            <div className="ml-3 space-y-0.5">{channels.filter((c) => open || c.id === channel?.id).map(channelRow)}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {pv.channels.length === 0 && <p className="px-2 py-4 text-sm text-text-2">{t('This server has no public channels to preview.')}</p>}
                 </div>
               </>
             ) : <div className="p-4 text-sm text-text-2">{t('Loading…')}</div>}

@@ -2,7 +2,7 @@
 title: Dołączanie do serwerów i tworzenie ich
 section: Pierwsze kroki
 summary: Dołącz przez zaproszenie, znajdź społeczności w Odkrywaniu albo załóż własny serwer.
-source: e69042c12a04
+source: 43bcf5f5166d
 ---
 
 **Serwer** to dom społeczności: jej kanały, członkowie i ich role. Możesz być na tylu serwerach, na ilu chcesz.
@@ -25,7 +25,7 @@ Kliknij kompas na dole listy serwerów:
 - **Serwery** pozwala przeszukiwać wszystko, co jest publicznie wystawione.
 - **Sceny** pokazuje trwające wydarzenia na scenach, na które możesz wpaść i posłuchać.
 
-Kliknij serwer, aby rozejrzeć się w trybie podglądu. Możesz czytać jego publiczne kanały, zanim się zdecydujesz. Gdy będziesz gotowy, kliknij **Dołącz** na pasku u góry.
+Kliknij serwer, aby rozejrzeć się w trybie podglądu. Możesz czytać jego publiczne kanały, zanim się zdecydujesz. Gdy będziesz gotowy, kliknij **Dołącz** na pasku u góry. Kanały są pogrupowane tak jak na serwerze, a społeczności wymienione osobno w sekcji **Społeczności**: otwórz jedną, by zobaczyć jej kanały.
 
 Niektóre serwery mają **kanał katalogu** z listą innych serwerów, do których możesz dołączyć, na przykład serwerów szkolnych kółek.
 
