@@ -1,13 +1,14 @@
-import { Check, Clapperboard, Filter, Gamepad2, Heart, Layers, Leaf, Moon, PawPrint, Pizza, Rocket, Search, Shirt, Sparkles, Wand2, X } from 'lucide-react'
+import { Check, ChevronDown, Clapperboard, Gamepad2, Heart, Layers, Leaf, Moon, PawPrint, Pizza, Rocket, Search, Shirt, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import Avatar from '../components/Avatar'
+import { LogoMark } from '../components/Logo'
 import { LazyVideo, nameplateSrc } from '../components/Nameplate'
 import ProfileCard from '../components/ProfileCard'
 import { CosmeticPreview, tagCounts } from '../components/profile/CosmeticPicker'
 import { api } from '../lib/api'
 import { assetFile } from '../lib/assetCatalog'
+import { decorationUrl } from '../lib/decorations'
 import type { CosmeticKind } from '../lib/cosmetics'
 import {
   COLORS, FIELD, KINDS, NO_FILTERS, groupVariants, labelOf, matches, sortItems, useExplore, wearPatch,
@@ -40,53 +41,116 @@ async function wear(patch: Record<string, string>, done: string) {
   } catch (e) { st.pushToast((e as Error).message, 'error') }
 }
 
-/** An item drawn small: a decoration around your own avatar, a nameplate behind your name, an effect's or frame's picture. */
-function Art({ item, me, live = false }: { item: ExploreItem; me: PrivateUser; live?: boolean }) {
-  const id = item.value.slice('asset:'.length)
-  if (item.kind === 'decoration') return <span className="flex h-full w-full items-center justify-center"><Avatar user={me} decoration={item.value} size={72} animate={live} /></span>
-  if (item.kind === 'nameplate') return (
-    <span className="flex h-full w-full items-center px-3">
-      <span className="relative isolate flex h-11 w-full items-center gap-2 overflow-hidden rounded-md bg-bg-1 px-2.5">
-        <LazyVideo src={nameplateSrc(item.value)} />
-        <Avatar user={me} size={26} /><span className="truncate text-sm font-semibold text-white [text-shadow:0_1px_2px_rgba(0,0,0,.8)]">{me.display_name || me.username}</span>
-      </span>
+const hoverless = () => typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches
+
+/** A stand-in avatar for the cards: a grey disc with the Parley mark (the cards show the item, not you). */
+function Blank({ className = '' }: { className?: string }) {
+  return <span className={`flex aspect-square items-center justify-center rounded-full bg-[#5c5f6a] text-white/45 ${className}`}><LogoMark className="w-1/2" /></span>
+}
+/** Skeleton lines and boxes, the shop's way of drawing "a profile" without anyone's details. */
+const Bar = ({ className = '' }: { className?: string }) => <span className={`block rounded-full bg-text-2/25 ${className}`} />
+
+/** A decoration around a stand-in avatar; it plays while `live`. */
+function DecorationArt({ value, live, className = '' }: { value: string; live: boolean; className?: string }) {
+  const id = value.slice('asset:'.length)
+  return (
+    <span className={`relative block aspect-square ${className}`}>
+      <Blank className="h-full w-full" />
+      <img src={decorationUrl(id, !live)} alt="" draggable={false} loading="lazy" className="pointer-events-none absolute left-[-10%] top-[-10%] h-[120%] w-[120%] max-w-none select-none" />
     </span>
   )
-  const src = item.kind === 'frame' ? `/api/assets/profile-frames/${encodeURIComponent(id)}/preview` : item.thumb ? assetFile('profile-effects', id, item.thumb) : null
-  return src ? <img src={src} alt="" loading="lazy" className={`h-full w-full ${item.kind === 'frame' ? 'object-contain p-2' : 'object-cover object-top'}`} /> : <span className="flex h-full items-center justify-center text-text-2"><Sparkles /></span>
+}
+
+/** A nameplate behind a member-list row (its video plays while the row is hovered; an animated picture on touch screens). */
+function PlateStrip({ value, className = '' }: { value: string; className?: string }) {
+  return (
+    <span className={`relative isolate flex items-center gap-[4cqw] overflow-hidden rounded-[2cqw] bg-bg-1 px-[3cqw] ${className}`}>
+      {hoverless() ? <img src={`${nameplateSrc(value)}/anim`} alt="" loading="lazy" className="np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" /> : <LazyVideo src={nameplateSrc(value)} />}
+      <Blank className="h-[60%] shrink-0" /><Bar className="h-[18%] w-[45%] bg-white/30" />
+    </span>
+  )
+}
+
+/** A blank profile card (banner, avatar, lines) with an effect over it or a frame around it. */
+function CardArt({ effect, frame }: { effect?: ExploreItem; frame?: ExploreItem }) {
+  const fx = effect?.thumb ? assetFile('profile-effects', effect.value.slice('asset:'.length), effect.thumb) : null
+  return (
+    <span className="absolute inset-0 overflow-hidden">
+      {frame
+        ? <img src={`/api/assets/profile-frames/${encodeURIComponent(frame.value.slice('asset:'.length))}/preview`} alt="" loading="lazy" className="absolute left-[14%] top-[5%] w-[72%] max-w-none" />
+        : (
+          <span className="absolute inset-x-[8%] top-[7%] bottom-0 overflow-hidden rounded-t-[4cqw] bg-text-2/10">
+            <span className="absolute left-[9%] top-[16%] w-[26%]"><Blank className="w-full" /></span>
+            <Bar className="absolute left-[9%] top-[48%] h-[4%] w-[40%]" /><Bar className="absolute left-[9%] top-[57%] h-[4%] w-[62%]" />
+          </span>
+        )}
+      {fx && <img src={fx} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover object-top" />}
+    </span>
+  )
+}
+
+/** An item drawn to fill a card (or any `@container` box): what it looks like on a profile, on blank stand-ins. */
+function Art({ item, live = false }: { item: ExploreItem; live?: boolean }) {
+  if (item.kind === 'decoration') return <span className="absolute inset-0 flex items-start justify-center pt-[13%]"><DecorationArt value={item.value} live={live} className="w-[50%]" /></span>
+  if (item.kind === 'nameplate') return (
+    <span className="absolute inset-x-[6%] top-[5%] flex flex-col gap-[4cqw]">
+      <span className="flex h-[17cqw] items-center gap-[4cqw] px-[3cqw] opacity-40"><Blank className="h-[60%]" /><Bar className="h-[3.5cqw] w-[45%]" /></span>
+      <PlateStrip value={item.value} className="h-[17cqw]" />
+      <span className="flex h-[17cqw] items-center gap-[4cqw] px-[3cqw] opacity-40"><Blank className="h-[60%]" /><Bar className="h-[3.5cqw] w-[45%]" /></span>
+    </span>
+  )
+  return item.kind === 'frame' ? <CardArt frame={item} /> : <CardArt effect={item} />
+}
+
+/** A set drawn together: your avatar with its decoration, the nameplate on a tilted row, the card with its effect or frame. */
+function SetArt({ items, live = false }: { items: ExploreItem[]; live?: boolean }) {
+  const of = (k: CosmeticKind) => items.find((x) => x.kind === k)
+  const dec = of('decoration'), plate = of('nameplate'), fx = of('effect'), fr = of('frame')
+  const card = fx || fr
+  if (!card) return (
+    <span className="absolute inset-0">
+      {dec && <span className="absolute left-1/2 top-[10%] w-[44%] -translate-x-1/2"><DecorationArt value={dec.value} live={live} className="w-full" /></span>}
+      {plate && <PlateStrip value={plate.value} className={`absolute left-[8%] h-[17cqw] w-[84%] shadow-lg ${dec ? 'top-[60%]' : 'top-[40%]'}`} />}
+    </span>
+  )
+  if (!dec && !plate) return <CardArt effect={fx} frame={fr} />
+  return (
+    <span className="absolute inset-0">
+      <span className="absolute -right-[8%] top-[4%] h-[104%] w-[56%] rotate-[7deg] overflow-hidden rounded-[3cqw] bg-bg-4 shadow-xl ring-1 ring-black/30 @container"><CardArt effect={fx} frame={fr} /></span>
+      {dec && <span className="absolute left-[6%] top-[7%] w-[40%]"><DecorationArt value={dec.value} live={live} className="w-full" /></span>}
+      {plate && <PlateStrip value={plate.value} className="absolute -left-[4%] top-[57%] h-[18cqw] w-[64%] -rotate-[8deg] shadow-lg" />}
+    </span>
+  )
 }
 
 const wearing = (me: PrivateUser, it: { kind: CosmeticKind; value: string }) => (me[FIELD[it.kind]] ?? '') === it.value
 
-function ItemCard({ group, me, onOpen }: { group: Group; me: PrivateUser; onOpen: () => void }) {
+/** A card in the grid: the art fills it, the name sits on a shade at the bottom. */
+function Tile({ name, sub, worn, onOpen, data, children }: { name: string; sub?: string; worn?: boolean; onOpen: () => void; data: Record<string, string | number>; children: (live: boolean) => ReactNode }) {
   const t = useT()
   const [live, setLive] = useState(false)
-  const first = group.items[0]
-  const worn = group.items.some((it) => wearing(me, it))
   return (
     <button type="button" onClick={onOpen} onMouseEnter={() => setLive(true)} onMouseLeave={() => setLive(false)} onFocus={() => setLive(true)} onBlur={() => setLive(false)}
-      className="group flex flex-col overflow-hidden rounded-xl border border-line bg-bg-1 text-left transition hover:-translate-y-0.5 hover:border-text-2 hover:shadow-lg"
-      data-style-card={first.value} data-style-kind={group.kind}>
-      <span className={`relative block w-full bg-bg-0/60 ${group.kind === 'nameplate' ? 'h-24' : 'aspect-square'}`}>
-        <Art item={first} me={me} live={live} />
-        {worn && <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase text-white" data-style-wearing><Check size={11} /> {t('Wearing')}</span>}
-        {group.items.length > 1 && <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white" data-style-variants={group.items.length}>{t('{n} styles', { n: group.items.length })}</span>}
+      className="@container group relative block aspect-[50/49] w-full overflow-hidden rounded-lg border border-white/[.06] bg-gradient-to-b from-bg-3 to-bg-4 text-left shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-accent" {...data}>
+      {children(live)}
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
+      <span className="absolute inset-x-0 bottom-0 px-3.5 pb-3 phone:px-2.5 phone:pb-2">
+        <span className="block truncate text-[15px] font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,.6)] phone:text-sm" data-style-card-name>{name}</span>
+        {sub && <span className="block truncate text-xs font-semibold text-white/70">{sub}</span>}
       </span>
-      <span className="px-3 pb-3 pt-2">
-        <span className="block truncate text-sm font-semibold text-text-0" data-style-card-name>{group.name}</span>
-        <span className="block truncate text-xs text-text-2">{t(ONE_KIND[group.kind])}</span>
-      </span>
+      {worn && <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow" data-style-wearing><Check size={11} /> {t('Wearing')}</span>}
     </button>
   )
 }
 
-/** A bundle drawn as a set: each of its items small, side by side. */
-function SetStrip({ bundle, byValue, me }: { bundle: ExploreBundle; byValue: Map<string, ExploreItem>; me: PrivateUser }) {
-  const items = bundle.items.map((x) => byValue.get(`${x.kind}|${x.value}`)).filter((x): x is ExploreItem => !!x).slice(0, 4)
+function ItemCard({ group, me, onOpen }: { group: Group; me: PrivateUser; onOpen: () => void }) {
+  const t = useT()
+  const first = group.items[0]
   return (
-    <span className="grid h-full w-full grid-cols-2 gap-1 p-1">
-      {items.map((it) => <span key={it.kind + it.value} className="relative overflow-hidden rounded-md bg-bg-0/70"><Art item={it} me={me} /></span>)}
-    </span>
+    <Tile name={group.name} sub={group.items.length > 1 ? t('{n} styles', { n: group.items.length }) : undefined} worn={group.items.some((it) => wearing(me, it))} onOpen={onOpen}
+      data={{ 'data-style-card': first.value, 'data-style-kind': group.kind, ...(group.items.length > 1 ? { 'data-style-variants': group.items.length } : {}) }}>
+      {(live) => <Art item={first} live={live} />}
+    </Tile>
   )
 }
 
@@ -157,7 +221,7 @@ function ItemDialog({ group, initial, catalog, me, onClose, onFilter }: { group:
                 {group.items.map((v, i) => (
                   <button key={v.value} type="button" onClick={() => { setIdx(i); setTrying(null) }} aria-pressed={i === idx} title={v.variant_label ?? v.name}
                     className={`overflow-hidden rounded-lg border bg-bg-0/60 ${i === idx ? 'border-accent ring-2 ring-accent/50' : 'border-line hover:border-text-2'}`} data-style-variant={v.value}>
-                    <span className={`block ${v.kind === 'nameplate' ? 'h-14' : 'aspect-square'}`}><Art item={v} me={me} /></span>
+                    <span className="@container relative block aspect-square bg-gradient-to-b from-bg-3 to-bg-4"><Art item={v} /></span>
                     <span className="block truncate px-1 py-0.5 text-[11px] text-text-1">{v.variant_label ?? v.name}</span>
                   </button>
                 ))}
@@ -209,7 +273,7 @@ function BundleDialog({ bundle, byValue, me, onClose, onOpenItem }: { bundle: Ex
           <div className="space-y-2">
             {items.map((it) => (
               <button key={it.kind + it.value} type="button" onClick={() => onOpenItem(it)} className="flex w-full items-center gap-3 rounded-lg border border-line p-2 text-left hover:border-text-2" data-style-bundle-item={it.value}>
-                <span className={`relative shrink-0 overflow-hidden rounded-md bg-bg-0/60 ${it.kind === 'nameplate' ? 'h-12 w-28' : 'h-14 w-14'}`}><Art item={it} me={me} /></span>
+                <span className="@container relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-gradient-to-b from-bg-3 to-bg-4"><Art item={it} /></span>
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{it.name}</span><span className="text-xs text-text-2">{t(ONE_KIND[it.kind])}</span></span>
                 {wearing(me, it) && <Check size={16} className="text-accent" />}
               </button>
@@ -223,11 +287,15 @@ function BundleDialog({ bundle, byValue, me, onClose, onOpenItem }: { bundle: Ex
 
 function Check1({ on, onChange, children, testid }: { on: boolean; onChange: (on: boolean) => void; children: ReactNode; testid?: Record<string, string> }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-text-1 hover:text-text-0" {...testid}>
-      <input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={on} onChange={(e) => onChange(e.target.checked)} />{children}
+    <label className="flex cursor-pointer items-center gap-3 py-1.5 text-[15px] text-text-1 hover:text-text-0" {...testid}>
+      <input type="checkbox" className="peer sr-only" checked={on} onChange={(e) => onChange(e.target.checked)} />
+      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border-2 transition peer-focus-visible:ring-2 peer-focus-visible:ring-accent ${on ? 'border-accent bg-accent text-white' : 'border-text-2/70'}`} aria-hidden>{on && <Check size={14} strokeWidth={3} />}</span>
+      <span className={on ? 'text-text-0' : ''}>{children}</span>
     </label>
   )
 }
+
+const Heading = ({ children }: { children: ReactNode }) => <h3 className="mb-2 text-[15px] font-semibold text-text-0">{children}</h3>
 
 /** Discover → Profile Style: browse and try on everything this server has for profiles, and wear it in a click. */
 export default function ProfileStyle() {
@@ -248,145 +316,155 @@ export default function ProfileStyle() {
   const items = catalog?.items ?? []
   const byValue = useMemo(() => new Map(items.map((it) => [`${it.kind}|${it.value}`, it])), [items])
   const kindTab = KINDS.includes(tab as CosmeticKind) ? (tab as CosmeticKind) : null
+  const sets = tab === 'bundles' || tab === 'collections'
   const scope = useMemo(() => (kindTab ? items.filter((it) => it.kind === kindTab) : items), [items, kindTab])
   const shownItems = useMemo(() => sortItems(scope.filter((it) => matches(it, kindTab ? { ...f, kinds: [] } : f)), sort), [scope, f, sort, kindTab])
   const groups = useMemo(() => groupVariants(shownItems), [shownItems])
   const colorsHere = COLORS.filter((c) => scope.some((it) => it.colors?.includes(c.code)))
   const themesHere = useMemo(() => [...new Set(scope.flatMap((it) => it.themes ?? []))], [scope])
   const tagsHere = useMemo(() => tagCounts(scope).slice(0, 16), [scope])
-  const bundles = useMemo(() => (catalog?.bundles ?? []).filter((b) => !f.q.trim() || b.name.toLowerCase().includes(f.q.trim().toLowerCase()) || b.items.some((x) => { const it = byValue.get(`${x.kind}|${x.value}`); return !!it && matches(it, { ...NO_FILTERS, q: f.q }) })), [catalog, f.q, byValue])
+  // Sets and collections show when one of their items passes the filters (kind and "part of" aside).
+  const itemFilter = useMemo(() => ({ ...f, kinds: [], inBundle: false, inCollection: false, collection: null }), [f])
+  const setItems = (list: { kind: CosmeticKind; value: string }[]) => list.map((x) => byValue.get(`${x.kind}|${x.value}`)).filter((x): x is ExploreItem => !!x)
+  const bundles = useMemo(() => {
+    const q = f.q.trim().toLowerCase()
+    const list = (catalog?.bundles ?? []).map((b) => ({ b, its: setItems(b.items) }))
+      .filter(({ b, its }) => (f.inCollection ? !!b.collection_id || its.some((x) => x.collection_id) : true) && ((q && !q.startsWith('#') && b.name.toLowerCase().includes(q)) || its.some((it) => matches(it, itemFilter))))
+    const rank = (its: ExploreItem[]) => Math.min(...its.map((x) => x.rank ?? Infinity))
+    const added = (its: ExploreItem[]) => Math.max(0, ...its.map((x) => x.added))
+    return list.sort((x, y) => sort === 'az' ? x.b.name.localeCompare(y.b.name) : sort === 'newest' ? added(y.its) - added(x.its) || x.b.name.localeCompare(y.b.name) : rank(x.its) - rank(y.its) || x.b.name.localeCompare(y.b.name))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog, f, itemFilter, byValue, sort])
   const collections = catalog?.collections ?? []
-  const { visible, more, sentinel } = useLazySlice(groups, { step: 60, key: `${tab}|${JSON.stringify(f)}|${sort}` })
-  const filtered = JSON.stringify({ ...f, q: '' }) !== JSON.stringify({ ...NO_FILTERS, q: '' })
+  const shownCollections = useMemo(() => collections.map((c) => ({ c, its: items.filter((it) => it.collection_id === c.id) })).filter(({ c, its }) => (f.q.trim() && !f.q.trim().startsWith('#') && c.name.toLowerCase().includes(f.q.trim().toLowerCase())) || its.some((it) => matches(it, itemFilter))), [collections, items, itemFilter, f.q])
+  const lazyList = tab === 'bundles' ? bundles : tab === 'collections' ? shownCollections : groups
+  const { visible, more, sentinel } = useLazySlice<unknown>(lazyList, { step: 60, key: `${tab}|${JSON.stringify(f)}|${sort}` })
+  const filtered = JSON.stringify(f) !== JSON.stringify(NO_FILTERS)
   const collection = collections.find((c) => c.id === f.collection)
   if (!me) return null
 
-  const title = tab === 'all' ? t('Everything') : tab === 'bundles' ? t('Bundles') : tab === 'collections' ? t('Collections') : t(KIND_LABEL[tab])
-  const count = tab === 'bundles' ? bundles.length : tab === 'collections' ? collections.length : shownItems.length
+  const title = tab === 'all' ? (f.kinds.length === 1 ? t(KIND_LABEL[f.kinds[0]]) : t('Everything')) : tab === 'bundles' ? t('Bundles') : tab === 'collections' ? t('Collections') : t(KIND_LABEL[tab])
+  const count = tab === 'bundles' ? bundles.length : tab === 'collections' ? shownCollections.length : shownItems.length
   const openItem = (it: ExploreItem) => { const g = groupVariants(items.filter((x) => x.kind === it.kind && (it.base_name ? x.base_name === it.base_name : x.value === it.value)))[0]; setOpenBundle(null); setOpen({ group: g, value: it.value }) }
-  const filterFrom = (p: Partial<Filters>) => { setF({ ...NO_FILTERS, ...p }); if (tab === 'bundles' || tab === 'collections') setTab('all') }
+  const filterFrom = (p: Partial<Filters>) => { setF({ ...NO_FILTERS, ...p }); if (sets) setTab('all') }
+  // Item Type: the four kinds can be ticked together; Bundles and Collections are views of their own.
+  const kindsOn: CosmeticKind[] = kindTab ? [kindTab] : tab === 'all' ? f.kinds : []
+  const pickKind = (k: CosmeticKind) => {
+    const next = sets ? [k] : (toggle(kindsOn, k) as CosmeticKind[])
+    if (next.length === 1) { setTab(next[0]); patch({ kinds: [] }) } else { setTab('all'); patch({ kinds: next }) }
+  }
+  const pickView = (v: 'bundles' | 'collections') => { setTab(tab === v ? 'all' : v); patch({ kinds: [] }) }
+  const grid = 'grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-5 phone:grid-cols-2 phone:gap-2.5'
+  const countOf = (n: number) => (n === 1 ? t('1 item') : t('{n} items', { n }))
 
   return (
-    <div className="min-h-full flex flex-col" data-style-page>
-      <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-bg-2/95 px-4 backdrop-blur phone:px-2">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist">
-          {TABS.map((x) => (
-            <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)} data-style-tab={x.id}
-              className={`-mb-px whitespace-nowrap border-b-2 px-2.5 py-2 text-sm font-semibold ${tab === x.id ? 'border-text-0 text-text-0' : 'border-transparent text-text-1 hover:text-text-0'}`}>{t(x.label)}</button>
-          ))}
-        </div>
-        <div className="relative w-56 shrink-0 phone:w-36">
-          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" aria-hidden />
-          <input className="input h-9 pl-8" value={f.q} onChange={(e) => patch({ q: e.target.value })} placeholder={t('Search or #tag')} aria-label={t('Search')} data-style-search />
-        </div>
-      </div>
-      <div className="flex flex-1 gap-6 p-6 phone:flex-col phone:gap-3 phone:p-3">
-        <div className="min-w-0 flex-1">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <h1 className="mr-auto text-2xl font-bold text-text-0">{title} <span className="font-normal text-text-2" data-style-count={count}>({count})</span></h1>
-            {tab !== 'bundles' && tab !== 'collections' && (
-              <label className="flex items-center gap-2 text-sm text-text-1">{t('Sort by')}
-                <select className="input h-9 w-auto py-0" value={sort} onChange={(e) => setSort(e.target.value as Sort)} data-style-sort>
-                  <option value="popular">{t('Popular')}</option><option value="newest">{t('Newest')}</option><option value="az">{t('A–Z')}</option>
-                </select>
-              </label>
-            )}
-            <button type="button" className="btn-ghost flex items-center gap-1.5 text-sm" onClick={() => setShowFilters((s) => !s)} aria-pressed={showFilters} data-style-toggle-filters><Filter size={15} />{showFilters ? t('Hide filters') : t('Show filters')}</button>
+    <div className="flex min-h-full" data-style-page>
+      <div className="min-w-0 flex-1 px-8 py-6 phone:px-3 phone:py-3">
+        <div className="mb-5 flex flex-wrap items-center gap-3 phone:mb-3 phone:gap-2">
+          <h1 className="mr-auto text-xl font-bold text-text-0">{title} <span data-style-count={count}>({count})</span></h1>
+          <div className="relative w-60 phone:order-last phone:w-full">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" aria-hidden />
+            <input className="input h-10 rounded-lg pl-9" value={f.q} onChange={(e) => patch({ q: e.target.value })} placeholder={t('Search or #tag')} aria-label={t('Search')} data-style-search />
           </div>
-          {collection && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              { <button type="button" onClick={() => patch({ collection: null })} className="flex items-center gap-1 rounded-full bg-accent/15 px-3 py-1 text-xs font-semibold text-accent" data-style-collection-chip>{t('Collection: {name}', { name: collection.name })} <X size={12} /></button>}
-            </div>
-          )}
-          {error && <p className="py-10 text-center text-sm text-red-400">{error}</p>}
-          {!catalog && !error && <p className="py-10 text-center text-sm text-text-2">{t('Loading…')}</p>}
-          {catalog && !items.length && <p className="py-16 text-center text-sm text-text-2" data-style-empty>{t('This server has nothing for profiles yet. Its admins can add decorations, nameplates, effects and frames in the Admin Console.')}</p>}
-          {catalog && items.length > 0 && tab === 'bundles' && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-              {bundles.map((b) => (
-                <button key={b.id} type="button" onClick={() => setOpenBundle(b.id)} className="flex flex-col overflow-hidden rounded-xl border border-line bg-bg-1 text-left transition hover:-translate-y-0.5 hover:border-text-2" data-style-bundle={b.id}>
-                  <span className="block aspect-square w-full bg-bg-0/60"><SetStrip bundle={b} byValue={byValue} me={me} /></span>
-                  <span className="px-3 pb-3 pt-2"><span className="block truncate text-sm font-semibold">{b.name}</span><span className="text-xs text-text-2">{(b.items.length === 1 ? t('1 item') : t('{n} items', { n: b.items.length }))}</span></span>
-                </button>
-              ))}
-              {!bundles.length && <p className="col-span-full py-10 text-center text-sm text-text-2">{t('No sets yet.')}</p>}
-            </div>
-          )}
-          {catalog && items.length > 0 && tab === 'collections' && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-              {collections.map((c) => {
-                const some = items.filter((it) => it.collection_id === c.id).slice(0, 4)
-                return (
-                  <button key={c.id} type="button" onClick={() => filterFrom({ collection: c.id })} className="flex flex-col overflow-hidden rounded-xl border border-line bg-bg-1 text-left transition hover:-translate-y-0.5 hover:border-text-2" data-style-collection={c.id}>
-                    <span className="grid aspect-square w-full grid-cols-2 gap-1 bg-bg-0/60 p-1">{some.map((it) => <span key={it.kind + it.value} className="relative overflow-hidden rounded-md bg-bg-0/70"><Art item={it} me={me} /></span>)}</span>
-                    <span className="px-3 pb-3 pt-2"><span className="block truncate text-sm font-semibold">{c.name}</span><span className="text-xs text-text-2">{(c.count === 1 ? t('1 item') : t('{n} items', { n: c.count }))}</span></span>
-                  </button>
-                )
-              })}
-              {!collections.length && <p className="col-span-full py-10 text-center text-sm text-text-2">{t('No collections yet.')}</p>}
-            </div>
-          )}
-          {catalog && items.length > 0 && tab !== 'bundles' && tab !== 'collections' && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4 phone:grid-cols-2 phone:gap-2" data-style-grid>
-              {visible.map((g) => <ItemCard key={g.key} group={g} me={me} onOpen={() => setOpen({ group: g })} />)}
-              {more && <div ref={sentinel} className="col-span-full h-10" aria-hidden />}
-              {!groups.length && <p className="col-span-full py-10 text-center text-sm text-text-2" data-style-nothing>{t('Nothing matches these filters.')}</p>}
-            </div>
-          )}
+          <label className="flex items-center gap-2.5 text-[15px] font-semibold text-text-0">{t('Sort by')}
+            <span className="relative">
+              <select className="h-10 w-48 cursor-pointer appearance-none rounded-lg border border-line bg-bg-1 pl-3 pr-9 text-[15px] font-normal text-text-0 outline-none hover:border-text-2/50 focus:border-accent phone:w-36" value={sort} onChange={(e) => setSort(e.target.value as Sort)} data-style-sort>
+                <option value="popular">{t('Popular')}</option><option value="newest">{t('Newest')}</option><option value="az">{t('A–Z')}</option>
+              </select>
+              <ChevronDown size={18} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-1" aria-hidden />
+            </span>
+          </label>
+          <button type="button" className="flex h-10 items-center gap-2 rounded-lg bg-bg-3 px-4 text-[15px] font-semibold text-text-0 hover:bg-bg-4" onClick={() => setShowFilters((s) => !s)} aria-pressed={showFilters} data-style-toggle-filters>
+            {showFilters ? t('Hide filters') : t('Show filters')}<SlidersHorizontal size={17} />
+          </button>
         </div>
-        {showFilters && tab !== 'bundles' && tab !== 'collections' && (
-          <aside className="w-64 shrink-0 space-y-5 phone:order-first phone:w-full" data-style-filters>
-            {tab === 'all' && (
-              <section>
-                <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-text-2">{t('Item type')}</h3>
-                {KINDS.map((k) => <Check1 key={k} on={f.kinds.includes(k)} onChange={() => patch({ kinds: toggle(f.kinds, k) as CosmeticKind[] })} testid={{ 'data-style-filter-kind': k }}>{t(KIND_LABEL[k])}</Check1>)}
-              </section>
+        {collection && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button type="button" onClick={() => patch({ collection: null })} className="flex items-center gap-1 rounded-full bg-accent/15 px-3 py-1 text-xs font-semibold text-accent" data-style-collection-chip>{t('Collection: {name}', { name: collection.name })} <X size={12} /></button>
+          </div>
+        )}
+        {error && <p className="py-10 text-center text-sm text-red-400">{error}</p>}
+        {!catalog && !error && <p className="py-10 text-center text-sm text-text-2">{t('Loading…')}</p>}
+        {catalog && !items.length && <p className="py-16 text-center text-sm text-text-2" data-style-empty>{t('This server has nothing for profiles yet. Its admins can add decorations, nameplates, effects and frames in the Admin Console.')}</p>}
+        {catalog && items.length > 0 && (
+          <div className={grid} data-style-grid>
+            {tab === 'bundles' && (visible as typeof bundles).map(({ b, its }) => (
+              <Tile key={b.id} name={b.name} sub={countOf(b.items.length)} worn={b.items.length > 0 && b.items.every((x) => wearing(me, x))} onOpen={() => setOpenBundle(b.id)} data={{ 'data-style-bundle': b.id }}>
+                {(live) => <SetArt items={its} live={live} />}
+              </Tile>
+            ))}
+            {tab === 'collections' && (visible as typeof shownCollections).map(({ c, its }) => (
+              <Tile key={c.id} name={c.name} sub={countOf(c.count)} onOpen={() => filterFrom({ collection: c.id })} data={{ 'data-style-collection': c.id }}>
+                {(live) => <SetArt items={KINDS.map((k) => its.find((x) => x.kind === k)).filter((x): x is ExploreItem => !!x)} live={live} />}
+              </Tile>
+            ))}
+            {!sets && (visible as Group[]).map((g) => <ItemCard key={g.key} group={g} me={me} onOpen={() => setOpen({ group: g })} />)}
+            {more && <div ref={sentinel} className="col-span-full h-10" aria-hidden />}
+            {!lazyList.length && (
+              <p className="col-span-full py-10 text-center text-sm text-text-2" data-style-nothing>
+                {filtered ? t('Nothing matches these filters.') : tab === 'bundles' ? t('No sets yet.') : tab === 'collections' ? t('No collections yet.') : t('Nothing matches these filters.')}
+              </p>
             )}
-            {(collections.length > 0 || (catalog?.bundles.length ?? 0) > 0) && (
-              <section>
-                <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-text-2">{t('Show only')}</h3>
-                {collections.length > 0 && <Check1 on={f.inCollection} onChange={(on) => patch({ inCollection: on })} testid={{ 'data-style-filter-only': 'collection' }}>{t('Part of a collection')}</Check1>}
-                {(catalog?.bundles.length ?? 0) > 0 && <Check1 on={f.inBundle} onChange={(on) => patch({ inBundle: on })} testid={{ 'data-style-filter-only': 'bundle' }}>{t('Part of a set')}</Check1>}
-              </section>
-            )}
-            {colorsHere.length > 0 && (
-              <section>
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-text-2">{t('Colour')}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {colorsHere.map((c) => {
-                    const on = f.colors.includes(c.code)
-                    return <button key={c.code} type="button" onClick={() => patch({ colors: toggle(f.colors, c.code) })} aria-pressed={on} title={t(labelOf(catalog?.labels ?? {}, c.code))} aria-label={t(labelOf(catalog?.labels ?? {}, c.code))}
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${on ? 'border-accent ring-2 ring-accent/40' : 'border-white/15 hover:border-white/40'}`} style={{ background: c.hex }} data-style-filter-color={c.code}>{on && <Check size={14} className={c.code === 'white' || c.code === 'yellow' ? 'text-black' : 'text-white'} />}</button>
-                  })}
-                </div>
-              </section>
-            )}
-            {themesHere.length > 0 && (
-              <section>
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-text-2">{t('Theme')}</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {themesHere.map((c) => {
-                    const on = f.themes.includes(c)
-                    const Icon = THEME_ICON[c] ?? Sparkles
-                    return <button key={c} type="button" onClick={() => patch({ themes: toggle(f.themes, c) })} aria-pressed={on}
-                      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${on ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-style-filter-theme={c}><Icon size={13} />{t(labelOf(catalog?.labels ?? {}, c))}</button>
-                  })}
-                </div>
-              </section>
-            )}
-            {tagsHere.length > 0 && (
-              <section>
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-text-2">{t('Tags')}</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {tagsHere.map(([x]) => <button key={x} type="button" onClick={() => patch({ q: f.q === `#${x}` ? '' : `#${x}` })} aria-pressed={f.q === `#${x}`}
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${f.q === `#${x}` ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-style-filter-tag={x}>#{x}</button>)}
-                </div>
-              </section>
-            )}
-            <button type="button" className="text-sm font-semibold text-accent hover:underline disabled:text-text-2 disabled:no-underline" disabled={!filtered && !f.q} onClick={() => setF(NO_FILTERS)} data-style-clear>{t('Clear all filters')}</button>
-          </aside>
+          </div>
         )}
       </div>
+      {showFilters && (
+        <aside className="sticky top-0 max-h-screen w-72 shrink-0 space-y-6 self-start overflow-y-auto border-l border-line px-5 py-6 phone:fixed phone:inset-0 phone:z-40 phone:max-h-none phone:w-full phone:border-0 phone:bg-bg-2 phone:pt-[calc(var(--sat)+1rem)] phone:pb-[calc(var(--sab)+1rem)]" data-style-filters>
+          <div className="hidden items-center justify-between phone:flex">
+            <span className="text-lg font-bold text-text-0">{t('Filters')}</span>
+            <button type="button" onClick={() => setShowFilters(false)} className="rounded-md p-2 text-text-2 hover:bg-bg-3 hover:text-text-0" aria-label={t('Close')} data-style-filters-close><X size={22} /></button>
+          </div>
+          <section>
+            <Heading>{t('Item type')}</Heading>
+            {KINDS.map((k) => <Check1 key={k} on={kindsOn.includes(k)} onChange={() => pickKind(k)} testid={{ 'data-style-filter-kind': k }}>{t(KIND_LABEL[k])}</Check1>)}
+            <Check1 on={tab === 'bundles'} onChange={() => pickView('bundles')} testid={{ 'data-style-tab': 'bundles' }}>{t('Bundles')}</Check1>
+            {collections.length > 0 && <Check1 on={tab === 'collections'} onChange={() => pickView('collections')} testid={{ 'data-style-tab': 'collections' }}>{t('Collections')}</Check1>}
+          </section>
+          {((collections.length > 0 && tab !== 'collections') || ((catalog?.bundles.length ?? 0) > 0 && !sets)) && (
+            <section>
+              <Heading>{t('Show only')}</Heading>
+              {collections.length > 0 && <Check1 on={f.inCollection} onChange={(on) => patch({ inCollection: on })} testid={{ 'data-style-filter-only': 'collection' }}>{t('Part of a collection')}</Check1>}
+              {(catalog?.bundles.length ?? 0) > 0 && !sets && <Check1 on={f.inBundle} onChange={(on) => patch({ inBundle: on })} testid={{ 'data-style-filter-only': 'bundle' }}>{t('Part of a set')}</Check1>}
+            </section>
+          )}
+          {colorsHere.length > 0 && (
+            <section>
+              <Heading>{t('Colour')}</Heading>
+              <div className="grid grid-cols-5 gap-2.5 phone:flex phone:flex-wrap">
+                {colorsHere.map((c) => {
+                  const on = f.colors.includes(c.code)
+                  return <button key={c.code} type="button" onClick={() => patch({ colors: toggle(f.colors, c.code) })} aria-pressed={on} title={t(labelOf(catalog?.labels ?? {}, c.code))} aria-label={t(labelOf(catalog?.labels ?? {}, c.code))}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full transition ${on ? 'ring-2 ring-text-0 ring-offset-2 ring-offset-bg-2' : 'ring-1 ring-white/10 hover:scale-110'}`} style={{ background: c.hex }} data-style-filter-color={c.code}>{on && <Check size={16} strokeWidth={3} className={c.code === 'white' || c.code === 'yellow' ? 'text-black' : 'text-white'} />}</button>
+                })}
+              </div>
+            </section>
+          )}
+          {themesHere.length > 0 && (
+            <section>
+              <Heading>{t('Theme')}</Heading>
+              <div className="flex flex-wrap gap-2">
+                {themesHere.map((c) => {
+                  const on = f.themes.includes(c)
+                  const Icon = THEME_ICON[c] ?? Sparkles
+                  return <button key={c} type="button" onClick={() => patch({ themes: toggle(f.themes, c) })} aria-pressed={on}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-semibold transition ${on ? 'border-accent bg-accent/20 text-text-0' : 'border-line text-text-1 hover:border-text-2/60 hover:text-text-0'}`} data-style-filter-theme={c}><Icon size={15} />{t(labelOf(catalog?.labels ?? {}, c))}</button>
+                })}
+              </div>
+            </section>
+          )}
+          {tagsHere.length > 0 && (
+            <section>
+              <Heading>{t('Tags')}</Heading>
+              <div className="flex flex-wrap gap-1.5">
+                {tagsHere.map(([x]) => <button key={x} type="button" onClick={() => patch({ q: f.q === `#${x}` ? '' : `#${x}` })} aria-pressed={f.q === `#${x}`}
+                  className={`rounded-lg border px-2 py-1 text-xs font-semibold ${f.q === `#${x}` ? 'border-accent bg-accent/20 text-text-0' : 'border-line text-text-1 hover:text-text-0'}`} data-style-filter-tag={x}>#{x}</button>)}
+              </div>
+            </section>
+          )}
+          <button type="button" className="h-10 w-full rounded-lg bg-bg-3 text-[15px] font-semibold text-text-0 hover:bg-bg-4 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-bg-3" disabled={!filtered} onClick={() => setF(NO_FILTERS)} data-style-clear>{t('Clear all filters')}</button>
+          <div className="hidden phone:block"><button type="button" className="btn-primary w-full" onClick={() => setShowFilters(false)} data-style-filters-done>{t('Show {n}', { n: count })}</button></div>
+        </aside>
+      )}
       {open && catalog && <ItemDialog key={open.group.key + (open.value ?? '')} group={open.group} initial={open.value} catalog={catalog} me={me} onClose={() => setOpen(null)} onFilter={filterFrom} />}
       {openBundle && catalog && (() => { const b = catalog.bundles.find((x) => x.id === openBundle); return b ? <BundleDialog bundle={b} byValue={byValue} me={me} onClose={() => setOpenBundle(null)} onOpenItem={openItem} /> : null })()}
     </div>

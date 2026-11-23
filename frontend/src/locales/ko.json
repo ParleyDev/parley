@@ -4981,5 +4981,7 @@
 "Yellow": "노랑",
 "{n} styles": "스타일 {n}개",
 "Profile style": "프로필 스타일",
-"1 item": "아이템 1개"
+"1 item": "아이템 1개",
+"Filters": "필터",
+"Show {n}": "{n}개 보기"
 }

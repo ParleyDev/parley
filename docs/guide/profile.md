@@ -70,10 +70,10 @@ The grid keeps loading as you scroll, so you'll see everything. **Built in** opt
 
 ### Browse everything in Discover
 
-To see the whole collection at once, open **Discover** (the compass in the server list) and choose **Profile Style**. Every card shows the item on your own picture and name.
+To see the whole collection at once, open **Discover** (the compass in the server list) and choose **Profile Style**. Each card shows how the item looks on a profile; open one to try it on your own.
 
-- The tabs at the top show one kind of item, **Bundles** (sets that go together) or **Collections**. Sort by **Popular**, **Newest** or **A–Z**.
-- The filters on the right narrow the grid by item type, colour, theme and tag. Type `#` and a tag in the search box to search tags only. **Hide filters** folds them away.
+- Under **Item type** on the right, tick one or more kinds of item, or **Bundles** (sets that go together) or **Collections**. Sort by **Popular**, **Newest** or **A–Z**.
+- The other filters narrow the grid by colour, theme and tag. Type `#` and a tag in the search box to search tags only. **Hide filters** folds them away; on a phone, **Show filters** opens them full screen.
 - Some designs come in several styles and share one card. Click a card to see its styles, preview it on your profile, and see the sets it's in.
 - **Wear it** puts an item on your profile straight away, with no need to save. **Try the set** previews a whole bundle on your profile, and **Wear all** puts on everything in it.
 

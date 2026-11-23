@@ -2,7 +2,7 @@
 title: Je profiel
 section: Jij
 summary: Je profielfoto, banner, naamstijl, naamplaatje, decoraties en effecten, status, en een andere look per server.
-source: 1e055d57e7e0
+source: 7e72688db327
 ---
 
 Je profiel is wat mensen zien als ze op je naam klikken. Open de editor via je profielfoto in de hoek linksonder en dan **Profiel bewerken**.
@@ -45,10 +45,10 @@ Het raster blijft laden terwijl je scrolt, dus je ziet alles. Opties onder **Ing
 
 ### Alles bekijken in Ontdekken
 
-Om de hele collectie in één keer te zien, open je **Ontdekken** (het kompas in de serverlijst) en kies je **Profielstijl**. Elke kaart toont het item op je eigen foto en naam.
+Om de hele collectie in één keer te zien, open je **Ontdekken** (het kompas in de serverlijst) en kies je **Profielstijl**. Elke kaart toont hoe het item op een profiel staat; open er een om het op je eigen profiel te passen.
 
-- De tabbladen bovenaan tonen één soort item, **Bundels** (sets die bij elkaar horen) of **Collecties**. Sorteer op **Populair**, **Nieuwste** of **A–Z**.
-- De filters rechts beperken het raster op soort item, kleur, thema en tag. Typ `#` en een tag in het zoekvak om alleen tags te doorzoeken. **Filters verbergen** klapt ze weg.
+- Vink onder **Soort item** rechts een of meer soorten items aan, of **Bundels** (sets die bij elkaar horen) of **Collecties**. Sorteer op **Populair**, **Nieuwste** of **A–Z**.
+- De andere filters beperken het raster op kleur, thema en tag. Typ `#` en een tag in het zoekveld om alleen tags te doorzoeken. **Filters verbergen** klapt ze in; op een telefoon opent **Filters tonen** ze schermvullend.
 - Sommige ontwerpen zijn er in meerdere stijlen en delen één kaart. Klik op een kaart om de stijlen te zien, het op je profiel te passen en te zien in welke sets het zit.
 - **Dragen** zet een item meteen op je profiel, zonder opslaan. **Set passen** toont een hele bundel op je profiel en **Alles dragen** doet alles uit de bundel aan.
 

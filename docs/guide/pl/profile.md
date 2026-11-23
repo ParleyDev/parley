@@ -2,7 +2,7 @@
 title: Twój profil
 section: Ty
 summary: Zdjęcie, baner, styl nazwy, tabliczka, dekoracje i efekty, status oraz inny wygląd na każdym serwerze.
-source: 1e055d57e7e0
+source: 7e72688db327
 ---
 
 Profil to to, co ludzie widzą po kliknięciu twojej nazwy. Otwórz edytor, klikając swoje zdjęcie w lewym dolnym rogu, a potem **Edytuj profil**.
@@ -45,10 +45,10 @@ Siatka doczytuje się podczas przewijania, więc zobaczysz wszystko. Opcje **Wbu
 
 ### Przeglądanie wszystkiego w Odkrywaj
 
-Aby zobaczyć całą kolekcję naraz, otwórz **Odkrywaj** (kompas na liście serwerów) i wybierz **Styl profilu**. Każda karta pokazuje przedmiot na twoim zdjęciu i nazwie.
+Aby zobaczyć całą kolekcję naraz, otwórz **Odkrywaj** (kompas na liście serwerów) i wybierz **Styl profilu**. Każda karta pokazuje, jak przedmiot wygląda na profilu; otwórz ją, by przymierzyć go na swoim.
 
-- Karty u góry pokazują jeden rodzaj przedmiotów, **Pakiety** (pasujące do siebie zestawy) lub **Kolekcje**. Sortuj według **Popularne**, **Najnowsze** lub **A–Z**.
-- Filtry po prawej zawężają siatkę według rodzaju przedmiotu, koloru, motywu i tagu. Wpisz `#` i tag w wyszukiwarce, aby szukać tylko w tagach. **Ukryj filtry** je zwija.
+- W **Rodzaj przedmiotu** po prawej zaznacz jeden lub kilka rodzajów przedmiotów albo **Pakiety** (pasujące do siebie zestawy) lub **Kolekcje**. Sortuj według **Popularne**, **Najnowsze** lub **A–Z**.
+- Pozostałe filtry zawężają siatkę według koloru, motywu i tagu. Wpisz `#` i tag w wyszukiwarce, aby szukać tylko w tagach. **Ukryj filtry** je zwija; na telefonie **Pokaż filtry** otwiera je na pełnym ekranie.
 - Niektóre projekty mają kilka stylów i dzielą jedną kartę. Kliknij kartę, aby zobaczyć jej style, przymierzyć ją w swoim profilu i zobaczyć zestawy, w których jest.
 - **Załóż** od razu dodaje przedmiot do twojego profilu, bez zapisywania. **Przymierz zestaw** pokazuje cały pakiet w twoim profilu, a **Załóż wszystko** zakłada wszystko, co w nim jest.
 

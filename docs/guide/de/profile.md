@@ -2,7 +2,7 @@
 title: Dein Profil
 section: Du
 summary: Dein Bild, Banner, Namensstil, Namensschild, Dekorationen und Effekte, dein Status und ein eigener Look pro Server.
-source: 1e055d57e7e0
+source: 7e72688db327
 ---
 
 Dein Profil ist das, was andere sehen, wenn sie auf deinen Namen klicken. Öffne den Editor über dein Bild in der Ecke unten links und dann **Profil bearbeiten**.
@@ -45,10 +45,10 @@ Das Raster lädt beim Scrollen weiter, du siehst also alles. **Integriert**-Opti
 
 ### Alles unter Entdecken durchstöbern
 
-Um die ganze Sammlung auf einmal zu sehen, öffne **Entdecken** (den Kompass in der Serverliste) und wähle **Profil-Style**. Jede Karte zeigt das Item an deinem eigenen Bild und Namen.
+Um die ganze Sammlung auf einmal zu sehen, öffne **Entdecken** (den Kompass in der Serverliste) und wähle **Profil-Style**. Jede Karte zeigt, wie das Item auf einem Profil aussieht; öffne eine, um es an deinem eigenen anzuprobieren.
 
-- Die Tabs oben zeigen eine Art von Item, **Bundles** (zusammenpassende Sets) oder **Kollektionen**. Sortiere nach **Beliebt**, **Neueste** oder **A–Z**.
-- Die Filter rechts grenzen das Raster nach Art, Farbe, Thema und Tag ein. Tippe `#` und einen Tag ins Suchfeld, um nur Tags zu durchsuchen. **Filter ausblenden** klappt sie weg.
+- Unter **Art** rechts hakst du eine oder mehrere Arten von Items an, oder **Bundles** (zusammenpassende Sets) oder **Kollektionen**. Sortiere nach **Beliebt**, **Neueste** oder **A–Z**.
+- Die übrigen Filter grenzen das Raster nach Farbe, Thema und Tag ein. Tippe `#` und einen Tag ins Suchfeld, um nur Tags zu durchsuchen. **Filter ausblenden** klappt sie weg; auf dem Handy öffnet **Filter anzeigen** sie im Vollbild.
 - Manche Designs gibt es in mehreren Varianten, die sich eine Karte teilen. Klicke auf eine Karte, um ihre Varianten zu sehen, sie an deinem Profil auszuprobieren und die Sets zu sehen, zu denen sie gehört.
 - **Tragen** setzt ein Item sofort in dein Profil, ganz ohne Speichern. **Set anprobieren** zeigt ein ganzes Bundle an deinem Profil, und **Alles tragen** legt alles daraus an.
 
