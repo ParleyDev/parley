@@ -8,6 +8,23 @@ export interface ChangelogEntry { id: string; date: string; title: string; items
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-23', date: '2026-11-23', title: 'Profile Style, safer servers and a steadier chat',
+    items: [
+      'Discover → Profile Style: browse every avatar decoration, nameplate, profile effect and frame, filter by colour, theme and tag, try whole sets on your profile and wear them in one click.',
+      'Reply to or react to someone\'s custom status, and display names get reworked fonts and effects.',
+      'Badges are now made by your Parley server\'s admins. The server owner, verified email and 2FA badges are gone.',
+      'Calls recover from dropped connections, tell you what went wrong, and fit the window.',
+      'The message list keeps your place, and unread markers do what they say: notification levels no longer hide unread channels.',
+      'The ⋯ button on a message opens the full menu, Forward included.',
+      'Previewing a server from Discover shows its channels by category, with its communities listed apart.',
+      'Age checks without asking for your date of birth, and reports handled by urgency.',
+      'A passkey counts as two-factor authentication, for moderators and in Getting Started.',
+      'Files can no longer be opened by their address alone, and iPhones keep the web app\'s notification permission.',
+      'The website and user guide are in every app language.',
+      'For admins: the Admin Console lives in User Settings, with event notifications to channels and webhooks, a network view, instance bans and spam limits.',
+    ],
+  },
+  {
     id: '2026-11-19', date: '2026-11-19', title: 'Communities, the Studio and a lot more',
     items: [
       'Communities: group a server\'s channels into communities, each with its own page. Follow the ones you like and find them in your sidebar.',
