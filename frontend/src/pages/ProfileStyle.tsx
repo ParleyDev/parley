@@ -2,6 +2,7 @@ import { Check, ChevronDown, Clapperboard, Gamepad2, Heart, Layers, Leaf, Moon, 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
+import { MobileBack } from '../components/HeaderBits'
 import { LogoMark } from '../components/Logo'
 import { LazyVideo, nameplateSrc } from '../components/Nameplate'
 import ProfileCard from '../components/ProfileCard'
@@ -432,7 +433,7 @@ export default function ProfileStyle() {
     <div className="flex min-h-full" data-style-page>
       <div className="min-w-0 flex-1 px-8 py-6 phone:px-3 phone:py-3">
         <div className="mb-5 flex flex-wrap items-center gap-3 phone:mb-3 phone:gap-2">
-          <h1 className="mr-auto text-xl font-bold text-text-0">{title} <span data-style-count={count}>({count})</span></h1>
+          <div className="mr-auto flex min-w-0 items-center gap-1"><MobileBack /><h1 className="truncate text-xl font-bold text-text-0">{title} <span data-style-count={count}>({count})</span></h1></div>
           <div className="relative w-60 phone:order-last phone:w-full">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" aria-hidden />
             <input className="input h-10 rounded-lg pl-9" value={f.q} onChange={(e) => patch({ q: e.target.value })} placeholder={t('Search or #tag')} aria-label={t('Search')} data-style-search />
