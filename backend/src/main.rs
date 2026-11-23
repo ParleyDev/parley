@@ -93,7 +93,15 @@ async fn main() -> anyhow::Result<()> {
         ))
     }
     .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE, Method::OPTIONS])
-    .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::HeaderName::from_static("x-audit-log-reason")])
+    // If-Match / If-None-Match: conditional writes (Profile Studio's bundle and metadata sync).
+    .allow_headers([
+        header::AUTHORIZATION,
+        header::CONTENT_TYPE,
+        header::IF_MATCH,
+        header::IF_NONE_MATCH,
+        header::HeaderName::from_static("x-audit-log-reason"),
+    ])
+    .expose_headers([header::ETAG])
     .allow_credentials(true);
 
     // MCP tools call the API in-process as the connected user (same checks, events and limits as the app).
