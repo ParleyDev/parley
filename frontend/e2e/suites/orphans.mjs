@@ -41,4 +41,23 @@ ok('as is a replaced community icon', await status(cIcon.url) === 404)
 r = await raw(a.token, 'DELETE', `/guilds/${g.id}/communities/pics`)
 ok('deleting the community frees its banner', r.status === 204 && await status(cNext.url) === 404)
 ok('but keeps an icon the server itself still shows', await status(icon.url) === 200)
+
+// Custom badge pictures, group DM icons and app icons are attached too.
+const bob = await reg('bob'), cat = await reg('cat')
+for (const f of [bob, cat]) { await call(a.token, 'POST', '/users/@me/relationships', { user_id: f.user.id }); await call(f.token, 'PUT', `/users/@me/relationships/${a.user.id}`) }
+const badgePic = await up('icon'), groupPic = await up('icon'), appPic = await up('icon')
+const badge = (await callS(admin.token, 'POST', '/admin/badges', { name: `Kept ${S}`, icon_url: badgePic.url })).body
+const group = await call(a.token, 'POST', '/users/@me/channels', { recipient_ids: [bob.user.id, cat.user.id], name: `Trio ${S}` })
+await callS(a.token, 'PATCH', `/channels/${group.id}`, { icon_url: groupPic.url })
+const app = await call(a.token, 'POST', '/applications', { name: `Pics ${S}` })
+await callS(a.token, 'PATCH', `/applications/${app.id}`, { icon_url: appPic.url })
+await callS(admin.token, 'POST', '/admin/maintenance/sweep-images?min_age_secs=0')
+ok('a custom badge\'s picture survives the sweep', await status(badgePic.url) === 200)
+ok('a group DM\'s icon survives the sweep', await status(groupPic.url) === 200)
+ok('an app\'s icon survives the sweep', await status(appPic.url) === 200)
+const badgeNext = await up('icon')
+await callS(admin.token, 'PATCH', `/admin/badges/${badge.id}`, { icon_url: badgeNext.url })
+ok('a replaced badge picture is freed', await status(badgePic.url) === 404 && await status(badgeNext.url) === 200)
+r = await raw(admin.token, 'DELETE', `/admin/badges/${badge.id}`)
+ok('deleting the badge frees its picture', r.status === 204 && await status(badgeNext.url) === 404)
 await finish()

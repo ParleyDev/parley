@@ -135,9 +135,11 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req
 async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<BadgeIn>) -> AppResult<Json<Badge>> {
     require_perm(&state, uid, Perm::InstanceManage).await?;
     let mut b = one(&state.db, id).await?;
+    let old_icon = b.icon_url.clone();
     apply(&mut b, req)?;
     sqlx::query("UPDATE custom_badges SET name = $2, description = $3, emoji = $4, icon_url = $5, color = $6, position = $7 WHERE id = $1")
         .bind(id).bind(&b.name).bind(&b.description).bind(&b.emoji).bind(&b.icon_url).bind(&b.color).bind(b.position).execute(&state.db).await?;
+    crate::routes::images::release_replaced(&state, old_icon.as_deref(), b.icon_url.as_deref()).await;
     audit::record(&state, uid, "badge.update", "badge", Some(id), &b.name, json!({})).await;
     broadcast(&state).await;
     Ok(Json(b))
@@ -149,6 +151,7 @@ async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     let b = one(&state.db, id).await?;
     let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_badges WHERE badge_id = $1").bind(id).fetch_one(&state.db).await?;
     sqlx::query("DELETE FROM custom_badges WHERE id = $1").bind(id).execute(&state.db).await?;
+    crate::routes::images::release_replaced(&state, b.icon_url.as_deref(), None).await;
     audit::record(&state, uid, "badge.delete", "badge", Some(id), &b.name, json!({ "holders": n })).await;
     broadcast(&state).await;
     Ok(StatusCode::NO_CONTENT)

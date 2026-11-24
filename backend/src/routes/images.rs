@@ -269,7 +269,7 @@ pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&
 }
 
 /// Images nothing points at any more (a `#crop=…` on the reference still counts as pointing at it): not a user's avatar/banner, a server's icon/banner, a Discover
-/// listing's banner, a community's icon/banner, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
+/// listing's banner, a community's icon/banner, a group DM's icon, an app's icon, a custom badge's picture, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
 pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid> {
     orphan_query(db, min_age_secs, None).await
 }
@@ -284,6 +284,9 @@ async fn orphan_query(db: &sqlx::PgPool, min_age_secs: f64, only: Option<Uuid>) 
            AND NOT EXISTS (SELECT 1 FROM guild_members gm WHERE split_part(gm.guild_avatar, '#', 1) = '/api/images/' || i.id::text OR split_part(gm.guild_banner, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_events ev WHERE split_part(ev.cover_url, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.icon = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM channels ch WHERE split_part(ch.icon_url, '#', 1) = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM applications a WHERE split_part(a.icon_url, '#', 1) = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM custom_badges cb WHERE split_part(cb.icon_url, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM emojis e WHERE e.id = i.id)
            AND NOT EXISTS (SELECT 1 FROM stickers s WHERE s.id = i.id)",
     )
@@ -307,7 +310,7 @@ pub async fn sweep_now(state: &AppState, min_age_secs: f64) -> usize {
     n
 }
 
-/// Periodic sweep: uploads that never got attached to a profile, server, listing, community, emoji or sticker.
+/// Periodic sweep: uploads that never got attached to anything (see `orphan_image_ids`).
 pub async fn sweep_orphans(state: AppState) {
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(900)).await;
