@@ -1540,23 +1540,34 @@ async fn forward_message(
         .bind(mid)
         .execute(&mut *tx)
         .await?;
-    // Duplicate attachment rows and files so the copy survives deletion of the original.
+    // Duplicate attachment rows and files so the copy survives deletion of the original. Everything the upload
+    // worked out comes along (a video's poster, a song's cover and tags, a voice message's waveform and finished
+    // transcript, alt text, the visualiser's data); play counts start afresh.
     for a in &src.attachments {
         let aid = Uuid::new_v4();
         let dir = &state.config.upload_dir;
         tokio::fs::copy(dir.join(a.id.to_string()), dir.join(aid.to_string())).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+        for ext in ["thumb", "viz"] {
+            match tokio::fs::copy(dir.join(format!("{}.{ext}", a.id)), dir.join(format!("{aid}.{ext}"))).await {
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(AppError::Other(anyhow::anyhow!(e))),
+            }
+        }
         sqlx::query(
-            "INSERT INTO attachments (id, message_id, uploader_id, channel_id, filename, content_type, size, width, height) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            "INSERT INTO attachments (id, message_id, uploader_id, channel_id, filename, content_type, size, width, height,
+                                      thumb_type, duration_ms, waveform, transcript, transcript_status, description, audio_tags)
+             SELECT $1, $2, $3, $4, filename, content_type, size, width, height,
+                    thumb_type, duration_ms, waveform,
+                    CASE WHEN transcript_status = 'done' THEN transcript END, CASE WHEN transcript_status = 'done' THEN 'done' END,
+                    description, audio_tags
+             FROM attachments WHERE id = $5",
         )
         .bind(aid)
         .bind(new_id)
         .bind(uid)
         .bind(req.channel_id)
-        .bind(&a.filename)
-        .bind(&a.content_type)
-        .bind(a.size)
-        .bind(a.width)
-        .bind(a.height)
+        .bind(a.id)
         .execute(&mut *tx)
         .await?;
     }

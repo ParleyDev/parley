@@ -41,6 +41,12 @@ ok('the cover becomes the thumbnail, as a JPEG', th?.status === 200 && th.header
 ok('a file without tags has none and no cover', bare.audio_tags === undefined && !bare.thumb_url, JSON.stringify(bare))
 const msgs = await call(a.token, 'GET', `/channels/${ch.id}/messages`)
 ok('messages carry the tags', msgs.some((m) => m.attachments?.some((x) => x.id === song.id && x.audio_tags?.title === 'Tidewater' && x.thumb_url)))
+const songMsg = msgs.find((m) => m.attachments?.some((x) => x.id === song.id))
+const other = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'elsewhere', kind: 'text' })
+const fw = await call(a.token, 'POST', `/channels/${ch.id}/messages/${songMsg.id}/forward`, { channel_id: other.id })
+const fa = fw.attachments?.[0]
+const fth = fa?.thumb_url ? await fetch(`${B.replace(/\/api$/, '')}${fa.thumb_url}`) : null
+ok('a forwarded song keeps its tags and its own copy of the cover', fa && fa.id !== song.id && sorted(fa.audio_tags) === sorted(song.audio_tags) && fth?.status === 200 && fth.headers.get('content-type') === 'image/jpeg', JSON.stringify(fa))
 
 console.log('-- card')
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] })
