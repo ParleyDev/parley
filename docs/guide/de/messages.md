@@ -2,7 +2,7 @@
 title: Nachrichten
 section: Reden
 summary: Nachrichten schreiben, formatieren, jemanden erwähnen, reagieren, antworten, Dateien anhängen, Umfragen starten, Nachrichten planen und als Lesezeichen speichern.
-source: 5dc5683055d5
+source: 85c6661b220f
 ---
 
 ![Eine Unterhaltung mit einer Antwort, Reaktionen und einer Umfrage](shot:messages)
@@ -90,6 +90,7 @@ Klicke auf **+** und **Datei hochladen**, zieh Dateien in den Chat oder füge si
 - Bis zu 10 Dateien pro Nachricht, normalerweise je 25 MB. Der Betreiber deines Servers erlaubt eventuell mehr.
 - Vor dem Senden kannst du **Als Spoiler markieren** oder **Alt-Text hinzufügen**: eine Beschreibung für Leute, die Screenreader nutzen.
 - Bilder öffnen sich beim Anklicken in voller Größe. Videos und Audio spielen direkt im Chat.
+- Musikdateien zeigen Titel, Interpret, Album und Cover des Songs, aus den Tags der Datei selbst.
 - **Link kopieren** bei einer Datei gibt dir einen Link, der ein, zwei Tage funktioniert und dann nicht mehr, damit eine Datei aus einer privaten Unterhaltung nicht für alle offen bleibt, die den Link haben. Um eine Datei länger zu teilen, leite die Nachricht weiter oder sende die Datei noch einmal.
 
 ## Sprachnachrichten

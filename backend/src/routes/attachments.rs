@@ -67,7 +67,7 @@ pub fn router() -> Router<AppState> {
         .route("/attachments/:id/:filename", get(serve))
 }
 
-pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description, plays, media_ms, (channel_min_age(channel_id) IS NOT NULL) AS restricted";
+pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description, plays, media_ms, audio_tags, (channel_min_age(channel_id) IS NOT NULL) AS restricted";
 
 fn sanitize_filename(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("file");
@@ -219,12 +219,29 @@ async fn finish_file(state: &AppState, uid: Uuid, channel_id: Uuid, id: Uuid, mu
     let (width, height) = if crate::video_thumb::is_video(&content_type) {
         match crate::video_thumb::make(&path).await { Some((w, h)) => { thumb_type = Some("image/jpeg".into()); (Some(w), Some(h)) } None => (width, height) }
     } else { (width, height) };
+    // Music: its tags, and its cover (checked like a posted picture) as the thumbnail. Not voice messages.
+    let mut audio_tags = None;
+    if crate::audio_viz::is_audio(&content_type) && duration_ms.is_none() {
+        if let Some(r) = crate::audio_tags::read(&path).await {
+            if let Some(cover) = &r.cover {
+                match crate::audio_tags::keep_cover(state, id, cover, uid, channel_id, &filename, true).await {
+                    Ok(true) => thumb_type = Some("image/jpeg".into()),
+                    Ok(false) => {}
+                    Err(e) => {
+                        let _ = tokio::fs::remove_file(&path).await;
+                        return Err(e);
+                    }
+                }
+            }
+            audio_tags = Some(r.tags);
+        }
+    }
     crate::metrics::METRICS.uploads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     crate::metrics::METRICS.upload_bytes.fetch_add(size as u64, std::sync::atomic::Ordering::Relaxed);
     let voice = content_type.starts_with("audio/") && duration_ms.is_some();
     let att = sqlx::query_as::<_, Attachment>(&format!(
-        "INSERT INTO attachments (id, uploader_id, channel_id, filename, content_type, size, width, height, thumb_type, duration_ms, waveform)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING {ATTACHMENT_COLS}"
+        "INSERT INTO attachments (id, uploader_id, channel_id, filename, content_type, size, width, height, thumb_type, duration_ms, waveform, audio_tags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING {ATTACHMENT_COLS}"
     ))
     .bind(id)
     .bind(uid)
@@ -237,6 +254,7 @@ async fn finish_file(state: &AppState, uid: Uuid, channel_id: Uuid, id: Uuid, mu
     .bind(thumb_type)
     .bind(if voice { duration_ms } else { None })
     .bind(if voice { waveform } else { None })
+    .bind(audio_tags)
     .fetch_one(&state.db)
     .await?;
     // Visualiser data, ready before anyone presses play (see audio_viz.rs).

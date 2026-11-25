@@ -3,7 +3,7 @@ import { Download, FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import VoiceMessage from './VoiceMessage'
-import AudioPlayer from './AudioPlayer'
+import AudioPlayer, { audioFileTitle } from './AudioPlayer'
 import VideoPlayer from './VideoPlayer'
 import type { Track } from '../lib/player'
 import type { Attachment } from '../lib/types'
@@ -167,7 +167,8 @@ function One({ a, mine, gallery = [], context }: { a: Attachment; mine?: boolean
           return <VoiceMessage key={a.id} a={a} mine={!!mine} track={{ ...track, title: context?.artist ? t('Voice message from {name}', { name: context.artist }) : t('Voice message') }} />
         }
         if (isAudio(a.content_type)) {
-          return <AudioPlayer key={a.id} a={a} track={{ ...track, title: a.filename.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/_+/g, ' ') }} />
+          const tags = a.audio_tags
+          return <AudioPlayer key={a.id} a={a} track={{ ...track, title: tags?.title || audioFileTitle(a.filename), artist: tags?.artist || track.artist, album: tags?.album, artwork: a.thumb_url }} />
         }
         if (inline && isTextFile(a)) return <TextPreview key={a.id} a={a} />
         if (isPdf(a)) return <PdfCard key={a.id} a={a} />

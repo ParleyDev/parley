@@ -13,6 +13,9 @@ import Avatar from './Avatar'
 import { useStore } from '../store'
 import { shownName } from '../lib/names'
 
+/** A song's title from its file name, for files without tags ("04_tidewater.mp3" → "04 tidewater"). */
+export const audioFileTitle = (filename: string) => filename.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/_+/g, ' ')
+
 export const fmtTime = (sec: number) => { const s = Math.max(0, Math.floor(sec)); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s % 60).padStart(2, '0')}` }
 const SPEEDS = [1, 1.25, 1.5, 2, 0.75]
 const VIZ = ['bars', 'wave', 'orb', 'off'] as const
@@ -94,8 +97,9 @@ function WaveBars({ peaks, frac }: { peaks: Uint8Array; frac: number }) {
 }
 
 /**
- * An audio file in chat: a big play button, the title, a live visualisation (bars, wave or orb; the button cycles
- * them, or off), a seek bar, speed and volume. It plays through the app-wide player, so it keeps going when you leave
+ * An audio file in chat: a big play button, the title (and artist and album, from the file's tags), a live visualisation (bars, wave or orb; the button cycles
+ * them, or off), a seek bar, speed and volume. A file with cover art opens with the cover, like a record in a shop,
+ * the title beside it and a soft blur of it behind the card. It plays through the app-wide player, so it keeps going when you leave
  * the chat. Download saves it; on phones it opens Save / Share / Copy Link / Open.
  */
 export default function AudioPlayer({ a, track: base }: { a: Attachment; track: Track }) {
@@ -123,7 +127,10 @@ export default function AudioPlayer({ a, track: base }: { a: Attachment; track: 
   const menu = useContextMenu()
   const dl = useRef<HTMLButtonElement>(null)
   const ext = (a.filename.match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? a.content_type.split('/')[1] ?? '').toUpperCase()
-  const title = a.filename.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[_]+/g, ' ')
+  const tags = a.audio_tags
+  const title = tags?.title || audioFileTitle(a.filename)
+  const cover = a.thumb_url
+  const albumLine = [tags?.album, tags?.year].filter(Boolean).join(' · ')
   const viz = prefs.audioViz
   const nextViz = VIZ[(VIZ.indexOf(viz) + 1) % VIZ.length]
   const vizIcon = { bars: <AudioLines size={16} />, wave: <Activity size={16} />, orb: <CircleDot size={16} />, off: <EyeOff size={16} /> }[viz]
@@ -143,31 +150,56 @@ export default function AudioPlayer({ a, track: base }: { a: Attachment; track: 
   ])
   const VolIcon = p.volume === 0 ? VolumeX : p.volume < 0.5 ? Volume1 : Volume2
 
+  const playBtn = (
+    <button type="button" onClick={() => toggle(track, { speed })} className={`relative ${cover ? 'h-10 w-10' : 'h-11 w-11'} shrink-0 rounded-full bg-accent text-white flex items-center justify-center shadow-lg shadow-accent/25 hover:bg-accent-hover active:scale-95 transition-transform`} title={playing ? t('Pause') : t('Play')} aria-label={playing ? t('Pause') : t('Play')} data-audio-play>
+      {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
+      {playing && <span className="absolute inset-0 rounded-full ring-2 ring-accent/50 animate-ping [animation-duration:2s]" aria-hidden />}
+    </button>
+  )
+  const facts = (
+    <div className="flex flex-wrap items-center gap-x-1.5 whitespace-nowrap text-xs text-text-2">
+      {ext && <span className="rounded bg-bg-4 px-1 py-px text-[10px] font-bold tracking-wide text-text-1">{ext}</span>}
+      <span>{formatBytes(a.size)}</span>
+      {duration > 0 && <><span aria-hidden>·</span><span className="tabular-nums">{fmtTime(duration)}</span></>}
+      {plays > 0 && <><span aria-hidden>·</span><span className="flex items-center gap-0.5 tabular-nums" title={plays === 1 ? t('1 play') : t('{n} plays', { n: plays.toLocaleString() })} data-audio-plays={plays}><Play size={10} fill="currentColor" />{plays.toLocaleString()}</span></>}
+      {listeners.length > 0 && (
+        <button type="button" onClick={showListeners} className="flex items-center gap-0.5 rounded px-0.5 tabular-nums hover:bg-white/10 hover:text-text-0" title={listenersTip} aria-label={listeners.length === 1 ? t('1 listener') : t('{n} listeners', { n: listeners.length })} data-audio-listeners={listeners.length}><Headphones size={11} />{listeners.length.toLocaleString()}</button>
+      )}
+    </div>
+  )
+  const vizBtn = <button type="button" onClick={() => setPrefs({ audioViz: nextViz })} className={iconBtn} title={t('Visualiser: {mode} (click for {next})', { mode: vizLabel[viz], next: vizLabel[nextViz] })} aria-label={t('Visualiser: {mode}', { mode: vizLabel[viz] })} data-audio-viz-mode={viz}>{vizIcon}</button>
+  const dlBtn = <button ref={dl} type="button" onClick={() => (phone ? openMenu() : void saveFile(a.url, a.filename))} className={iconBtn} title={t('Download')} aria-label={t('Download')} data-audio-download><Download size={17} /></button>
+  const titleEl = <div className={`font-semibold text-text-0 ${cover ? 'line-clamp-2 break-words text-[17px] leading-snug' : 'truncate text-[15px]'}`} title={a.filename} data-audio-title>{title}</div>
+
   return (
     <div className={`relative w-full max-w-[460px] overflow-hidden rounded-xl border bg-bg-2 transition-colors ${playing ? 'border-accent/60' : 'border-line'}`}
       onContextMenu={(e) => menu.open(e, items)} data-audio-player={a.id} data-playing={playing ? '1' : '0'}>
       {/* A soft wash of the accent behind the card while it plays. */}
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/15 via-transparent to-transparent transition-opacity duration-500 ${playing ? 'opacity-100' : 'opacity-0'}`} aria-hidden />
-      <div className="relative flex items-center gap-3 px-3 pt-3">
-        <button type="button" onClick={() => toggle(track, { speed })} className="relative h-11 w-11 shrink-0 rounded-full bg-accent text-white flex items-center justify-center shadow-lg shadow-accent/25 hover:bg-accent-hover active:scale-95 transition-transform" title={playing ? t('Pause') : t('Play')} aria-label={playing ? t('Pause') : t('Play')} data-audio-play>
-          {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
-          {playing && <span className="absolute inset-0 rounded-full ring-2 ring-accent/50 animate-ping [animation-duration:2s]" aria-hidden />}
-        </button>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-semibold text-text-0" title={a.filename} data-audio-title>{title}</div>
-          <div className="flex items-center gap-1.5 text-xs text-text-2">
-            {ext && <span className="rounded bg-bg-4 px-1 py-px text-[10px] font-bold tracking-wide text-text-1">{ext}</span>}
-            <span>{formatBytes(a.size)}</span>
-            {duration > 0 && <><span aria-hidden>·</span><span className="tabular-nums">{fmtTime(duration)}</span></>}
-            {plays > 0 && <><span aria-hidden>·</span><span className="flex items-center gap-0.5 tabular-nums" title={plays === 1 ? t('1 play') : t('{n} plays', { n: plays.toLocaleString() })} data-audio-plays={plays}><Play size={10} fill="currentColor" />{plays.toLocaleString()}</span></>}
-            {listeners.length > 0 && (
-              <button type="button" onClick={showListeners} className="flex items-center gap-0.5 rounded px-0.5 tabular-nums hover:bg-white/10 hover:text-text-0" title={listenersTip} aria-label={listeners.length === 1 ? t('1 listener') : t('{n} listeners', { n: listeners.length })} data-audio-listeners={listeners.length}><Headphones size={11} />{listeners.length.toLocaleString()}</button>
-            )}
+      {cover && <img src={cover} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-20 blur-2xl saturate-150" data-audio-wash />}
+      {cover ? (
+        <div className="relative flex items-end gap-3.5 px-3 pt-3" data-audio-header="cover">
+          <img src={cover} alt="" className="h-28 w-28 shrink-0 rounded-lg object-cover shadow-lg shadow-black/30 phone:h-20 phone:w-20" data-audio-cover />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5 self-center">
+            {albumLine && <div className="truncate text-[10px] font-bold uppercase tracking-wider text-text-2" title={albumLine} data-audio-album>{albumLine}</div>}
+            {titleEl}
+            {tags?.artist && <div className="truncate text-[13px] text-text-1" title={tags.artist} data-audio-artist>{tags.artist}</div>}
+            <div className="mt-1">{facts}</div>
           </div>
+          <div className="flex shrink-0 flex-col items-center gap-1">{playBtn}{vizBtn}{dlBtn}</div>
         </div>
-        <button type="button" onClick={() => setPrefs({ audioViz: nextViz })} className={iconBtn} title={t('Visualiser: {mode} (click for {next})', { mode: vizLabel[viz], next: vizLabel[nextViz] })} aria-label={t('Visualiser: {mode}', { mode: vizLabel[viz] })} data-audio-viz-mode={viz}>{vizIcon}</button>
-        <button ref={dl} type="button" onClick={() => (phone ? openMenu() : void saveFile(a.url, a.filename))} className={iconBtn} title={t('Download')} aria-label={t('Download')} data-audio-download><Download size={17} /></button>
-      </div>
+      ) : (
+        <div className="relative flex items-center gap-3 px-3 pt-3" data-audio-header="plain">
+          {playBtn}
+          <div className="min-w-0 flex-1">
+            {titleEl}
+            {(tags?.artist || albumLine) && <div className="truncate text-[13px] text-text-1" data-audio-artist>{[tags?.artist, albumLine].filter(Boolean).join(' · ')}</div>}
+            {facts}
+          </div>
+          {vizBtn}
+          {dlBtn}
+        </div>
+      )}
       {viz !== 'off' && (
         <button type="button" tabIndex={-1} onClick={() => toggle(track, { speed })} className="relative block w-full px-3 pt-2" aria-hidden data-audio-viz-area>
           <AudioVisualizer mode={viz} active={cur} playing={playing} className="h-14" />

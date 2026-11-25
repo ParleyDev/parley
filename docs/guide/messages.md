@@ -123,6 +123,7 @@ Click **+** and **Upload a File**, drag files onto the chat, or paste them.
 - Up to 10 files per message, normally 25 MB each. Your server's host may allow more.
 - Before sending, you can **Mark as spoiler** or **Add alt text**: a description for people who use screen readers.
 - Pictures open full size when clicked. Videos and audio play right in the chat.
+- Music files show the song's title, artist, album and cover art, from the file's own tags.
 - **Copy Link** on a file gives a link that works for a day or two, then stops, so a file from a private conversation doesn't stay open to anyone who has the link. To share a file for longer, forward the message or send the file again.
 
 ## Voice messages

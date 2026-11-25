@@ -2,7 +2,7 @@
 title: Berichten
 section: Praten
 summary: Berichten schrijven, opmaken, iemand vermelden, reageren, antwoorden, bestanden toevoegen, peilingen houden, berichten inplannen en als bladwijzer opslaan.
-source: 5dc5683055d5
+source: 85c6661b220f
 ---
 
 ![Een gesprek met een antwoord, reacties en een peiling](shot:messages)
@@ -90,6 +90,7 @@ Klik op **+** en **Bestand uploaden**, sleep bestanden naar de chat, of plak ze.
 - Tot 10 bestanden per bericht, normaal 25 MB per stuk. De host van je server staat misschien meer toe.
 - Voor het versturen kun je **Als spoiler markeren** of **Alt-tekst toevoegen**: een beschrijving voor mensen die een schermlezer gebruiken.
 - Afbeeldingen openen op ware grootte als je erop klikt. Video's en audio spelen direct in de chat af.
+- Muziekbestanden tonen de titel, artiest, het album en de hoes van het nummer, uit de tags van het bestand zelf.
 - **Link kopiëren** bij een bestand geeft een link die een dag of twee werkt en daarna niet meer, zodat een bestand uit een privégesprek niet open blijft voor iedereen die de link heeft. Wil je een bestand langer delen, stuur dan het bericht door of verstuur het bestand opnieuw.
 
 ## Spraakberichten

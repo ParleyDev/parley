@@ -2,7 +2,7 @@
 title: Mesajlar
 section: Konuşmak
 summary: Mesaj yaz, biçimlendir, birinden bahset, tepki ver, yanıtla, dosya ekle, anket yap, mesajları zamanla ve yer imlerine ekle.
-source: 5dc5683055d5
+source: 85c6661b220f
 ---
 
 ![Yanıt, tepkiler ve anket içeren bir sohbet](shot:messages)
@@ -90,6 +90,7 @@ Bir mesaja sağ tıkla, **⋯** düğmesine tıkla ya da telefonda basılı tut.
 - Mesaj başına en fazla 10 dosya, normalde her biri 25 MB. Sunucunu barındıran kişi daha fazlasına izin verebilir.
 - Göndermeden önce **Spoiler olarak işaretle** ya da **Alternatif metin ekle** diyebilirsin: ekran okuyucu kullananlar için bir açıklama.
 - Resimler tıklandığında tam boyutta açılır. Videolar ve sesler doğrudan sohbette oynar.
+- Müzik dosyaları, dosyanın kendi etiketlerinden şarkının adını, sanatçısını, albümünü ve kapak resmini gösterir.
 - Bir dosyadaki **Bağlantıyı Kopyala**, bir iki gün çalışıp sonra çalışmayan bir bağlantı verir; böylece özel bir sohbetteki dosya, bağlantıya sahip herkese açık kalmaz. Bir dosyayı daha uzun süre paylaşmak için mesajı ilet ya da dosyayı yeniden gönder.
 
 ## Sesli mesajlar

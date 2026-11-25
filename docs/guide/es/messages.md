@@ -2,7 +2,7 @@
 title: Mensajes
 section: Conversar
 summary: Escribe, da formato, menciona, reacciona, responde, adjunta archivos, haz encuestas, programa mensajes y guárdalos en marcadores.
-source: 5dc5683055d5
+source: 85c6661b220f
 ---
 
 ![Una conversación con una respuesta, reacciones y una encuesta](shot:messages)
@@ -90,6 +90,7 @@ Haz clic en **+** y en **Subir un archivo**, arrastra archivos al chat o pégalo
 - Hasta 10 archivos por mensaje, normalmente de 25 MB cada uno. Quien aloja tu servidor puede permitir más.
 - Antes de enviar, puedes **Marcar como spoiler** o **Añadir texto alternativo**: una descripción para las personas que usan lectores de pantalla.
 - Las imágenes se abren a tamaño completo al hacer clic. Los vídeos y el audio se reproducen en el propio chat.
+- Los archivos de música muestran el título, el artista, el álbum y la portada de la canción, a partir de las etiquetas del propio archivo.
 - **Copiar enlace** en un archivo da un enlace que funciona durante uno o dos días y luego deja de hacerlo, para que un archivo de una conversación privada no quede abierto a cualquiera que tenga el enlace. Para compartir un archivo durante más tiempo, reenvía el mensaje o vuelve a enviar el archivo.
 
 ## Mensajes de voz

@@ -1,4 +1,5 @@
 mod audit;
+mod audio_tags;
 mod audio_viz;
 mod av;
 mod auth;
@@ -138,6 +139,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(abuse::sweep_loop(state_for_sweep.clone()));
     tokio::spawn(routes::link_feeds::refresh_loop(state_for_sweep.clone()));
     tokio::spawn(audio_viz::backfill(state_for_sweep.db.clone(), state_for_sweep.config.upload_dir.clone()));
+    tokio::spawn(audio_tags::backfill(state_for_sweep.clone()));
     tokio::spawn(video_thumb::backfill(state_for_sweep.db.clone(), state_for_sweep.config.upload_dir.clone()));
     tokio::spawn(voice_audio::convert_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::assets::convert_nameplates(state_for_sweep.clone()));

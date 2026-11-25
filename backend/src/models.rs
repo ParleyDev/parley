@@ -890,6 +890,9 @@ pub struct Attachment {
     /// Audio files: the length, once the server has analysed it.
     #[sqlx(default)]
     pub media_ms: Option<i32>,
+    /// Audio files: the song's tags (audio_tags.rs); NULL until read, `{}` when there are none.
+    #[sqlx(default)]
+    pub audio_tags: Option<serde_json::Value>,
     /// The channel it is in has a minimum age: its links are the short kind (`media_sign`).
     #[sqlx(default)]
     pub restricted: bool,
@@ -922,6 +925,9 @@ pub struct AttachmentJson {
     pub plays: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub media_ms: Option<i32>,
+    /// Audio files: `{title, artist, album, year, track, genre}`, whichever the file has; its cover is `thumb_url`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_tags: Option<serde_json::Value>,
 }
 
 fn is_zero(n: &i32) -> bool { *n == 0 }
@@ -931,7 +937,7 @@ impl From<Attachment> for AttachmentJson {
         let url = a.url();
         // `?v=2`: thumbnails are cached as immutable, and v2 ones honour EXIF orientation; bump when they change.
         let thumb_url = a.thumb_type.as_ref().map(|_| crate::media_sign::sign(&format!("/api/attachments/{}/thumb?v=2", a.id), a.restricted));
-        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, description: a.description, listened_by: a.listened_by, plays: a.plays, media_ms: a.media_ms }
+        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, description: a.description, listened_by: a.listened_by, plays: a.plays, media_ms: a.media_ms, audio_tags: a.audio_tags.filter(|t| t.as_object().map(|o| !o.is_empty()).unwrap_or(false)) }
     }
 }
 

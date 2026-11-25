@@ -12,8 +12,12 @@ export interface Track {
   id: string
   url: string
   title: string
-  /** Who posted it, for the now-playing bar and the lock screen. */
+  /** The song's artist (from its tags), else who posted it: for the now-playing bar and the lock screen. */
   artist?: string
+  /** From the song's tags, for the lock screen. */
+  album?: string
+  /** Cover art, for the now-playing bar and the lock screen. */
+  artwork?: string
   /** Where it was posted, so the now-playing bar can go back there. */
   where?: { guildId: string | null; channelId: string; messageId: string }
   /** Report "listened" past 80% (voice messages from someone else). */
@@ -203,7 +207,9 @@ function mediaSession() {
   const ms = navigator.mediaSession
   if (!ms || !state.track) return
   try {
-    ms.metadata = new MediaMetadata({ title: state.track.title, artist: state.track.artist ?? 'Parley' })
+    const t = state.track
+    const artwork = t.artwork ? [{ src: new URL(t.artwork, location.href).href, type: 'image/jpeg' }] : undefined
+    ms.metadata = new MediaMetadata({ title: t.title, artist: t.artist ?? 'Parley', album: t.album ?? '', artwork })
     ms.setActionHandler('play', () => void resume())
     ms.setActionHandler('pause', () => audio().pause())
     ms.setActionHandler('stop', () => stop())

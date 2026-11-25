@@ -416,6 +416,8 @@ export interface Ban {
 /** `burst`: a super reaction (shown and counted apart from the normal one of the same emoji). */
 export interface Reaction { emoji: string; count: number; me: boolean; burst?: boolean }
 
+export interface AudioTags { title?: string; artist?: string; album?: string; year?: number; track?: number; genre?: string }
+
 export interface Attachment {
   id: string
   filename: string
@@ -437,6 +439,8 @@ export interface Attachment {
   plays?: number
   /** Audio files: length, once the server has analysed the file. */
   media_ms?: number
+  /** Audio files: the song's tags (ID3 and the like), whichever the file has. Its cover art is `thumb_url`. */
+  audio_tags?: AudioTags
   /** Alt text, set by the uploader. */
   description?: string | null
 }

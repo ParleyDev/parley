@@ -9,7 +9,7 @@ import { fmtTime, Scrubber } from './AudioPlayer'
 
 /**
  * What the app-wide player is playing, above the user panel: it keeps playing when you leave the chat it came from.
- * A mini visualiser, the title (click to go back to the message), play/pause, a seek bar and ✕ to stop.
+ * A mini visualiser (or the song's cover), the title (click to go back to the message), play/pause, a seek bar and ✕ to stop.
  */
 export default function NowPlaying() {
   const t = useT()
@@ -28,7 +28,9 @@ export default function NowPlaying() {
   return (
     <div className="mb-2 rounded-lg border border-line bg-bg-2 px-2 pt-1.5 pb-1 shadow-lg" data-now-playing={tr.id} data-playing={p.playing ? '1' : '0'}>
       <div className="flex items-center gap-2">
-        <div className="w-9 shrink-0"><AudioVisualizer mode="bars" active playing={p.playing} className="h-7" /></div>
+        {tr.artwork
+          ? <img src={tr.artwork} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" data-now-playing-cover />
+          : <div className="w-9 shrink-0"><AudioVisualizer mode="bars" active playing={p.playing} className="h-7" /></div>}
         <button type="button" onClick={back} disabled={!tr.where} className="min-w-0 flex-1 text-left" title={tr.where ? t('Go to message') : undefined} data-now-playing-title>
           <div className="truncate text-[13px] font-semibold text-text-0">{tr.title}</div>
           <div className="truncate text-[11px] text-text-2 tabular-nums">{fmtTime(p.pos)} / {p.duration ? fmtTime(p.duration) : '–:––'}{tr.artist ? ` · ${tr.artist}` : ''}</div>
