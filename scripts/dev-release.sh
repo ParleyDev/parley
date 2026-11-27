@@ -15,11 +15,20 @@ repo=$GITHUB_REPOSITORY
 case "$cmd" in
   prepare)
     version=$2
-    # Point the tag at this commit (create or move). The desktop and mobile workflows may both get here at once,
-    # so a failed create falls back to the other path.
+    # Point the tag at this commit (create or move). The desktop and mobile workflows often get here at the same
+    # moment for the same commit, and GitHub then refuses one of the two updates (HTTP 422). So each attempt first
+    # checks where the tag is: already at this commit (the other workflow moved it) is done; otherwise create or
+    # move it, and on a refusal wait a little and look again.
+    at() { gh api "repos/$repo/git/ref/tags/dev" -q .object.sha 2>/dev/null || true; }
     move() { gh api -X PATCH "repos/$repo/git/refs/tags/dev" -f sha="$GITHUB_SHA" -F force=true >/dev/null; }
     make() { gh api -X POST "repos/$repo/git/refs" -f ref=refs/tags/dev -f sha="$GITHUB_SHA" >/dev/null; }
-    if gh api "repos/$repo/git/ref/tags/dev" >/dev/null 2>&1; then move; else make 2>/dev/null || move; fi
+    for attempt in 1 2 3 4 5 6; do
+      now=$(at)
+      if [ "$now" = "$GITHUB_SHA" ]; then break; fi
+      if [ -z "$now" ]; then make 2>/dev/null && break; else move && break; fi
+      if [ "$attempt" = 6 ]; then echo "could not point the dev tag at $GITHUB_SHA" >&2; exit 1; fi
+      sleep $((attempt * 3 + RANDOM % 4))
+    done
     notes="Development build **$version** from $GITHUB_SHA, rebuilt on every change to main. These builds may have rough edges; the desktop app's Settings → Advanced → Update channel → Development keeps it on them. Releases are the stable channel."
     edit() { gh release edit dev --repo "$repo" --prerelease --latest=false --title "Development build ($version)" --notes "$notes" >/dev/null; }
     if gh release view dev --repo "$repo" >/dev/null 2>&1; then edit
