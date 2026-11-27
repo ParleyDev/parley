@@ -423,6 +423,10 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
   text-shadow: 0 0 1px #fff, 0 0 4px var(--n1), 0 0 10px var(--n1), 0 0 22px color-mix(in srgb, var(--n1) 70%, transparent);
   animation: ne-flicker 2.4s linear infinite;
 }
+/* Neon's glow spills well past the letters. Where a name is clipped so a long one can end in "…" (.truncate on the
+   name or on the box around it), widen the clipping box for the glow with padding and take the space back with an
+   equal negative margin, so nothing moves and the glow isn't cut off in a hard rectangle. */
+.truncate:is(.ne-neon, :has(.ne-neon)) { padding: .8em 1.5em; margin: -.8em -1.5em; }
 .ne-toon {
   color: color-mix(in oklab, var(--n1) 80%, #fff);
   -webkit-text-stroke: .14em color-mix(in oklab, var(--n1) 28%, #000); paint-order: stroke fill;

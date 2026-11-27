@@ -27,6 +27,12 @@ const author = pb.locator(`[data-msg-id="${m.id}"] [data-msg-author] span`).firs
 ok('the chat author name carries the font and effect classes with the colour variable', (await author.getAttribute('class')).includes('nf-poster') && (await author.getAttribute('class')).includes('ne-neon') && (await author.evaluate((el) => el.style.getPropertyValue('--n1'))) === '#57f287')
 ok('neon paints a glow', (await author.evaluate((el) => getComputedStyle(el).textShadow)) !== 'none')
 ok('the DM sidebar and profile panel use it too', (await pb.locator(`aside a[href="/channels/@me/${dm.id}"] span.truncate`).first().getAttribute('class')).includes('ne-neon') && (await pb.locator('[data-dm-profile] [data-profile-name]').getAttribute('class')).includes('ne-neon'))
+{
+  // A name clipped for "…" (the DM list's .truncate) gets room for the glow, taken back by a negative margin.
+  const dmName = pb.locator(`aside a[href="/channels/@me/${dm.id}"] span.truncate.ne-neon`).first()
+  const box = await dmName.evaluate((e) => { const cs = getComputedStyle(e); return { pad: parseFloat(cs.paddingTop), padX: parseFloat(cs.paddingLeft), m: parseFloat(cs.marginTop), mx: parseFloat(cs.marginLeft) } })
+  ok('a clipped neon name has room for its glow, without moving', box.pad >= 10 && box.padX >= 20 && box.m === -box.pad && box.mx === -box.padX, JSON.stringify(box))
+}
 
 // A member seen only through the member list (no DM, not a friend) still gets their style; animation waits for hover.
 const c = await reg('carol'); const g = await call(a.token, 'POST', '/guilds', { name: `Style ${S}` }); const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(c.token, 'POST', `/invites/${inv.code}`)
