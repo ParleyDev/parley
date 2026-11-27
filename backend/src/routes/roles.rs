@@ -451,9 +451,8 @@ async fn update_member(
 
     if let Some(wanted) = &req.roles {
         perms::check(p, perms::MANAGE_ROLES)?;
-        if target != uid && !ctx.outranks_member(uid, target) {
-            return Err(AppError::Forbidden);
-        }
+        // As on Discord, what counts is the roles being given or taken, not who gets them: anyone with Manage Roles
+        // can hand out roles below their own highest role, to any member (the owner too, e.g. from a bot's role menu).
         let current: Vec<Uuid> = ctx.member_roles.get(&target).cloned().unwrap_or_default();
         let wanted: Vec<Uuid> = wanted.iter().copied().filter(|r| *r != id).collect();
         for r in wanted.iter() {
@@ -464,8 +463,9 @@ async fn update_member(
         let changed: Vec<Uuid> = current.iter().filter(|r| !wanted.contains(r)).chain(wanted.iter().filter(|r| !current.contains(r))).copied().collect();
         for r in &changed {
             let role = &ctx.roles[r];
-            if !ctx.outranks_role(uid, role) || role.id == id {
-                return Err(AppError::Forbidden);
+            if role.id == id { return Err(AppError::Forbidden) }
+            if !ctx.outranks_role(uid, role) {
+                return Err(AppError::ForbiddenWith(format!("{} is not below your highest role, so you can't give or take it", role.name)));
             }
             if role.managed_app_id.is_some() { return Err(AppError::BadRequest(format!("{} is a bot's own role and can't be given or taken", role.name))) }
             if crate::routes::integrations::is_managed(&state.db, role.id).await? { return Err(AppError::BadRequest(format!("{} is managed by a Twitch or YouTube integration", role.name))) }

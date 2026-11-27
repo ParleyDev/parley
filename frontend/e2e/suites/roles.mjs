@@ -19,6 +19,10 @@ r=await callS(b.token,'PATCH',`/guilds/${g.id}/roles/${helpers.id}`,{permissions
 r=await callS(b.token,'PATCH',`/guilds/${g.id}/members/${c.user.id}`,{roles:[helpers.id]}); ok('bob assigns lower role to carol', r.status===200)
 r=await callS(c.token,'DELETE',`/guilds/${g.id}/members/${b.user.id}`); ok('carol (Helpers, KICK) cannot kick bob who outranks -> 403', r.status===403)
 r=await callS(b.token,'DELETE',`/guilds/${g.id}/members/${a.user.id}`); ok('bob cannot kick owner -> 403', r.status===403)
+// Giving roles depends on the roles, not on who gets them (as on Discord): bob may give the owner a role below his own.
+r=await callS(b.token,'PATCH',`/guilds/${g.id}/members/${a.user.id}`,{roles:[helpers.id]}); ok('bob gives the owner a role below his own', r.status===200 && r.body.roles.includes(helpers.id), JSON.stringify(r.body))
+r=await callS(b.token,'PATCH',`/guilds/${g.id}/members/${a.user.id}`,{roles:[]}); ok('and takes it back', r.status===200 && !r.body.roles.includes(helpers.id))
+r=await callS(b.token,'PATCH',`/guilds/${g.id}/members/${c.user.id}`,{roles:[helpers.id,mods.id]}); ok('but not a role at his own level, and Parley says why', r.status===403 && /Mods is not below your highest role/.test(r.body?.error ?? ''), JSON.stringify(r.body))
 r=await callS(c.token,'PATCH',`/guilds/${g.id}`,{name:'nope'}); ok('carol cannot rename server -> 403', r.status===403)
 // bob (MANAGE_MESSAGES) deletes carol's message
 r=await callS(c.token,'POST',`/channels/${tc}/messages`,{content:'hi'}); const cm=r.body
