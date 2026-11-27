@@ -1,6 +1,6 @@
 // Membership screening (server rules), Discover featured/verified flags, and bookmark folders.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
+import { B, WEB, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
 
 const admin = await adminToken()
 const a = await reg('alice'); const b = await reg('bob')
@@ -18,6 +18,11 @@ ok('the guild payload on join carries them too', joined.rules_required === true 
 r = await raw(b.token, 'POST', `/channels/${tc.id}/messages`, { content: 'hi' }); let j = await r.json()
 ok('sending before accepting -> 403 rules_required', r.status === 403 && j.code === 'rules_required', JSON.stringify(j))
 ok('the owner (who never accepted either) is gated the same way', (await raw(a.token, 'POST', `/channels/${tc.id}/messages`, { content: 'me too' })).status === 403)
+// A bot can't accept rules: once someone adds it, it can post and the rules gate leaves it alone.
+const bapp = await call(a.token, 'POST', '/applications', { name: `Rulebot ${S}` }); const rb = await call(a.token, 'POST', `/applications/${bapp.id}/bot`, {})
+await raw(a.token, 'POST', '/oauth2/authorize', { client_id: bapp.client_id, scope: 'bot', guild_id: g.id, permissions: String((1 << 10) | (1 << 11)) })
+r = await fetch(`${B}/channels/${tc.id}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bot ${rb.token}` }, body: JSON.stringify({ content: 'bots skip the rules' }) })
+ok('a bot added to the server posts without accepting the rules', r.status === 201, String(r.status))
 r = await callS(b.token, 'POST', `/guilds/${g.id}/rules/accept`); ok('accepting records the time', r.status === 200 && !!r.body.rules_accepted_at)
 r = await raw(b.token, 'POST', `/channels/${tc.id}/messages`, { content: 'now I can' }); ok('then messages go through', r.status === 201)
 await callS(a.token, 'POST', `/guilds/${g.id}/rules/accept`)

@@ -86,8 +86,9 @@ pub async fn accept_rules(State(state): State<AppState>, AuthUser(uid): AuthUser
 }
 
 /// Membership screening gate: Err(RulesRequired) when the guild requires rules the member has not accepted.
+/// Bots skip it: they can't accept rules, and whoever added one already chose to let it in.
 pub async fn check_rules(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
-    let blocked: Option<(bool,)> = sqlx::query_as("SELECT (g.rules_required OR COALESCE((g.applications->>'enabled')::boolean, false)) AND m.rules_accepted_at IS NULL FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 WHERE g.id = $1")
+    let blocked: Option<(bool,)> = sqlx::query_as("SELECT (g.rules_required OR COALESCE((g.applications->>'enabled')::boolean, false)) AND m.rules_accepted_at IS NULL AND NOT u.bot FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 JOIN users u ON u.id = m.user_id WHERE g.id = $1")
         .bind(guild_id).bind(user_id).fetch_optional(db).await?;
     if blocked.map(|b| b.0).unwrap_or(false) { Err(AppError::RulesRequired) } else { Ok(()) }
 }
