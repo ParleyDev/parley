@@ -2,7 +2,7 @@
 title: Bildirimler ve gelen kutun
 section: Konuşmak
 summary: Neyin sana bildirim göndereceğini belirle; okunmamışlara, bahsetmelere, yer imlerine ve hatırlatıcılara yetiş.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Okunmamış mesajlar
@@ -61,7 +61,7 @@ Sağ üstteki gelen kutusu düğmesi (<kbd>Ctrl</kbd>+<kbd>I</kbd>) seni bekleye
 
 - **Masaüstü Bildirimlerini Etkinleştir** yeni mesajlar için bir uyarı açar.
 - **Bu tarayıcıda anlık bildirimler**, Parley sekmesi kapalıyken bile bildirimlerin gelmesini sağlar. Bildirimden yanıt verebilir veya okundu olarak işaretleyebilirsin.
-- **Okunmamış Mesaj Rozeti** sekmede veya uygulama simgesinde bir sayı gösterir.
+- **Okunmamış Mesaj Rozeti** sekmede veya uygulama simgesinde bir sayı gösterir. Windows’ta görev çubuğu düğmesinde, macOS’ta Dock’ta, iPhone’da uygulama simgesinde görünür ve uygulama kapalıyken bile güncel kalır.
 - **Biri mesajımı yanıtladığında bana bildir** yanıtları bahsetmeler gibi ele alır.
 - **Telefonlar:** Parley uygulaması kuruluysa, bir bilgisayarda aktifken telefonun sessiz kalır. **Telefonlarıma test bildirimi gönder** çalışıp çalışmadığını kontrol eder.
 - **E-posta bildirimleri** saatte en fazla bir e-posta gönderir ve yalnızca sen çevrimdışıyken.

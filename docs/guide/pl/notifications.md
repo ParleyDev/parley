@@ -2,7 +2,7 @@
 title: Powiadomienia i skrzynka odbiorcza
 section: Rozmowy
 summary: Decyduj, co cię powiadamia, i nadrabiaj nieprzeczytane, wzmianki, zakładki i przypomnienia.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Nieprzeczytane wiadomości
@@ -61,7 +61,7 @@ W **Ustawienia użytkownika → Powiadomienia**:
 
 - **Włącz powiadomienia na pulpicie** wyświetla komunikat o nowych wiadomościach.
 - **Powiadomienia push w tej przeglądarce** dostarcza je nawet wtedy, gdy karta Parley jest zamknięta. Z powiadomienia możesz odpowiedzieć albo oznaczyć wiadomość jako przeczytaną.
-- **Włącz plakietkę nieprzeczytanych wiadomości** pokazuje licznik na karcie lub ikonie aplikacji.
+- **Włącz plakietkę nieprzeczytanych wiadomości** pokazuje licznik na karcie lub ikonie aplikacji. W Windows pojawia się na przycisku na pasku zadań, w macOS w Docku, a na iPhonie na ikonie aplikacji, i jest aktualny także wtedy, gdy aplikacja jest zamknięta.
 - **Powiadamiaj mnie, gdy ktoś odpowie na moją wiadomość** traktuje odpowiedzi jak wzmianki.
 - **Telefony:** gdy masz zainstalowaną aplikację Parley, telefon milczy, kiedy jesteś aktywny na komputerze. **Wyślij powiadomienie testowe na moje telefony** sprawdza, czy to działa.
 - **Powiadomienia e-mail** to najwyżej jeden e-mail na godzinę i tylko wtedy, gdy jesteś offline.

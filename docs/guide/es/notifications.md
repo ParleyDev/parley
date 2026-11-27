@@ -2,7 +2,7 @@
 title: Notificaciones y tu bandeja de entrada
 section: Conversar
 summary: Controla qué te avisa y ponte al día con lo no leído, las menciones, los marcadores y los recordatorios.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Mensajes no leídos
@@ -61,7 +61,7 @@ En **Ajustes de usuario → Notificaciones**:
 
 - **Activar notificaciones de escritorio** muestra un aviso cuando llegan mensajes nuevos.
 - **Notificaciones push en este navegador** hace que sigan llegando aunque la pestaña de Parley esté cerrada. Puedes responder o marcarlas como leídas desde la propia notificación.
-- **Activar indicador de mensajes no leídos** muestra un número en la pestaña o en el icono de la app.
+- **Activar indicador de mensajes no leídos** muestra un número en la pestaña o en el icono de la app. En Windows aparece en el botón de la barra de tareas, en macOS en el Dock y en iPhone en el icono de la app, y se mantiene al día aunque la app esté cerrada.
 - **Avisarme cuando alguien responda a mi mensaje** trata las respuestas como menciones.
 - **Móviles:** con la app de Parley instalada, tu móvil no suena mientras estás activo en un ordenador. **Enviar una notificación de prueba a mis teléfonos** comprueba que funciona.
 - **Notificaciones por correo** envía como mucho un correo por hora, y solo mientras estás desconectado.

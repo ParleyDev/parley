@@ -2,7 +2,7 @@
 title: Notificações e caixa de entrada
 section: Conversando
 summary: Controle o que avisa você e acompanhe as mensagens não lidas, menções, favoritos e lembretes.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Mensagens não lidas
@@ -61,7 +61,7 @@ Em **Configurações de usuário → Notificações**:
 
 - **Ativar notificações na área de trabalho** mostra um aviso para mensagens novas.
 - **Notificações push neste navegador** faz os avisos continuarem chegando mesmo com a aba do Parley fechada. Você pode responder ou marcar como lida pela própria notificação.
-- **Ativar indicador de mensagens não lidas** mostra um número na aba ou no ícone do app.
+- **Ativar indicador de mensagens não lidas** mostra um número na aba ou no ícone do app. No Windows ele aparece no botão da barra de tarefas, no macOS no Dock e no iPhone no ícone do app, e fica atualizado mesmo com o app fechado.
 - **Notificar quando alguém responder à minha mensagem** trata respostas como menções.
 - **Celulares:** com o app do Parley instalado, seu celular fica quieto enquanto você está ativo no computador. **Enviar uma notificação de teste para meus celulares** confere se está funcionando.
 - **Notificações por e-mail** enviam no máximo um e-mail por hora, e só enquanto você está offline.

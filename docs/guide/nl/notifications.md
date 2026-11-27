@@ -2,7 +2,7 @@
 title: Meldingen en je inbox
 section: Praten
 summary: Bepaal wat je een seintje geeft, en haal ongelezen berichten, vermeldingen, bladwijzers en herinneringen in.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Ongelezen berichten
@@ -61,7 +61,7 @@ In **Gebruikersinstellingen → Meldingen**:
 
 - **Bureaubladmeldingen inschakelen** toont een melding bij nieuwe berichten.
 - **Pushmeldingen in deze browser** laat ze binnenkomen, ook als het tabblad van Parley dicht is. Je kunt vanuit de melding antwoorden of het bericht als gelezen markeren.
-- **Badge voor ongelezen berichten** toont een aantal op het tabblad of het app-pictogram.
+- **Badge voor ongelezen berichten** toont een aantal op het tabblad of het app-pictogram. Op Windows staat het op de taakbalkknop, op macOS in het Dock en op de iPhone op het app-pictogram, en het blijft bijgewerkt, ook als de app dicht is.
 - **Melden als iemand op mijn bericht reageert** behandelt antwoorden als vermeldingen.
 - **Telefoons:** met de Parley-app geïnstalleerd blijft je telefoon stil zolang je actief bent op een computer. **Stuur een testmelding naar mijn telefoons** controleert of het werkt.
 - **E-mailmeldingen** sturen hooguit één e-mail per uur, en alleen als je offline bent.

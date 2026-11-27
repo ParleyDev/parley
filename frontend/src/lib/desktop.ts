@@ -27,7 +27,11 @@ export interface UpdateStatus { state: 'idle' | 'checking' | 'none' | 'downloadi
 
 let lastBadge = -1
 export const desktop = {
-  badge(count: number) { const i = invoke(); if (!i || isOverlay() || count === lastBadge) return; lastBadge = count; i('set_badge', { count: Math.max(0, Math.min(count, 9999)) }).catch(() => {}) },
+  /** The taskbar / dock count. `overlay` is the number drawn as a PNG, for Windows' taskbar (it has no count badge). */
+  badge(count: number, overlay?: Uint8Array) {
+    const i = invoke(); if (!i || isOverlay() || count === lastBadge) return; lastBadge = count
+    i('set_badge', { count: Math.max(0, Math.min(count, 9999)), ...(overlay ? { overlay: Array.from(overlay) } : {}) }).catch(() => {})
+  },
   flash() { if (!isOverlay()) invoke()?.('flash').catch(() => {}) },
   /** Show or hide the in-game overlay; `locked` makes it click-through. False when the shell can't. */
   overlay: (show: boolean, locked?: boolean): Promise<boolean> => invoke()?.<boolean>('overlay', { show, locked }).catch(() => false) ?? Promise.resolve(false),

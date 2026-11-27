@@ -2,7 +2,7 @@
 title: Notifiche e posta in arrivo
 section: Conversare
 summary: Decidi cosa ti avvisa e recupera non letti, menzioni, segnalibri e promemoria.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Messaggi non letti
@@ -61,7 +61,7 @@ In **Impostazioni utente → Notifiche**:
 
 - **Attiva notifiche desktop** mostra un avviso per i nuovi messaggi.
 - **Notifiche push su questo browser** le fa arrivare anche quando la scheda di Parley è chiusa. Puoi rispondere o segnarle come lette direttamente dalla notifica.
-- **Attiva badge messaggi non letti** mostra un contatore sulla scheda o sull'icona dell'app.
+- **Attiva badge messaggi non letti** mostra un contatore sulla scheda o sull'icona dell'app. Su Windows compare sul pulsante della barra delle applicazioni, su macOS nel Dock e su iPhone sull'icona dell'app, e resta aggiornato anche quando l'app è chiusa.
 - **Avvisami quando qualcuno risponde al mio messaggio** tratta le risposte come menzioni.
 - **Telefoni:** con l'app di Parley installata, il telefono resta in silenzio mentre sei attivo su un computer. **Invia una notifica di prova ai miei telefoni** verifica che funzioni.
 - **Notifiche via email** invia al massimo un'email all'ora, e solo mentre sei offline.

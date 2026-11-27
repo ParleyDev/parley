@@ -289,16 +289,21 @@ fn install_update(app: AppHandle) -> Result<(), String> {
     app.restart();
 }
 
-/// Unread mentions on the dock / taskbar icon (a red dot overlay on Windows, which has no count badge).
+/// The unread count on the dock / taskbar icon. Windows has no count badge, only an overlay picture on the taskbar
+/// button: the web client draws the number into `overlay` (a small PNG); without one (an older web client) it's a red dot.
 #[tauri::command]
-fn set_badge(window: WebviewWindow, count: u32) {
+fn set_badge(window: WebviewWindow, count: u32, overlay: Option<Vec<u8>>) {
     #[cfg(windows)]
     {
-        let icon = if count > 0 { tauri::image::Image::from_bytes(include_bytes!("../../assets/badge.png")).ok() } else { None };
+        let drawn = overlay.filter(|png| !png.is_empty() && png.len() <= 64 * 1024).and_then(|png| tauri::image::Image::from_bytes(&png).ok().map(|i| i.to_owned()));
+        let icon = if count > 0 { drawn.or_else(|| tauri::image::Image::from_bytes(include_bytes!("../../assets/badge.png")).ok()) } else { None };
         let _ = window.set_overlay_icon(icon);
     }
     #[cfg(not(windows))]
-    let _ = window.set_badge_count(if count > 0 { Some(count as i64) } else { None });
+    {
+        let _ = overlay;
+        let _ = window.set_badge_count(if count > 0 { Some(count as i64) } else { None });
+    }
 }
 
 /// Flash the taskbar button / bounce the dock icon once, when a notifying message arrives in the background.

@@ -68,7 +68,7 @@ In **User Settings → Notifications**:
 
 - **Enable Desktop Notifications** pops up a notice for new messages.
 - **Push notifications on this browser** keeps them coming even when Parley's tab is closed. You can reply or mark them read from the notification.
-- **Unread Message Badge** shows a count on the tab or app icon.
+- **Unread Message Badge** shows a count on the tab or app icon: on the taskbar button in Windows, the dock in macOS, and the app icon on iPhone, where it stays up to date while the app is closed too.
 - **Notify me when someone replies to my message** treats replies like mentions.
 - **Phones:** with the Parley app installed, your phone stays quiet while you're active on a computer. **Send a test notification to my phones** checks it's working.
 - **Email notifications** send at most one email an hour, and only while you're offline.

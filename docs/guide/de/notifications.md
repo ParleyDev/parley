@@ -2,7 +2,7 @@
 title: Benachrichtigungen und dein Posteingang
 section: Reden
 summary: Lege fest, was dich anpingt, und hol Ungelesenes, Erwähnungen, Lesezeichen und Erinnerungen nach.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Ungelesene Nachrichten
@@ -61,7 +61,7 @@ Unter **Benutzereinstellungen → Benachrichtigungen**:
 
 - **Desktop-Benachrichtigungen aktivieren** zeigt einen Hinweis bei neuen Nachrichten.
 - **Push-Benachrichtigungen in diesem Browser** sorgt dafür, dass sie auch dann kommen, wenn der Parley-Tab geschlossen ist. Du kannst direkt aus der Benachrichtigung antworten oder sie als gelesen markieren.
-- **Abzeichen für ungelesene Nachrichten aktivieren** zeigt eine Zahl auf dem Tab oder dem App-Icon.
+- **Abzeichen für ungelesene Nachrichten aktivieren** zeigt eine Zahl auf dem Tab oder dem App-Icon. Unter Windows erscheint sie auf der Schaltfläche in der Taskleiste, unter macOS im Dock und auf dem iPhone auf dem App-Icon, und sie bleibt aktuell, auch wenn die App geschlossen ist.
 - **Benachrichtigen, wenn jemand auf meine Nachricht antwortet** behandelt Antworten wie Erwähnungen.
 - **Handys:** Mit installierter Parley-App bleibt dein Handy still, solange du am Computer aktiv bist. **Testbenachrichtigung an meine Telefone senden** prüft, ob es funktioniert.
 - **E-Mail-Benachrichtigungen** schicken höchstens eine E-Mail pro Stunde und nur, solange du offline bist.

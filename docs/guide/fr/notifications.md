@@ -2,7 +2,7 @@
 title: Notifications et boîte de réception
 section: Discuter
 summary: Choisis ce qui te notifie, rattrape tes non-lus, tes mentions, tes favoris et tes rappels.
-source: 86d448f5a017
+source: dc21d360df89
 ---
 
 ## Messages non lus
@@ -61,7 +61,7 @@ Dans **Paramètres utilisateur → Notifications** :
 
 - **Activer les notifications de bureau** affiche une alerte pour les nouveaux messages.
 - **Notifications push sur ce navigateur** les fait arriver même quand l'onglet de Parley est fermé. Tu peux répondre ou les marquer comme lues depuis la notification.
-- **Badge de messages non lus** affiche un compteur sur l'onglet ou l'icône de l'appli.
+- **Badge de messages non lus** affiche un compteur sur l'onglet ou l'icône de l'appli. Sous Windows, il apparaît sur le bouton de la barre des tâches, sous macOS dans le Dock et sur iPhone sur l'icône de l'appli, et il reste à jour même quand l'appli est fermée.
 - **M'avertir quand quelqu'un répond à mon message** traite les réponses comme des mentions.
 - **Téléphones :** avec l'appli Parley installée, ton téléphone reste silencieux pendant que tu es actif sur un ordinateur. **Envoyer une notification de test à mes téléphones** vérifie que tout fonctionne.
 - **Notifications par e-mail** envoie au maximum un e-mail par heure, et seulement quand tu es hors ligne.

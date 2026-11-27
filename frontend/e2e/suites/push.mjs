@@ -86,6 +86,8 @@ const inst = await call(a.token, 'GET', '/instance'); ok('/instance shows push o
 const iosGood = 'a'.repeat(64), iosGone = 'gone' + 'b'.repeat(60)
 await callS(b.token, 'PUT', '/users/@me/push-tokens', { platform: 'ios', token: iosGood }); await callS(b.token, 'PUT', '/users/@me/push-tokens', { platform: 'ios', token: iosGone })
 await callS(b.token, 'PUT', '/users/@me/push-tokens', { platform: 'android', token: 'android' + 'c'.repeat(60) })
+// Bob accepts Alice's message request, so the DM's unread messages count on his app icon (a request counts once).
+await callS(b.token, 'POST', `/channels/${dm.id}/request`, { action: 'accept' })
 const fcmBefore = sent.length
 await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: `to the iphone ${S}` })
 for (let i = 0; i < 40 && apnsSent.length < 2; i++) await new Promise((r) => setTimeout(r, 150)); await new Promise((r) => setTimeout(r, 400))
@@ -100,6 +102,15 @@ await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: `again iph
 for (let i = 0; i < 40 && apnsSent.length < 3; i++) await new Promise((r) => setTimeout(r, 150)); await new Promise((r) => setTimeout(r, 400))
 ok('a token APNs calls Unregistered is dropped', apnsSent.length === 3 && apnsSent[2].token === iosGood)
 ok('the provider token is reused', apnsSent[2].auth === ap?.auth)
+ok('iOS pushes carry the app icon number: every unread message in an accepted DM', ap?.body.aps.badge >= 1 && apnsSent[2].body.aps.badge === ap.body.aps.badge + 1, JSON.stringify(apnsSent.map((m) => m.body.aps.badge)))
+const lastMsg = (await call(b.token, 'GET', `/channels/${dm.id}/messages?limit=1`))[0]
+const beforeRead = apnsSent.length
+await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: lastMsg.id })
+await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: lastMsg.id })
+for (let i = 0; i < 50 && apnsSent.length === beforeRead; i++) await new Promise((r) => setTimeout(r, 150)); await new Promise((r) => setTimeout(r, 600))
+const cleared = apnsSent.slice(beforeRead)
+const stillUnread = (await call(b.token, 'GET', '/users/@me/unreads')).channels.reduce((n, c) => n + c.mentions, 0)
+ok('reading updates the icon number with one quiet, badge-only push (what is still unread elsewhere)', cleared.length === 1 && cleared[0].body.aps.badge === stillUnread && cleared[0].body.aps.badge < apnsSent[2].body.aps.badge && !cleared[0].body.aps.alert && !cleared[0].body.aps.sound && cleared[0].priority === '5', JSON.stringify(cleared.map((m) => [m.body, m.priority])))
 await callS(b.token, 'PUT', '/users/@me/push-tokens', { platform: 'ios', token: iosGone })
 r = await callS(b.token, 'POST', '/users/@me/push-tokens/test', {})
 const dev = (end) => r.body.devices.find((d) => end.endsWith(d.token_end))

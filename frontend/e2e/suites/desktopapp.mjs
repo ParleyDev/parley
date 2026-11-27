@@ -67,6 +67,17 @@ await p.evaluate(() => { window.__calls.length = 0 })
 await call(b.token, 'POST', `/channels/${ch.id}/messages`, { content: `<@${a.user.id}> hey` })
 await p.waitForFunction(() => window.__calls.some((c) => c[0] === 'set_badge' && c[1].count > 0), null, { timeout: 8000 }).catch(() => {})
 ok('a mention puts a count on the app icon', (await calls(p, 'set_badge')).some((x) => x.count === 1), JSON.stringify(await calls(p, 'set_badge')))
+const withOverlay = (await calls(p, 'set_badge')).find((x) => x.count === 1)
+// Windows has no count badge: the number comes drawn as a PNG for the taskbar overlay.
+const png = withOverlay?.overlay ?? []
+ok('…with the number drawn for the Windows taskbar (a PNG)', png.length > 100 && png.slice(0, 4).join() === '137,80,78,71')
+const drawn = await p.evaluate(async (bytes) => {
+  const img = new Image(); img.src = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' })); await img.decode()
+  const c = document.createElement('canvas'); c.width = 32; c.height = 32; const x = c.getContext('2d'); x.drawImage(img, 0, 0)
+  const px = (a, b) => [...x.getImageData(a, b, 1, 1).data]
+  return { size: [img.width, img.height], edge: px(16, 3), centre: [...x.getImageData(10, 8, 12, 16).data].filter((v, i) => i % 4 === 1 && v > 200).length }
+}, png)
+ok('…a red disc with white digits on it', drawn.size.join() === '32,32' && drawn.edge[0] > 200 && drawn.edge[1] < 100 && drawn.centre > 10, JSON.stringify(drawn))
 await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForTimeout(1500)
 ok('reading it clears the badge', (await calls(p, 'set_badge')).at(-1)?.count === 0, JSON.stringify(await calls(p, 'set_badge')))
 

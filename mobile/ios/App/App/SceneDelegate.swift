@@ -39,6 +39,7 @@ class ParleyBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(ParleySharePlugin())
+        bridge?.registerPluginInstance(ParleyBadgePlugin())
         if let webView = webView, let original = webView.navigationDelegate {
             // navigationDelegate is weak: the proxy is kept here.
             let proxy = NavigationRecovery(forwardingTo: original) { [weak self] in self?.showOffline() }

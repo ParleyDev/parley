@@ -80,12 +80,14 @@ fn apns_client() -> &'static reqwest::Client {
 
 /// Send one notification through APNs. Builds from Xcode get sandbox tokens, TestFlight and App Store builds
 /// production ones: a token production calls bad is tried once on the sandbox. Err((dead, why)).
-async fn send_apns(a: &Apns, token: &str, title: &str, body: &str, data: &serde_json::Value) -> Result<(), (bool, String)> {
+async fn send_apns(a: &Apns, token: &str, title: &str, body: &str, data: &serde_json::Value, badge: Option<i64>) -> Result<(), (bool, String)> {
     let jwt = apns_jwt(a).ok_or((false, "could not sign the APNs provider token".to_string()))?;
     let mut payload = data.as_object().cloned().unwrap_or_default();
     payload.retain(|_, v| !v.is_null());
     let mut aps = json!({ "alert": { "title": title, "body": body }, "sound": "default" });
     if let Some(c) = data.get("channel_id").and_then(|v| v.as_str()) { aps["thread-id"] = json!(c); }
+    // The number on the app icon, as the app itself shows it (iOS sets it from the push; nothing else can while closed).
+    if let Some(n) = badge { aps["badge"] = json!(n); }
     payload.insert("aps".into(), aps);
     let hosts: Vec<String> = if a.endpoint.is_empty() { vec!["https://api.push.apple.com".into(), "https://api.sandbox.push.apple.com".into()] } else { vec![a.endpoint.clone()] };
     for (i, host) in hosts.iter().enumerate() {
@@ -141,15 +143,86 @@ async fn send_one(f: &Fcm, token: &str, title: &str, body: &str, data: &serde_js
     Err((dead, format!("FCM {}: {}", status.as_u16(), text.chars().take(200).collect::<String>())))
 }
 
+/// The number the app shows on its icon for `user`, worked out as the app does (lib/badge.ts): unread mentions in the
+/// channels they can see and every unread message in their accepted DMs, plus incoming friend requests and message
+/// requests.
+pub async fn badge_count(db: &sqlx::PgPool, user: Uuid) -> i64 {
+    let guilds: Vec<(Uuid,)> = sqlx::query_as("SELECT m.guild_id FROM guild_members m JOIN guilds g ON g.id = m.guild_id WHERE m.user_id = $1 AND g.state = 'active'")
+        .bind(user).fetch_all(db).await.unwrap_or_default();
+    let mut channels: Vec<Uuid> = Vec::new();
+    for (g,) in guilds { channels.extend(crate::perms::visible_channels(db, g, user).await.unwrap_or_default().into_iter().map(|c| c.id)); }
+    let dms = crate::routes::dms::list_dm_channels(db, user).await.unwrap_or_default();
+    let accepted: Vec<Uuid> = dms.iter().filter(|d| d.request_state == "accepted").map(|d| d.channel.id).collect();
+    let requests = dms.iter().filter(|d| d.request_state == "pending").count() as i64;
+    channels.extend(accepted.iter().copied());
+    let mentions: i64 = crate::ws::handler::mention_counts(db, user, &channels, &accepted).await.into_iter().map(|(_, n)| n).sum();
+    let friends: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1 AND r.kind = 'incoming' AND u.account_state = 'active'")
+        .bind(user).fetch_one(db).await.unwrap_or((0,));
+    mentions + friends.0 + requests
+}
+
+/// The icon number last sent to each user's iPhones, so reading only pushes when it changed.
+static SENT_BADGES: OnceLock<Mutex<HashMap<Uuid, i64>>> = OnceLock::new();
+/// Users with a badge update on its way (reads come in bursts: one update per burst).
+static BADGE_DUE: OnceLock<Mutex<std::collections::HashSet<Uuid>>> = OnceLock::new();
+
+/// After `user` reads something (on any device): bring the number on their iPhone's app icon up to date with a
+/// silent, badge-only push, a few seconds later and only when it changed. Runs in the background.
+pub fn sync_badge(state: &AppState, user: Uuid) {
+    if let Ok(mut due) = BADGE_DUE.get_or_init(Default::default).lock() { if !due.insert(user) { return; } } else { return; }
+    let st = state.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        if let Ok(mut due) = BADGE_DUE.get_or_init(Default::default).lock() { due.remove(&user); }
+        let Some(a) = apns(&st).await else { return };
+        let tokens: Vec<(String,)> = sqlx::query_as("SELECT token FROM push_tokens WHERE user_id = $1 AND platform = 'ios'").bind(user).fetch_all(&st.db).await.unwrap_or_default();
+        if tokens.is_empty() { return; }
+        let n = badge_count(&st.db, user).await;
+        {
+            let Ok(mut sent) = SENT_BADGES.get_or_init(Default::default).lock() else { return };
+            if sent.get(&user) == Some(&n) { return; }
+            sent.insert(user, n);
+        }
+        for (token,) in tokens {
+            if let Err((true, _)) = send_apns_badge(&a, &token, n).await { let _ = sqlx::query("DELETE FROM push_tokens WHERE token = $1").bind(&token).execute(&st.db).await; }
+        }
+    });
+}
+
+/// A push that only sets the app icon's number (no alert, no sound). Err((dead, why)) as in send_apns.
+async fn send_apns_badge(a: &Apns, token: &str, badge: i64) -> Result<(), (bool, String)> {
+    let jwt = apns_jwt(a).ok_or((false, "could not sign the APNs provider token".to_string()))?;
+    let payload = json!({ "aps": { "badge": badge } });
+    let hosts: Vec<String> = if a.endpoint.is_empty() { vec!["https://api.push.apple.com".into(), "https://api.sandbox.push.apple.com".into()] } else { vec![a.endpoint.clone()] };
+    for (i, host) in hosts.iter().enumerate() {
+        let resp = apns_client().post(format!("{host}/3/device/{token}"))
+            .header("authorization", format!("bearer {jwt}"))
+            .header("apns-topic", &a.topic).header("apns-push-type", "alert").header("apns-priority", "5")
+            .json(&payload).send().await.map_err(|e| (false, format!("could not reach APNs: {e}")))?;
+        let status = resp.status();
+        if status.is_success() { return Ok(()); }
+        let reason = resp.json::<serde_json::Value>().await.ok().and_then(|v| v.get("reason").and_then(|r| r.as_str()).map(String::from)).unwrap_or_default();
+        if reason == "BadDeviceToken" && i + 1 < hosts.len() { continue; }
+        let dead = status.as_u16() == 410 || matches!(reason.as_str(), "BadDeviceToken" | "Unregistered" | "DeviceTokenNotForTopic");
+        return Err((dead, format!("APNs {}: {reason}", status.as_u16())));
+    }
+    Err((false, "APNs: no host left to try".into()))
+}
+
 /// Notify `users` (already filtered to offline, unmuted recipients) about a message.
 pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, data: serde_json::Value) {
     crate::webpush::notify(state, users, title, body, &data).await;
     let (f, a) = (fcm(state).await, apns(state).await);
     if (f.is_none() && a.is_none()) || users.is_empty() { return; }
-    let rows: Vec<(String, String)> = match sqlx::query_as("SELECT token, platform FROM push_tokens WHERE user_id = ANY($1)").bind(users).fetch_all(&state.db).await { Ok(r) => r, Err(_) => return };
-    for (token, platform) in rows {
+    let rows: Vec<(String, String, Uuid)> = match sqlx::query_as("SELECT token, platform, user_id FROM push_tokens WHERE user_id = ANY($1)").bind(users).fetch_all(&state.db).await { Ok(r) => r, Err(_) => return };
+    let mut badges: HashMap<Uuid, i64> = HashMap::new();
+    for (token, platform, user) in rows {
         let sent = match (platform.as_str(), &a, &f) {
-            ("ios", Some(a), _) => send_apns(a, &token, title, body, &data).await,
+            ("ios", Some(a), _) => {
+                let n = match badges.get(&user) { Some(n) => *n, None => { let n = badge_count(&state.db, user).await; badges.insert(user, n); n } };
+                if let Ok(mut m) = SENT_BADGES.get_or_init(Default::default).lock() { m.insert(user, n); }
+                send_apns(a, &token, title, body, &data, Some(n)).await
+            }
             (_, _, Some(f)) => send_one(f, &token, title, body, &data).await,
             _ => continue,
         };
@@ -206,7 +279,7 @@ pub async fn test(state: &AppState, user: Uuid) -> serde_json::Value {
     for (token, platform, seen) in rows {
         let data = json!({ "test": "1" });
         let sent = match (platform.as_str(), &a, &f) {
-            ("ios", Some(a), _) => Some(send_apns(a, &token, "Parley", "Test notification: push works on this device.", &data).await),
+            ("ios", Some(a), _) => Some(send_apns(a, &token, "Parley", "Test notification: push works on this device.", &data, None).await),
             ("ios", None, Some(f)) | ("android", _, Some(f)) | ("web", _, Some(f)) => Some(send_one(f, &token, "Parley", "Test notification: push works on this device.", &data).await),
             _ => None,
         };
