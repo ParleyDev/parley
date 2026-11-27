@@ -136,7 +136,7 @@ export function renderMarkdown(src: string, opts: MarkdownOptions = {}): ReactNo
   return <>{out}</>
 }
 
-type ListItem = { text: string; children: ListItem[]; ordered: boolean }
+type ListItem = { text: string; more: string[]; children: ListItem[]; ordered: boolean; start: number }
 
 function renderLines(lines: string[], blocks: boolean, key: () => string): ReactNode[] {
   const out: ReactNode[] = []
@@ -182,11 +182,18 @@ function renderLines(lines: string[], blocks: boolean, key: () => string): React
     }
     if (blocks && /^\s{0,3}(?:[-*+]|\d{1,3}[.)])\s+\S/.test(line)) {
       const items: ListItem[] = []
-      while (i < lines.length && (m = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/.exec(lines[i]))) {
-        const item: ListItem = { text: m[3], children: [], ordered: /\d/.test(m[2]) }
-        const nested = m[1].length >= 2 && items.length > 0
-        if (nested) items[items.length - 1].children.push(item); else items.push(item)
-        i++
+      let last: ListItem | undefined
+      while (i < lines.length) {
+        if ((m = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/.exec(lines[i]))) {
+          const item: ListItem = { text: m[3], more: [], children: [], ordered: /\d/.test(m[2]), start: parseInt(m[2], 10) || 1 }
+          const nested = m[1].length >= 2 && items.length > 0
+          if (nested) items[items.length - 1].children.push(item); else items.push(item)
+          last = item; i++; continue
+        }
+        // A plain line straight after an item belongs to it (a description under "1. Title"), on its own line,
+        // so the list carries on (and keeps counting) at the next item instead of restarting at 1.
+        if (last && lines[i].trim() && !startsBlock(lines[i])) { last.more.push(lines[i].trim()); i++; continue }
+        break
       }
       out.push(renderList(items, key)); prevPlain = false; continue
     }
@@ -196,14 +203,25 @@ function renderLines(lines: string[], blocks: boolean, key: () => string): React
   return out
 }
 
+/** Lines that start something else (a list item, heading, quote, table, subtext), so they don't continue a list item. */
+function startsBlock(line: string): boolean {
+  return /^\s*(?:[-*+]|\d{1,3}[.)])\s+\S/.test(line) || /^(#{1,3})\s+/.test(line) || /^>/.test(line) || /^\s*\|/.test(line) || /^-#\s+/.test(line)
+}
+
 function renderList(items: ListItem[], key: () => string): ReactNode {
-  const Tag = items[0].ordered ? 'ol' : 'ul'
+  const ordered = items[0].ordered
+  // An ordered list keeps the number it was written with (a list that starts at 3 shows 3.), as Discord does.
+  const start = ordered && items[0].start !== 1 ? items[0].start : undefined
+  return ordered ? <ol key={key()} start={start}>{items.map((it) => renderItem(it, key))}</ol> : <ul key={key()}>{items.map((it) => renderItem(it, key))}</ul>
+}
+
+function renderItem(it: ListItem, key: () => string): ReactNode {
   return (
-    <Tag key={key()}>
-      {items.map((it) => (
-        <li key={key()}>{renderInline(it.text)}{it.children.length > 0 && renderList(it.children, key)}</li>
-      ))}
-    </Tag>
+    <li key={key()}>
+      {renderInline(it.text)}
+      {it.more.map((l) => <Fragment key={key()}><br />{renderInline(l)}</Fragment>)}
+      {it.children.length > 0 && renderList(it.children, key)}
+    </li>
   )
 }
 
