@@ -221,7 +221,11 @@ async fn deliver(state: &AppState, uid: Uuid, p: u64, c: &Channel, app: Uuid, bo
         .bind(id).bind(crate::routes::applications::hash(&token)).bind(app).bind(uid).bind(c.id).bind(c.guild_id).bind(kind).bind(&data).bind(source).execute(&state.db).await?;
     let user = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(uid).fetch_one(&state.db).await?;
     let member = match c.guild_id { Some(gid) => crate::routes::guilds::fetch_member(&state.db, gid, uid).await.ok().map(|m| json!({ "nickname": m.nickname, "roles": m.roles, "permissions": p.to_string() })), None => None };
-    let message = match source { Some(m) => fetch_message(&state.db, m, bot).await.ok().map(|m| json!(m)), None => None };
+    // The message the button or menu is on: a stored one, or an ephemeral answer only this user sees.
+    let message = match source {
+        Some(m) => match fetch_message(&state.db, m, bot).await { Ok(msg) => Some(json!(msg)), Err(_) => ephemeral_answer(state, uid, c.id, m).await?.map(|(_, msg)| msg) },
+        None => None,
+    };
     state.hub.emit_users(vec![bot], "INTERACTION_CREATE", json!({ "id": id, "token": token, "application_id": app, "type": kind, "data": data, "guild_id": c.guild_id, "channel_id": c.id, "user": user, "member": member, "message": message }));
     if let Some(label) = fail_label {
         let st = state.clone();
@@ -233,6 +237,11 @@ async fn deliver(state: &AppState, uid: Uuid, p: u64, c: &Channel, app: Uuid, bo
         });
     }
     Ok(id)
+}
+
+/// An ephemeral answer someone was sent in a channel, by its message id: (the interaction that holds it, the message).
+async fn ephemeral_answer(state: &AppState, user: Uuid, channel: Uuid, mid: Uuid) -> AppResult<Option<(Uuid, Value)>> {
+    Ok(sqlx::query_as("SELECT id, ephemeral FROM interactions WHERE user_id = $1 AND channel_id = $2 AND ephemeral->>'id' = $3").bind(user).bind(channel).bind(mid.to_string()).fetch_optional(&state.db).await?)
 }
 
 /// The app behind a bot user, if any: (app id, name).
@@ -247,12 +256,11 @@ struct ComponentIn { channel_id: Uuid, message_id: Uuid, custom_id: String, #[se
 async fn component(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<ComponentIn>) -> AppResult<(StatusCode, Json<Value>)> {
     let (c, p) = require_channel_perms(&state.db, req.channel_id, uid).await?;
     // The message: a stored one in this channel, or an ephemeral answer someone sent you.
-    let (author, components, stored): (Uuid, Value, bool) = match fetch_message(&state.db, req.message_id, uid).await {
-        Ok(m) if m.channel_id == c.id => (m.author.id, m.components.clone().unwrap_or(Value::Null), true),
+    let (author, components): (Uuid, Value) = match fetch_message(&state.db, req.message_id, uid).await {
+        Ok(m) if m.channel_id == c.id => (m.author.id, m.components.clone().unwrap_or(Value::Null)),
         _ => {
-            let row: Option<(Value,)> = sqlx::query_as("SELECT ephemeral FROM interactions WHERE user_id = $1 AND channel_id = $2 AND ephemeral->>'id' = $3").bind(uid).bind(c.id).bind(req.message_id.to_string()).fetch_optional(&state.db).await?;
-            let (msg,) = row.ok_or_else(|| AppError::NotFound("Message not found".into()))?;
-            (msg["author"]["id"].as_str().and_then(|s| s.parse().ok()).unwrap_or_default(), msg["components"].clone(), false)
+            let (_, msg) = ephemeral_answer(&state, uid, c.id, req.message_id).await?.ok_or_else(|| AppError::NotFound("Message not found".into()))?;
+            (msg["author"]["id"].as_str().and_then(|s| s.parse().ok()).unwrap_or_default(), msg["components"].clone())
         }
     };
     let comp = components.as_array().into_iter().flatten().flat_map(|row| row["components"].as_array().cloned().unwrap_or_default()).find(|x| x["custom_id"].as_str() == Some(req.custom_id.as_str()))
@@ -266,7 +274,7 @@ async fn component(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(
     }
     let (app, app_name) = app_of_bot(&state, author).await?;
     let data = json!({ "custom_id": req.custom_id, "component_type": kind, "values": req.values });
-    let id = deliver(&state, uid, p, &c, app, author, 3, data, stored.then_some(req.message_id), Some(comp["label"].as_str().map(|l| format!("“{l}”")).unwrap_or_else(|| "that".into())), &app_name).await?;
+    let id = deliver(&state, uid, p, &c, app, author, 3, data, Some(req.message_id), Some(comp["label"].as_str().map(|l| format!("“{l}”")).unwrap_or_else(|| "that".into())), &app_name).await?;
     Ok((StatusCode::ACCEPTED, Json(json!({ "id": id }))))
 }
 
@@ -421,16 +429,21 @@ async fn update_source(state: &AppState, l: &Live, d: &ResponseData) -> AppResul
     let content: String = d.content.trim_end().chars().take(2000).collect();
     let embeds = match &d.embeds { Some(e) if e.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(crate::routes::webhooks::clean_embeds(e)?), _ => None };
     let components = match &d.components { Some(v) if v.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(clean_components(v)?), _ => None };
+    if content.trim().is_empty() && embeds.is_none() { return Err(AppError::BadRequest("A message needs content or an embed".into())) }
     let bot = bot_of(state, l.app).await?;
-    match l.source {
-        Some(mid) => {
-            sqlx::query("UPDATE messages SET content = $2, embeds = $3, components = $4, edited_at = now() WHERE id = $1 AND author_id = $5")
-                .bind(mid).bind(&content).bind(&embeds).bind(&components).bind(bot).execute(&state.db).await?;
-            let msg = fetch_message(&state.db, mid, bot).await?;
-            state.hub.emit(target_for(&state.db, &l.channel).await?, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
-        }
-        None => return Err(AppError::BadRequest("Ephemeral messages can't be updated this way; send a new one".into())),
+    let mid = l.source.ok_or_else(|| AppError::NotFound("No message to update".into()))?;
+    let done = sqlx::query("UPDATE messages SET content = $2, embeds = $3, components = $4, edited_at = now() WHERE id = $1 AND author_id = $5")
+        .bind(mid).bind(&content).bind(&embeds).bind(&components).bind(bot).execute(&state.db).await?;
+    if done.rows_affected() > 0 {
+        let msg = fetch_message(&state.db, mid, bot).await?;
+        state.hub.emit(target_for(&state.db, &l.channel).await?, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
+        return Ok(());
     }
+    // An ephemeral answer: change the copy kept with the interaction that sent it, and show only this user.
+    let (owner, mut msg) = ephemeral_answer(state, l.user, l.channel.id, mid).await?.ok_or_else(|| AppError::NotFound("No message to update".into()))?;
+    msg["content"] = json!(content); msg["embeds"] = json!(embeds); msg["components"] = json!(components); msg["edited_at"] = json!(Utc::now());
+    sqlx::query("UPDATE interactions SET ephemeral = $2 WHERE id = $1").bind(owner).bind(&msg).execute(&state.db).await?;
+    state.hub.emit_users(vec![l.user], "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
     Ok(())
 }
 
@@ -441,8 +454,11 @@ async fn edit_original(State(state): State<AppState>, Path((id, token)): Path<(U
     let content: String = d.content.trim_end().chars().take(2000).collect();
     let embeds = match &d.embeds { Some(e) if e.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(crate::routes::webhooks::clean_embeds(e)?), _ => None };
     if content.trim().is_empty() && embeds.is_none() { return Err(AppError::BadRequest("A response needs content or an embed".into())) }
+    // Buttons and menus: replaced when given (an empty list removes them), kept otherwise.
+    let components = match &d.components { Some(v) if v.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(Some(clean_components(v)?)), Some(_) => Some(None), None => None };
     if let Some(mut msg) = l.ephemeral.clone() {
         msg["content"] = json!(content); msg["embeds"] = json!(embeds); msg["interaction"]["deferred"] = json!(false);
+        if let Some(c) = &components { msg["components"] = json!(c); }
         sqlx::query("UPDATE interactions SET ephemeral = $2 WHERE id = $1").bind(id).bind(&msg).execute(&state.db).await?;
         state.hub.emit_users(vec![l.user], "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
         return Ok(Json(msg));
@@ -452,8 +468,8 @@ async fn edit_original(State(state): State<AppState>, Path((id, token)): Path<(U
     let filling = was["deferred"].as_bool() == Some(true);
     let mut meta = was; meta["deferred"] = json!(false);
     // Filling in "thinking" isn't an edit; changing a real answer is.
-    sqlx::query("UPDATE messages SET content = $2, embeds = $3, interaction = $4, edited_at = CASE WHEN $5 THEN edited_at ELSE now() END WHERE id = $1")
-        .bind(mid).bind(&content).bind(&embeds).bind(&meta).bind(filling).execute(&state.db).await?;
+    sqlx::query("UPDATE messages SET content = $2, embeds = $3, interaction = $4, edited_at = CASE WHEN $5 THEN edited_at ELSE now() END, components = CASE WHEN $6 THEN $7 ELSE components END WHERE id = $1")
+        .bind(mid).bind(&content).bind(&embeds).bind(&meta).bind(filling).bind(components.is_some()).bind(components.flatten()).execute(&state.db).await?;
     let bot = bot_of(&state, l.app).await?;
     let msg = fetch_message(&state.db, mid, bot).await?;
     state.hub.emit(target_for(&state.db, &l.channel).await?, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));

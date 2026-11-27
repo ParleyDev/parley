@@ -14,6 +14,7 @@ const asBot = (m, p, body) => fetch(B + p, { method: m, headers: { ...H, Authori
 const cb = (ev, body) => fetch(`${B}/interactions/${ev.d.id}/${ev.d.token}/callback`, { method: 'POST', headers: H, body: JSON.stringify(body) })
 const ws = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${bot.token}`); w.onmessage = (e) => { if (JSON.parse(e.data).t === 'READY') resolve(w) } })
 const got = []
+let ephSource
 
 console.log('-- api')
 ok('people can\'t send buttons', (await raw(a.token, 'POST', `/channels/${ch.id}/messages`, { content: 'x', components: [{ type: 1, components: [{ type: 2, style: 1, label: 'Hi', custom_id: 'hi' }] }] })).status === 400)
@@ -27,6 +28,7 @@ await asBot('PUT', `/applications/${app.id}/commands`, [
   { name: 'city', description: 'Weather for a city', options: [{ type: 3, name: 'name', description: 'City', required: true, autocomplete: true }] },
   { type: 2, name: 'High five' },
   { type: 3, name: 'Bookmark it' },
+  { name: 'ask', description: 'Ask privately' },
 ])
 ok('menu picks must be real options', (await raw(b.token, 'POST', '/interactions/component', { channel_id: ch.id, message_id: pm.id, custom_id: 'colour', values: ['purple'] })).status === 400)
 ok('unknown buttons are refused', (await raw(b.token, 'POST', '/interactions/component', { channel_id: ch.id, message_id: pm.id, custom_id: 'nope' })).status === 400)
@@ -39,6 +41,8 @@ ws.onmessage = async (e) => {
   if (ev.d.type === 3 && d.custom_id === 'form') await cb(ev, { type: 9, data: { title: 'Feedback', custom_id: 'fb', components: [{ type: 1, components: [{ type: 4, custom_id: 'what', label: 'What do you think?', style: 2, required: true }] }] } })
   if (ev.d.type === 5) await cb(ev, { type: 4, data: { content: `thanks: ${d.components[0].value}` } })
   if (ev.d.type === 4) { const q = d.options.find((o) => o.focused).value.toLowerCase(); await cb(ev, { type: 8, data: { choices: ['London', 'Lisbon', 'Lima', 'Paris'].filter((c) => c.toLowerCase().startsWith(q)).map((c) => ({ name: c, value: c })) } }) }
+  if (ev.d.type === 2 && d.name === 'ask') await cb(ev, { type: 4, data: { content: `private question ${S}`, flags: 64, components: [{ type: 1, components: [{ type: 2, style: 1, label: 'OK', custom_id: 'eph-ok' }] }] } })
+  if (ev.d.type === 3 && d.custom_id === 'eph-ok') { ephSource = ev.d.message; await cb(ev, { type: 7, data: { content: `answered privately ${S}`, components: [] } }) }
   if (ev.d.type === 2 && d.name === 'city') await cb(ev, { type: 4, data: { content: `sunny in ${d.options[0].value}` } })
   if (ev.d.type === 2 && d.name === 'High five') await cb(ev, { type: 4, data: { content: `high five <@${d.target_id}>!` } })
   if (ev.d.type === 2 && d.name === 'Bookmark it') await cb(ev, { type: 4, data: { content: `bookmarked: ${d.resolved.messages[d.target_id].content}`, flags: 64 } })
@@ -78,6 +82,35 @@ ok('the app suggests values as you type', await pb.locator('[data-option-choice=
 await pb.click('[data-option-choice="Lisbon"]'); ok('picking fills it in', (await box.inputValue()) === '/city name:Lisbon ')
 await box.press('Enter'); await pb.waitForSelector('text=sunny in Lisbon', { timeout: 5000 }).catch(() => {})
 ok('and the command runs', await pb.locator('[data-message-list] [data-msg-id]:has-text("sunny in Lisbon")').count() === 1)
+
+console.log('-- private answers')
+await box.fill('/ask '); await box.press('Enter')
+const q = pb.locator(`[data-message-list] [data-msg-id]:has-text("private question ${S}")`)
+await q.waitFor({ timeout: 5000 }).catch(() => {})
+await q.locator('[data-component-button="eph-ok"]').click()
+const done = pb.locator(`[data-message-list] [data-msg-id]:has-text("answered privately ${S}")`)
+await done.waitFor({ timeout: 5000 }).catch(() => {})
+ok('a button on a private answer updates it in place', await done.count() === 1 && await q.count() === 0 && await done.locator('[data-component-button]').count() === 0)
+ok('the bot is sent the private answer it is on', ephSource?.content === `private question ${S}` && ephSource?.ephemeral === true)
+
+console.log('-- bots edit embeds and buttons')
+const edit = (m, body, as = asBot) => as('PATCH', `/channels/${ch.id}/messages/${m.id}`, body)
+const mine = await call(a.token, 'POST', `/channels/${ch.id}/messages`, { content: `just text ${S}` })
+ok('people can\'t edit embeds', (await raw(a.token, 'PATCH', `/channels/${ch.id}/messages/${mine.id}`, { embeds: [{ title: 'x' }] })).status === 400)
+await call(a.token, 'DELETE', `/channels/${ch.id}/messages/${mine.id}`)
+ok('nor another\'s message\'s buttons', (await raw(a.token, 'PATCH', `/channels/${ch.id}/messages/${pm2.id}`, { components: [] })).status === 403)
+let r = await edit(pm2, { embeds: [{ title: `Poll closed ${S}`, description: 'Thanks for voting' }], components: [{ type: 1, components: [{ type: 2, style: 2, label: 'Closed', custom_id: 'closed', disabled: true }] }] })
+const em = await r.json()
+ok('a bot changes its message\'s embeds and buttons', r.status === 200 && em.embeds?.[0]?.title === `Poll closed ${S}` && em.components?.[0]?.components?.[0]?.custom_id === 'closed' && em.content === 'Menu')
+await pb.waitForSelector(`[data-msg-id="${pm2.id}"] [data-component-button="closed"]`, { timeout: 5000 }).catch(() => {})
+ok('and people see it change', await pb.locator(`[data-msg-id="${pm2.id}"]:has-text("Poll closed ${S}")`).count() === 1 && await pb.locator(`[data-msg-id="${pm2.id}"] [data-component-select]`).count() === 0)
+r = await edit(pm2, { components: [] }); const nc = await r.json()
+ok('an empty list removes the buttons and keeps the rest', r.status === 200 && !nc.components && nc.embeds?.length === 1)
+ok('components are checked on edit', (await edit(pm2, { components: [{ type: 1, components: [{ type: 2, style: 5, label: 'bad', url: 'javascript:1' }] }] })).status === 400)
+r = await edit(pm2, { content: '' }); ok('a message with an embed can lose its text', r.status === 200 && (await r.json()).content === '')
+ok('but not its last embed too', (await edit(pm2, { embeds: [] })).status === 400)
+r = await edit(pm2, { content: 'Menu again', embeds: null }); const back = await r.json()
+ok('text and no embeds', r.status === 200 && back.content === 'Menu again' && !back.embeds?.length)
 
 console.log('-- apps menus')
 const target = await call(a.token, 'POST', `/channels/${ch.id}/messages`, { content: `remember this ${S}` })

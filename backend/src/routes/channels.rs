@@ -755,7 +755,20 @@ struct EditMessage {
     /// Mark or unmark attachments as spoilers, by id (the author). Spoilers are the SPOILER_ filename prefix.
     #[serde(default)]
     attachment_spoilers: HashMap<Uuid, bool>,
+    /// Bots, their own messages: replace the embeds or the buttons and menus (`[]` or null removes them).
+    #[serde(default, deserialize_with = "present")]
+    embeds: Option<serde_json::Value>,
+    #[serde(default, deserialize_with = "present")]
+    components: Option<serde_json::Value>,
 }
+
+/// A field that was sent, even as null (`Some(Value::Null)`), told apart from one left out (`None`).
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<serde_json::Value>, D::Error> {
+    serde::Deserialize::deserialize(d).map(Some)
+}
+
+/// A list that removes the field when empty or null.
+fn non_empty(v: &serde_json::Value) -> Option<&serde_json::Value> { v.as_array().filter(|a| !a.is_empty()).map(|_| v) }
 
 /// Alt text for a message's attachments (up to 1024 characters each; empty clears it).
 async fn set_descriptions(db: &PgPool, mid: Uuid, descs: &HashMap<Uuid, String>) -> AppResult<()> {
@@ -790,6 +803,22 @@ async fn edit_message(
                 .bind(aid).bind(mid).bind(on).execute(&state.db).await?;
         }
     }
+    if req.embeds.is_some() || req.components.is_some() {
+        if author != uid { return Err(AppError::Forbidden) }
+        let (bot,): (bool,) = sqlx::query_as("SELECT bot FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+        if !bot { return Err(AppError::BadRequest("Only bots can change a message's embeds, buttons and menus".into())) }
+        let embeds = match req.embeds.as_ref().map(non_empty) { Some(Some(e)) => Some(Some(crate::routes::webhooks::clean_embeds(e)?)), Some(None) => Some(None), None => None };
+        let components = match req.components.as_ref().map(non_empty) { Some(Some(v)) => Some(Some(crate::routes::interactions::clean_components(v)?)), Some(None) => Some(None), None => None };
+        // Removing the embeds mustn't leave nothing to show.
+        if let Some(None) = embeds {
+            let (text, files): (String, bool) = sqlx::query_as("SELECT content, EXISTS (SELECT 1 FROM attachments WHERE message_id = $1) FROM messages WHERE id = $1").bind(mid).fetch_one(&state.db).await?;
+            let text = req.content.as_deref().map(tidy_content).unwrap_or(text);
+            if text.trim().is_empty() && !files { return Err(AppError::BadRequest("A message needs content or an embed".into())) }
+        }
+        // New embeds are an edit; changing only the buttons (say, disabling them once used) isn't.
+        sqlx::query("UPDATE messages SET embeds = CASE WHEN $2 THEN $3 ELSE embeds END, components = CASE WHEN $4 THEN $5 ELSE components END, edited_at = CASE WHEN $2 THEN now() ELSE edited_at END WHERE id = $1")
+            .bind(mid).bind(embeds.is_some()).bind(embeds.flatten()).bind(components.is_some()).bind(components.flatten()).execute(&state.db).await?;
+    }
     let Some(content) = req.content else {
         let msg = fetch_message(&state.db, mid, uid).await?;
         let target = target_for(&state.db, &c).await?;
@@ -797,7 +826,9 @@ async fn edit_message(
         return Ok(Json(msg));
     };
     let content = tidy_content(&content);
-    if content.trim().is_empty() || content.chars().count() > 2000 {
+    // A bot's message may be all embed.
+    let (has_embeds,): (bool,) = sqlx::query_as("SELECT embeds IS NOT NULL AND jsonb_array_length(embeds) > 0 FROM messages WHERE id = $1").bind(mid).fetch_one(&state.db).await?;
+    if (content.trim().is_empty() && !has_embeds) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
     }
     let (m_users, m_roles, m_everyone) = parse_mentions(&content);
