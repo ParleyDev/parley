@@ -207,7 +207,7 @@ fn parse_scopes(s: &str) -> AppResult<Vec<String>> {
 async fn authorize_info(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<AuthorizeQ>) -> AppResult<Json<Value>> {
     let app = by_client(&state, &q.client_id).await?;
     let scopes = parse_scopes(q.scope.as_deref().unwrap_or("identify"))?;
-    let redirect = if bot_only(&scopes) { pick_redirect(&app, q.redirect_uri.as_deref()).ok() } else { Some(pick_redirect(&app, q.redirect_uri.as_deref())?) };
+    let redirect = redirect_for(&app, &scopes, q.redirect_uri.as_deref())?;
     if scopes.iter().any(|s| s == "bot") && !app.bot_public && app.owner_id != uid { return Err(AppError::BadRequest("This bot is private: only its owner can add it".into())) }
     let owner = sqlx::query_as::<_, User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(app.owner_id).fetch_optional(&state.db).await?;
     let guilds: Vec<(Uuid, String, Option<String>)> = if scopes.iter().any(|s| s == "bot") {
@@ -237,6 +237,14 @@ fn pick_redirect(app: &App, want: Option<&str>) -> AppResult<String> {
 #[derive(Deserialize)]
 struct AuthorizeReq { client_id: String, redirect_uri: Option<String>, scope: Option<String>, state: Option<String>, guild_id: Option<Uuid>, #[serde(default)] permissions: Option<serde_json::Value> }
 
+/// Where to send the user after approving. Bot-only invites (bot and/or applications.commands) go back to the app
+/// only when the link names a registered redirect_uri: otherwise the consent page says it's done. (Falling back to
+/// the app's first redirect URI sent a plain "add the bot" link to the app's sign-in callback, which wasn't expecting it.)
+fn redirect_for(app: &App, scopes: &[String], want: Option<&str>) -> AppResult<Option<String>> {
+    if bot_only(scopes) { return want.map(|u| pick_redirect(app, Some(u))).transpose() }
+    pick_redirect(app, want).map(Some)
+}
+
 /// Bot-only invites (bot and/or applications.commands) need no redirect: the app gets nothing back.
 fn bot_only(scopes: &[String]) -> bool { scopes.iter().all(|s| s == "bot" || s == "applications.commands") }
 
@@ -248,7 +256,7 @@ async fn authorize(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(
     crate::routes::guests::deny(&state, uid, "Guests can't authorize apps. Claim your account first.").await?;
     let app = by_client(&state, &req.client_id).await?;
     let scopes = parse_scopes(req.scope.as_deref().unwrap_or("identify"))?;
-    let redirect = if bot_only(&scopes) { pick_redirect(&app, req.redirect_uri.as_deref()).ok() } else { Some(pick_redirect(&app, req.redirect_uri.as_deref())?) };
+    let redirect = redirect_for(&app, &scopes, req.redirect_uri.as_deref())?;
     if scopes.iter().any(|s| s == "bot") {
         if !app.bot_public && app.owner_id != uid { return Err(AppError::BadRequest("This bot is private: only its owner can add it".into())) }
         let gid = req.guild_id.ok_or_else(|| AppError::BadRequest("Pick a server to add the bot to".into()))?;
@@ -278,6 +286,10 @@ async fn authorize(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(
     let mut u = url::Url::parse(&redirect).map_err(|_| AppError::BadRequest("Bad redirect URI".into()))?;
     u.query_pairs_mut().append_pair("code", &code);
     if let Some(st) = &req.state { u.query_pairs_mut().append_pair("state", st); }
+    // With the bot scope, say which server it went to (as Discord does), so the app can show that server.
+    if let (true, Some(gid)) = (scopes.iter().any(|s| s == "bot"), req.guild_id) {
+        u.query_pairs_mut().append_pair("guild_id", &gid.to_string());
+    }
     Ok(Json(json!({ "redirect": u.to_string() })))
 }
 

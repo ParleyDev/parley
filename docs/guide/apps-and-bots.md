@@ -24,9 +24,11 @@ Open the **App Directory** from Discover (**Browse the App Directory**) or from 
 ## Adding a bot to your server
 
 1. Click **Add to Server** on the app, or open the invite link its maker gives you.
-2. Pick a server where you have **Manage Server** permission.
+2. Pick a server where you have **Manage Server** permission. A link made for one server has it picked already.
 3. Check the permissions it asks for. Untick any it doesn't need.
 4. Click **Authorise**.
+
+Then click **Go to the server**. If you started on the app's own website, Parley takes you back there instead.
 
 The bot gets a role of its own. You can change its permissions in **Server Settings → Roles**. To remove a bot, use **Server Settings → Integrations**, or kick it like any member.
 

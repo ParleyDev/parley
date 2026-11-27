@@ -2,7 +2,7 @@
 title: Uygulamalar, botlar ve yapay zeka asistanları
 section: Sunucu yönetmek
 summary: Sunucuna bot ekle, komutlarını kullan ve hesabına bir yapay zeka asistanı bağla.
-source: a98657c6c333
+source: 33c7e9205c14
 ---
 
 **Uygulamalar** Parley'ye özellikler ekler. **Bot**, bir sunucuya üye gibi katılan bir uygulamadır: insanları karşılayabilir, oyunlar yönetebilir, müzik çalabilir veya güncellemeler paylaşabilir.
@@ -14,9 +14,11 @@ source: a98657c6c333
 ## Sunucuna bot eklemek
 
 1. Uygulamada **Sunucuya Ekle**'ye tıkla ya da yapımcısının verdiği davet bağlantısını aç.
-2. **Sunucuyu Yönet** iznine sahip olduğun bir sunucu seç.
+2. **Sunucuyu Yönet** iznine sahip olduğun bir sunucu seç. Belirli bir sunucu için hazırlanmış bir bağlantıda o sunucu zaten seçilidir.
 3. İstediği izinleri kontrol et. İhtiyacı olmayanların işaretini kaldır.
 4. **Yetkilendir**'e tıkla.
+
+Ardından **Sunucuya git**'e tıkla. Uygulamanın kendi sitesinden başladıysan Parley seni oraya geri götürür.
 
 Bot kendine ait bir rol alır. İzinlerini **Sunucu Ayarları → Roller** bölümünden değiştirebilirsin. Bir botu kaldırmak için **Sunucu Ayarları → Entegrasyonlar**'ı kullan ya da herhangi bir üye gibi at.
 

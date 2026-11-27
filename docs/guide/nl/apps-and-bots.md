@@ -2,7 +2,7 @@
 title: Apps, bots en AI-assistenten
 section: Een server runnen
 summary: Voeg bots toe aan je server, gebruik hun commando's en koppel een AI-assistent aan je account.
-source: a98657c6c333
+source: 33c7e9205c14
 ---
 
 **Apps** voegen functies toe aan Parley. Een **bot** is een app die als lid bij een server komt: hij kan mensen welkom heten, spelletjes draaien, muziek afspelen of updates plaatsen.
@@ -14,9 +14,11 @@ Open de **App-directory** vanuit Ontdekken (**De App-directory bekijken**) of va
 ## Een bot aan je server toevoegen
 
 1. Klik op **Aan server toevoegen** bij de app, of open de uitnodigingslink die de maker je geeft.
-2. Kies een server waarin je de machtiging **Server beheren** hebt.
+2. Kies een server waarin je de machtiging **Server beheren** hebt. Bij een link voor één bepaalde server is die al gekozen.
 3. Controleer de machtigingen die hij vraagt. Vink uit wat hij niet nodig heeft.
 4. Klik op **Autoriseren**.
+
+Klik daarna op **Naar de server**. Begon je op de website van de app, dan brengt Parley je daar terug.
 
 De bot krijgt een eigen rol. Je kunt de machtigingen ervan wijzigen in **Serverinstellingen → Rollen**. Om een bot te verwijderen, gebruik je **Serverinstellingen → Integraties**, of verwijder je hem zoals elk ander lid.
 

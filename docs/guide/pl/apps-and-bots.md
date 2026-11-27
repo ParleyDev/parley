@@ -2,7 +2,7 @@
 title: Aplikacje, boty i asystenci AI
 section: Prowadzenie serwera
 summary: Dodawaj boty do serwera, korzystaj z ich poleceń i połącz asystenta AI ze swoim kontem.
-source: a98657c6c333
+source: 33c7e9205c14
 ---
 
 **Aplikacje** dodają do Parley nowe funkcje. **Bot** to aplikacja, która dołącza do serwera jak członek: może witać ludzi, prowadzić gry, puszczać muzykę albo publikować aktualności.
@@ -14,9 +14,11 @@ Otwórz **Katalog aplikacji** z Odkrywania (**Przeglądaj Katalog aplikacji**) a
 ## Dodawanie bota do serwera
 
 1. Kliknij **Dodaj do serwera** przy aplikacji albo otwórz link z zaproszeniem od jej twórcy.
-2. Wybierz serwer, na którym masz uprawnienie **Zarządzanie serwerem**.
+2. Wybierz serwer, na którym masz uprawnienie **Zarządzanie serwerem**. Link przygotowany dla konkretnego serwera ma go już wybranego.
 3. Sprawdź, o jakie uprawnienia prosi. Odznacz te, których nie potrzebuje.
 4. Kliknij **Autoryzuj**.
+
+Potem kliknij **Przejdź do serwera**. Jeśli zaczynasz na stronie aplikacji, Parley odeśle cię z powrotem tam.
 
 Bot dostaje własną rolę. Jego uprawnienia zmienisz w **Ustawienia serwera → Role**. Aby usunąć bota, użyj **Ustawienia serwera → Integracje** albo wyrzuć go jak każdego członka.
 

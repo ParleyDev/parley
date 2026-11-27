@@ -2,7 +2,7 @@
 title: Apps, Bots und KI-Assistenten
 section: Einen Server leiten
 summary: Füge deinem Server Bots hinzu, nutze ihre Befehle und verbinde einen KI-Assistenten mit deinem Konto.
-source: a98657c6c333
+source: 33c7e9205c14
 ---
 
 **Apps** erweitern Parley um Funktionen. Ein **Bot** ist eine App, die einem Server wie ein Mitglied beitritt: Er kann Leute begrüßen, Spiele leiten, Musik abspielen oder Updates posten.
@@ -14,9 +14,11 @@ source: a98657c6c333
 ## Einen Bot zu deinem Server hinzufügen
 
 1. Klicke bei der App auf **Zum Server hinzufügen** oder öffne den Einladungslink, den dir ihr Entwickler gibt.
-2. Wähle einen Server, auf dem du die Berechtigung **Server verwalten** hast.
+2. Wähle einen Server, auf dem du die Berechtigung **Server verwalten** hast. Ein Link für einen bestimmten Server hat ihn schon ausgewählt.
 3. Prüf die Berechtigungen, die sie anfordert. Entferne den Haken bei allem, was sie nicht braucht.
 4. Klicke auf **Autorisieren**.
+
+Klicke dann auf **Zum Server**. Wenn du auf der Website der App angefangen hast, bringt Parley dich stattdessen dorthin zurück.
 
 Der Bot bekommt eine eigene Rolle. Seine Berechtigungen kannst du unter **Servereinstellungen → Rollen** ändern. Um einen Bot zu entfernen, nutze **Servereinstellungen → Integrationen** oder kicke ihn wie jedes andere Mitglied.
 

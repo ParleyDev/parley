@@ -2,7 +2,7 @@
 title: App, bot e assistenti IA
 section: Gestire un server
 summary: Aggiungi bot al tuo server, usa i loro comandi e collega un assistente IA al tuo account.
-source: a98657c6c333
+source: 33c7e9205c14
 ---
 
 Le **app** aggiungono funzioni a Parley. Un **bot** è un'app che entra in un server come un membro: può dare il benvenuto alle persone, gestire giochi, riprodurre musica o pubblicare aggiornamenti.
@@ -14,9 +14,11 @@ Apri la **Directory delle app** da Esplora (**Sfoglia la directory delle app**) 
 ## Aggiungere un bot al tuo server
 
 1. Fai clic su **Aggiungi al server** sull'app, oppure apri il link d'invito che ti dà chi l'ha creata.
-2. Scegli un server in cui hai il permesso **Gestire il server**.
+2. Scegli un server in cui hai il permesso **Gestire il server**. Un link fatto per un server preciso lo ha già selezionato.
 3. Controlla i permessi che chiede. Togli la spunta a quelli che non le servono.
 4. Fai clic su **Autorizza**.
+
+Poi fai clic su **Vai al server**. Se sei partito dal sito dell'app, Parley ti riporta lì.
 
 Il bot riceve un suo ruolo. Puoi cambiarne i permessi in **Impostazioni server → Ruoli**. Per rimuovere un bot, usa **Impostazioni server → Integrazioni**, oppure espellilo come un membro qualsiasi.
 

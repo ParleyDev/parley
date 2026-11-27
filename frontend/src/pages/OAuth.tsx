@@ -28,7 +28,7 @@ export default function OAuthPage() {
   const [installed, setInstalled] = useState(false)
   const navigate = useNavigate()
   const q = Object.fromEntries(params.entries())
-  useEffect(() => { api.get<Info>(`/oauth2/authorize?${params.toString()}`).then((i) => { setInfo(i); setGuild(i.guilds[0]?.id ?? ''); setPerms(i.permissions ?? 0) }).catch((e: Error) => setErr(e.message)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { api.get<Info>(`/oauth2/authorize?${params.toString()}`).then((i) => { setInfo(i); setGuild(i.guilds.find((g) => g.id === q.guild_id)?.id ?? i.guilds[0]?.id ?? ''); setPerms(i.permissions ?? 0) }).catch((e: Error) => setErr(e.message)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const approve = async () => {
     setBusy(true); setErr(null)
     try { const r = await api.post<{ redirect: string | null }>('/oauth2/authorize', { client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope, state: q.state, guild_id: guild || undefined, permissions: String(band(perms, mine)) }); if (r.redirect) window.location.href = r.redirect; else if (wantsBot) { setAdded(guild); setBusy(false) } else { setInstalled(true); setBusy(false) } } catch (e) { setErr((e as Error).message); setBusy(false) }
