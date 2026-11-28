@@ -36,6 +36,17 @@ plain.ws.close()
 const full = await gateway((1 << 0) | (1 << 9) | (1 << 15))
 await call(b.token, 'POST', `/channels/${ch.id}/messages`, { content: `open plans ${S}` })
 ok('with Message Content it reads everything', !!(await until(() => full.events.find((e) => e.t === 'MESSAGE_CREATE' && e.d.message.content === `open plans ${S}`))))
+{
+  // Server reactions need only Guild Message Reactions (reaction roles): the events say which server they're in.
+  const reacts = await gateway((1 << 0) | (1 << 10))
+  const target = await call(b.token, 'POST', `/channels/${ch.id}/messages`, { content: `react here ${S}` })
+  await raw(b.token, 'PUT', `/channels/${ch.id}/messages/${target.id}/reactions/${encodeURIComponent('🍌')}`)
+  const add = await until(() => reacts.events.find((e) => e.t === 'REACTION_ADD' && e.d.message_id === target.id))
+  await raw(b.token, 'DELETE', `/channels/${ch.id}/messages/${target.id}/reactions/${encodeURIComponent('🍌')}`)
+  const rem = await until(() => reacts.events.find((e) => e.t === 'REACTION_REMOVE' && e.d.message_id === target.id))
+  ok('server reactions reach a bot with Guild Message Reactions, with the server', add?.d.guild_id === g.id && add.d.user_id === b.user.id && add.d.emoji === '🍌' && rem?.d.guild_id === g.id)
+  reacts.ws.close()
+}
 
 console.log('-- commands')
 ok('commands are checked', (await asBot('PUT', `/applications/${app.id}/commands`, [{ name: 'Bad Name', description: 'x' }])).status === 400)

@@ -1110,6 +1110,8 @@ struct BurstQ { #[serde(default)] burst: bool }
 /// Super reactions a person can send in a rolling day.
 pub const SUPER_REACTIONS_PER_DAY: i64 = 5;
 
+/// Reactions in a server carry its `guild_id` (as on Discord): bots get them with Guild Message Reactions, and DM ones
+/// (no guild) with Direct Message Reactions.
 async fn add_reaction(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
@@ -1141,7 +1143,7 @@ async fn add_reaction(
         .bind(mid).bind(uid).bind(&emoji).bind(q.burst).execute(&state.db).await?.rows_affected();
     if added > 0 {
         let target = target_for(&state.db, &c).await?;
-        state.hub.emit(target, "REACTION_ADD", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji, "burst": q.burst }));
+        state.hub.emit(target, "REACTION_ADD", json!({ "message_id": mid, "channel_id": id, "guild_id": c.guild_id, "user_id": uid, "emoji": emoji, "burst": q.burst }));
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1177,7 +1179,7 @@ async fn remove_reaction(
         .bind(mid).bind(uid).bind(&emoji).bind(q.burst).execute(&state.db).await?.rows_affected();
     if gone > 0 {
         let target = target_for(&state.db, &c).await?;
-        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji, "burst": q.burst }));
+        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "guild_id": c.guild_id, "user_id": uid, "emoji": emoji, "burst": q.burst }));
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1194,7 +1196,7 @@ async fn remove_user_reaction(
     let gone = sqlx::query("DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3 AND burst = $4").bind(mid).bind(user).bind(&emoji).bind(q.burst).execute(&state.db).await?.rows_affected();
     if gone > 0 {
         let target = target_for(&state.db, &c).await?;
-        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": user, "emoji": emoji, "burst": q.burst }));
+        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "guild_id": c.guild_id, "user_id": user, "emoji": emoji, "burst": q.burst }));
     }
     Ok(StatusCode::NO_CONTENT)
 }
