@@ -23,6 +23,7 @@ import { has, P } from '../lib/perms'
 import { formatTime, renderMarkdown } from '../lib/format'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
+import { OfficialTag } from './Flair'
 import ChatPane from './ChatPane'
 import { ThreadPanel, ThreadsPanel } from './ThreadPanel'
 import ForumView from './ForumView'
@@ -176,6 +177,8 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
     if (e.key === 'Enter' && query.trim()) { e.preventDefault(); setSearch(query.trim()); setSearchFocus(false) }
     if (e.key === 'Escape') { setQuery(''); setSearch(null) }
   }
+  // The instance's own account ("Parley") only sends notices: no calls, no adding people, nothing to encrypt.
+  const official = !!other?.system
   const btn = (active: boolean) => `h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${active ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`
 
   // Like Discord: with the profile (or a group's members) beside a DM, or a server's member list beside a channel, the
@@ -201,6 +204,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
             <>
               <Avatar user={other} size={24} presence />
               <span className="font-bold truncate" data-dm-header-name>{nameOf(other, notes)}</span>
+              {official && <OfficialTag />}
               {other.custom_status && <span className="text-sm text-text-1 truncate phone:hidden" data-header-status>{other.custom_status}</span>}
             </>
           ) : (
@@ -214,7 +218,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
           <span className="ml-auto flex items-center gap-0.5">
             {!isDm && <SummariesButton channel={channel} />}
             <InboxButton />
-            {isDm && (
+            {isDm && !official && (
               <>
                 <button onClick={() => startCall(false)} title={t('Start Voice Call')} className={btn(myVoice === channel.id)} data-start-call><Phone size={20} /></button>
                 <button onClick={() => startCall(true)} title={t('Start Video Call')} className={btn(false)} data-start-video><Video size={20} /></button>
@@ -248,7 +252,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
               <button onClick={() => setBookmarks((b) => !b)} title={t('Bookmarks')} className={`${btn(bookmarks)} phone:hidden`} data-bookmarks-toggle><Bookmark size={20} /></button>
               {bookmarks && <BookmarksPanel channelId={channel.id} onClose={() => setBookmarks(false)} />}
             </span>
-            {isDm && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? t('Add Friends to Group') : t('Add Friends to DM')} className={`${btn(false)} phone:hidden`} data-add-to-group><UserPlus size={20} /></button>}
+            {isDm && !official && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? t('Add Friends to Group') : t('Add Friends to DM')} className={`${btn(false)} phone:hidden`} data-add-to-group><UserPlus size={20} /></button>}
             {isDm && !group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide User Profile') : t('Show User Profile')} className={`${btn(dmProfileOpen)} phone:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
             {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide Member List') : t('Show Member List')} className={`${btn(dmProfileOpen)} phone:hidden`} data-group-members-toggle><Users size={20} /></button>}
             {!isDm && <MembersToggle />}
@@ -259,8 +263,8 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
               { label: t('Bookmarks'), icon: <Bookmark size={18} />, onClick: () => setBookmarks(true) },
               { label: t('Jump to date'), icon: <CalendarDays size={18} />, onClick: () => setDatePick(true) },
               !isDm && channel.news && { label: t('Follow'), icon: <Megaphone size={18} />, onClick: () => openModal({ kind: 'followChannel', channelId: channel.id }) },
-              isDm && { label: group ? t('Add Friends to Group') : t('Add Friends to DM'), icon: <UserPlus size={18} />, onClick: () => openModal({ kind: 'groupMembers', channelId: channel.id }) },
-              isDm && { label: channel.e2ee ? t('Calls are end-to-end encrypted') : t('Encrypt calls end to end'), icon: channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />, onClick: toggleE2ee },
+              isDm && !official && { label: group ? t('Add Friends to Group') : t('Add Friends to DM'), icon: <UserPlus size={18} />, onClick: () => openModal({ kind: 'groupMembers', channelId: channel.id }) },
+              isDm && !official && { label: channel.e2ee ? t('Calls are end-to-end encrypted') : t('Encrypt calls end to end'), icon: channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />, onClick: toggleE2ee },
             ] as (MenuEntry | false)[]).filter((x): x is MenuEntry => !!x))} title={t('More')} className={`${btn(false)} wide:hidden`} data-header-more><MoreVertical size={20} /></button>
             {more.menu && <ContextMenu {...more.menu} onClose={more.close} label={t('More')} />}
             <span className={`relative ml-1 ${phoneSearch ? 'phone:absolute phone:inset-x-2 phone:top-2 phone:z-30 phone:ml-0 phone:flex phone:items-center phone:gap-1 phone:bg-bg-2' : 'phone:hidden'}`} data-search-box>

@@ -2,7 +2,7 @@
 title: Amici e messaggi diretti
 section: Conversare
 summary: Aggiungi amici, chatta a tu per tu o in piccoli gruppi e gestisci le richieste di messaggi.
-source: fef9acf4603e
+source: 212741dd746a
 ---
 
 Fai clic su **Messaggi diretti** in cima all'elenco dei server per vedere i tuoi amici e le conversazioni private.
@@ -63,3 +63,9 @@ Per annullare, usa **Sblocca** nella scheda **Bloccato** del tuo elenco degli am
 ## Quando un messaggio non può essere consegnato
 
 Se un messaggio non può essere consegnato (per esempio perché l'altra persona accetta DM solo dagli amici), resta rosso nella chat con **Riprova** ed **Elimina**. L'assistente di Parley ti spiega il motivo.
+
+## Avvisi ufficiali
+
+I messaggi del team che gestisce il tuo server Parley arrivano dall’account **Parley**, contrassegnato da **✓ Ufficiale**. Ti dicono, per esempio, com’è andata una segnalazione che hai fatto. La conversazione compare come **Messaggio ufficiale di Parley** e si può solo leggere: non c’è la casella dei messaggi e non puoi chiamare l’account né aggiungerlo agli amici.
+
+Il team di Parley non ti chiederà mai la password, i codici di accesso o il token dell’account. Se qualcun altro dice di essere di Parley e te li chiede, non rispondere e segnalalo.

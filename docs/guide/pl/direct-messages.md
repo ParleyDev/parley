@@ -2,7 +2,7 @@
 title: Znajomi i wiadomości prywatne
 section: Rozmowy
 summary: Dodawaj znajomych, rozmawiaj w cztery oczy lub w małych grupach i obsługuj prośby o wiadomość.
-source: fef9acf4603e
+source: 212741dd746a
 ---
 
 Kliknij **Wiadomości prywatne** na górze listy serwerów, aby zobaczyć znajomych i prywatne rozmowy.
@@ -63,3 +63,9 @@ Aby to cofnąć, użyj **Odblokuj** w zakładce **Zablokowany** na liście znajo
 ## Gdy wiadomości nie da się dostarczyć
 
 Jeśli wiadomości nie da się dostarczyć (np. ta osoba przyjmuje wiadomości prywatne tylko od znajomych), zostaje na czacie na czerwono z przyciskami **Spróbuj ponownie** i **Usuń**. Pomocnik Parley wyjaśnia dlaczego.
+
+## Oficjalne powiadomienia
+
+Wiadomości od zespołu prowadzącego Twój serwer Parley przychodzą z konta **Parley**, oznaczonego **✓ Oficjalne**. Mówią Ci na przykład, co stało się z Twoim zgłoszeniem. Rozmowa widnieje na liście jako **Oficjalna wiadomość Parley** i można ją tylko czytać: nie ma pola wiadomości, a do konta nie można zadzwonić ani dodać go do znajomych.
+
+Zespół Parley nigdy nie poprosi Cię o hasło, kody logowania ani token konta. Jeśli ktoś inny podaje się za Parley i o nie prosi, nie odpowiadaj i zgłoś go.

@@ -2,7 +2,7 @@
 title: Amigos e mensagens diretas
 section: Conversando
 summary: Adicione amigos, converse a dois ou em pequenos grupos e cuide das solicitações de mensagem.
-source: fef9acf4603e
+source: 212741dd746a
 ---
 
 Clique em **Mensagens diretas** no topo da lista de servidores para ver seus amigos e suas conversas privadas.
@@ -63,3 +63,9 @@ Para desfazer, use **Desbloquear** na aba **Bloqueado** da sua lista de amigos.
 ## Quando uma mensagem não pode ser entregue
 
 Se uma mensagem não puder ser entregue (por exemplo, se a pessoa só aceita DMs de amigos), ela fica vermelha no chat com **Tentar de novo** e **Excluir**. O assistente do Parley explica o motivo.
+
+## Avisos oficiais
+
+As mensagens da equipe que administra seu servidor Parley vêm da conta **Parley**, marcada com **✓ Oficial**. Elas contam, por exemplo, o que aconteceu com uma denúncia que você fez. A conversa aparece como **Mensagem oficial do Parley** e só pode ser lida: não há caixa de mensagem, e você não pode ligar para a conta nem adicioná-la como amiga.
+
+A equipe do Parley nunca vai pedir sua senha, códigos de login ou token da conta. Se outra pessoa disser que é do Parley e pedir isso, não responda e denuncie.

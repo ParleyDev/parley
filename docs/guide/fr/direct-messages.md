@@ -2,7 +2,7 @@
 title: Amis et messages privés
 section: Discuter
 summary: Ajoute des amis, discute en tête-à-tête ou en petits groupes, et gère les demandes de message.
-source: fef9acf4603e
+source: 212741dd746a
 ---
 
 Clique sur **Messages privés** en haut de la liste des serveurs pour voir tes amis et tes conversations privées.
@@ -63,3 +63,9 @@ Pour annuler, utilise **Débloquer** dans l'onglet **Bloqué** de ta liste d'ami
 ## Quand un message ne peut pas être distribué
 
 Si un message ne peut pas être distribué (par exemple si la personne n'accepte que les MP de ses amis), il reste en rouge dans la discussion avec **Réessayer** et **Supprimer**. L'assistant de Parley explique pourquoi.
+
+## Notifications officielles
+
+Les messages de l’équipe qui gère ton serveur Parley viennent du compte **Parley**, marqué **✓ Officiel**. Ils t’indiquent par exemple la suite donnée à un signalement que tu as fait. La conversation apparaît comme **Message officiel de Parley** et se lit seulement : il n’y a pas de zone de message, et tu ne peux ni appeler ce compte ni l’ajouter en ami.
+
+L’équipe de Parley ne te demandera jamais ton mot de passe, tes codes de connexion ou ton jeton de compte. Si quelqu’un d’autre prétend venir de Parley et te les demande, ne réponds pas et signale-le.

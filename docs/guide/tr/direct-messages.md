@@ -2,7 +2,7 @@
 title: Arkadaşlar ve doğrudan mesajlar
 section: Konuşmak
 summary: Arkadaş ekle, birebir veya küçük gruplar halinde sohbet et ve mesaj isteklerini yönet.
-source: fef9acf4603e
+source: 212741dd746a
 ---
 
 Arkadaşlarını ve özel sohbetlerini görmek için sunucu listesinin en üstündeki **Doğrudan Mesajlar**'a tıkla.
@@ -63,3 +63,9 @@ Geri almak için arkadaş listendeki **Engellendi** sekmesinde **Engeli Kaldır*
 ## Bir mesaj iletilemediğinde
 
 Bir mesaj iletilemezse (örneğin karşı taraf yalnızca arkadaşlarından DM kabul ediyorsa) sohbette **Yeniden dene** ve **Sil** seçenekleriyle kırmızı kalır. Parley'nin yardımcısı nedenini açıklar.
+
+## Resmi bildirimler
+
+Parley sunucunu yöneten ekibin mesajları **✓ Resmi** işaretli **Parley** hesabından gelir. Örneğin yaptığın bir şikâyetin sonucunu bildirirler. Sohbet listede **Resmi Parley Mesajı** olarak görünür ve yalnızca okunabilir: mesaj kutusu yoktur, hesabı arayamaz veya arkadaş olarak ekleyemezsin.
+
+Parley ekibi senden asla şifreni, giriş kodlarını veya hesap anahtarını istemez. Başka biri Parley'den olduğunu söyleyip bunları isterse cevap verme ve onu şikâyet et.

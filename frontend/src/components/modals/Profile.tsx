@@ -129,7 +129,8 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
     ]),
     ...(wishlist.length ? [{ id: 'wishlist' as FullTab, label: t('Wishlist') }] : []),
     ...(games.length ? [{ id: 'games' as FullTab, label: t('Games') }] : []),
-    { id: 'reviews', label: t('Reviews') },
+    // Nobody reviews the instance's own account.
+    ...(user.system ? [] : [{ id: 'reviews' as FullTab, label: t('Reviews') }]),
   ]
   const [tab, setTab] = useState<FullTab>(initialTab && initialTab !== 'roles' && tabs.some((x) => x.id === initialTab) ? initialTab : 'activity')
   const empty = (msg: string) => <p className="py-10 text-center text-sm text-[#b5bac1]">{msg}</p>

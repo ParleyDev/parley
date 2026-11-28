@@ -73,3 +73,9 @@ To undo it, use **Unblock** in the **Blocked** tab of your friends list.
 ## When a message can't be delivered
 
 If a message can't be delivered (say they only accept DMs from friends), it stays red in the chat with **Retry** and **Delete**. Parley's helper explains why.
+
+## Official notices
+
+Messages from the team that runs your Parley server come from the **Parley** account, marked **✓ Official**. They tell you, for example, what happened to a report you made. The conversation is listed as **Official Parley Message** and can only be read: there is no message box, and you can't call or friend the account.
+
+Parley's team will never ask for your password, sign-in codes or account token. If someone else claims to be from Parley and asks for them, don't answer, and report them.

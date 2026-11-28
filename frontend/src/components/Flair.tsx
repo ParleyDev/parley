@@ -1,4 +1,4 @@
-import { Award, ShieldCheck, Sparkles, Sprout, UserRound, Waves, Zap } from 'lucide-react'
+import { Award, Check, ShieldCheck, Sparkles, Sprout, UserRound, Waves, Zap } from 'lucide-react'
 import { useState, type HTMLAttributes, type ReactNode } from 'react'
 import ServerTagCard from './ServerTagCard'
 import { useStore } from '../store'
@@ -62,6 +62,12 @@ export function CustomBadgeIcon({ badge, size = 20 }: { badge: Pick<CustomBadge,
       {badge.icon_url ? <img src={badge.icon_url} alt="" className="rounded-sm object-contain" style={{ width: size * 0.75, height: size * 0.75 }} draggable={false} /> : <span className="leading-none" style={{ fontSize: size * 0.62 }}>{badge.emoji}</span>}
     </span>
   )
+}
+
+/** The tag beside the instance's own account ("Parley"), wherever its name shows: ✓ OFFICIAL. */
+export function OfficialTag({ className = '' }: { className?: string }) {
+  const t = useT()
+  return <span className={`inline-flex shrink-0 items-center gap-0.5 rounded bg-accent px-1 py-px text-[10px] font-bold uppercase leading-[14px] text-white ${className}`} data-system-tag title={t('An official message from this Parley server')}><Check size={10} strokeWidth={3} />{t('Official')}</span>
 }
 
 export function Badges({ badges, className = '' }: { badges?: string[]; className?: string }) {

@@ -6,7 +6,7 @@ import { AvatarMotion, mayAnimate, stillImageUrl } from '../lib/motion'
 import { useStore } from '../store'
 
 interface Props {
-  user: { id: string; display_name: string; avatar_url: string | null; status?: string; avatar_decoration?: string }
+  user: { id: string; display_name: string; avatar_url: string | null; status?: string; avatar_decoration?: string; system?: boolean }
   /** Force a frame regardless of what is saved (previews and unsaved drafts). */
   decoration?: string
   /** Play an animated avatar and decoration (profile cards, previews). Otherwise they play while the surrounding
@@ -91,7 +91,8 @@ export default function Avatar({ user, size = 32, presence = false, typingIn, cl
           className="absolute pointer-events-none select-none max-w-none" style={{ width: '120%', height: '120%', left: '-10%', top: '-10%' }} data-decoration={decoration} />
       )}
 
-      {presence && typing ? <TypingBadge size={dot} color={statusColor(status, online)} /> : presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online && status !== 'invisible' && status !== 'offline' ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
+      {/* The instance's own account ("Parley") is never online or offline: no status, like Discord's. */}
+      {presence && user.system ? null : presence && typing ? <TypingBadge size={dot} color={statusColor(status, online)} /> : presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online && status !== 'invisible' && status !== 'offline' ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
     </div>
   )
 }

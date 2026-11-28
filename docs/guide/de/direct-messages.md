@@ -2,7 +2,7 @@
 title: Freunde und Direktnachrichten
 section: Reden
 summary: Freunde hinzufügen, zu zweit oder in kleinen Gruppen chatten und Nachrichtenanfragen bearbeiten.
-source: fef9acf4603e
+source: 212741dd746a
 ---
 
 Klicke oben in der Serverliste auf **Direktnachrichten**, um deine Freunde und privaten Unterhaltungen zu sehen.
@@ -63,3 +63,9 @@ Um das rückgängig zu machen, nutze **Blockierung aufheben** im Tab **Blockiert
 ## Wenn eine Nachricht nicht zugestellt werden kann
 
 Wenn eine Nachricht nicht zugestellt werden kann (etwa weil die Person nur DMs von Freunden annimmt), bleibt sie rot im Chat stehen, mit **Erneut versuchen** und **Löschen**. Parleys Helfer erklärt, warum.
+
+## Offizielle Mitteilungen
+
+Nachrichten vom Team, das deinen Parley-Server betreibt, kommen vom Konto **Parley** und sind mit **✓ Offiziell** gekennzeichnet. Sie sagen dir zum Beispiel, was aus einer Meldung von dir geworden ist. Die Unterhaltung steht als **Offizielle Parley-Nachricht** in der Liste und kann nur gelesen werden: Es gibt kein Nachrichtenfeld, und du kannst das Konto weder anrufen noch als Freund hinzufügen.
+
+Das Parley-Team wird dich nie nach deinem Passwort, Anmeldecodes oder Konto-Token fragen. Wenn jemand anderes behauptet, von Parley zu sein, und danach fragt, antworte nicht und melde die Person.

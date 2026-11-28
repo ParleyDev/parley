@@ -13,6 +13,7 @@ import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import type { DmChannel } from '../lib/types'
 import Avatar from './Avatar'
+import { OfficialTag } from './Flair'
 import StyledName from './StyledName'
 import { useT } from '../lib/i18n'
 import { globalName } from '../lib/names'
@@ -119,8 +120,18 @@ export default function DmSidebar() {
           </span>
         ) : other ? (
           <span className="min-w-0 flex-1 leading-tight">
-            <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{globalName(other)}</StyledName>
-            {other.custom_status && <span className="block truncate text-xs text-text-2" data-dm-status>{other.custom_status}</span>}
+            {other.system ? (
+              // The instance's own account, as Discord lists its own: ✓ OFFICIAL by the name, and what it is below.
+              <>
+                <span className="flex min-w-0 items-center gap-1"><StyledName userId={other.id} className={`truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{globalName(other)}</StyledName><OfficialTag /></span>
+                <span className="block truncate text-xs font-medium text-text-1" data-dm-official>{t('Official Parley Message')}</span>
+              </>
+            ) : (
+              <>
+                <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{globalName(other)}</StyledName>
+                {other.custom_status && <span className="block truncate text-xs text-text-2" data-dm-status>{other.custom_status}</span>}
+              </>
+            )}
           </span>
         ) : <span className="truncate text-[15px]">{t('Unknown')}</span>}
         {unread && <span className="ml-auto h-2 w-2 rounded-full bg-white" />}

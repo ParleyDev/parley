@@ -18,7 +18,7 @@ import { colorFor, initials, renderMarkdown } from '../lib/format'
 import ExpressionPicker from './ExpressionPicker'
 import Avatar from './Avatar'
 import { publicOrigin } from './InviteCard'
-import { Badges, ClanTag } from './Flair'
+import { Badges, ClanTag, OfficialTag } from './Flair'
 import { colorRole } from './StyledName'
 import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
@@ -142,7 +142,9 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const ban = () => { onClose(); openModal({ kind: 'ban', guildId: guildId!, userId: user.id }) }
   const block = () => { onClose(); openModal({ kind: 'confirm', title: t('Block {name}', { name: shownName(user, member, friendNote?.nickname) }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name: shownName(user, member, friendNote?.nickname) }), danger: true, confirmLabel: t('Block'), action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
 
-  const friendBtn = !isMe && (
+  // The instance's own account ("Parley"): no friending, reviews or messages, and when it was made, not joined.
+  const official = !!user.system
+  const friendBtn = !isMe && !official && (
     rel === 'friend' ? { title: t('Friend'), icon: <UserCheck size={18} />, fn: (e: React.MouseEvent) => { const r = e.currentTarget.getBoundingClientRect(); setFriendMenu((m) => m ? null : { x: r.left, y: r.bottom + 4, items: [{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] }) } }
     : rel === undefined ? { title: t('Add Friend'), icon: <UserPlus size={18} />, fn: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }
     : rel === 'incoming' ? { title: t('Accept Friend Request'), icon: <Check size={18} />, fn: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }
@@ -205,7 +207,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       ...(streamer ? [] : [{ label: friendNote?.note ? t('Edit Note') : t('Add Note'), onClick: () => { onClose(); openModal({ kind: 'profile', userId: user.id, note: true }) } }]),
       ...(inviteTargets.length ? [{ label: t('Invite to Server'), children: inviteTargets.map((g) => ({ label: g.name, icon: <GuildDot g={g} />, onClick: () => invite(g) })) }] : []),
       'sep',
-      ...(rel === undefined ? [{ label: t('Add Friend'), onClick: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }] : []),
+      ...(rel === undefined && !official ? [{ label: t('Add Friend'), onClick: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }] : []),
       ...(rel === 'incoming' ? [{ label: t('Accept Friend Request'), onClick: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }] : []),
       ...(rel === 'outgoing' ? [{ label: t('Cancel Friend Request'), onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
       ...(rel === 'friend' ? [{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
@@ -270,6 +272,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             ) : (
               <span className={look.className} style={nameStyle} data-profile-name><NameText look={look}>{shownName(user, member, friendNote?.nickname)}</NameText></span>
             )}
+            {official && <OfficialTag />}
             <ClanTag userId={user.id} tag={user.clan_tag} />
             <Badges badges={user.badges} />
             {guild?.owner_id === user.id && <Crown size={16} className="text-warn shrink-0" />}
@@ -286,10 +289,10 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           // Discord's full profile: the actions sit under the name, the main one spelled out.
           <div className="flex items-center gap-2" data-full-actions>
             {isMe ? <span className="relative phone:flex-1" ref={editChoiceRef}><button onClick={editProfile} aria-expanded={guildId ? editChoice : undefined} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center justify-center gap-1.5 phone:w-full phone:h-10" data-full-edit-profile><Pencil size={15} />{t('Edit Profile')}</button>{editChoices('left-0 top-full mt-2')}</span>
-              : rel === undefined ? <button onClick={() => act(() => api.post('/users/@me/relationships', { user_id: user.id }))} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-add-friend><UserPlus size={16} />{t('Add Friend')}</button>
+              : rel === undefined && !official ? <button onClick={() => act(() => api.post('/users/@me/relationships', { user_id: user.id }))} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-add-friend><UserPlus size={16} />{t('Add Friend')}</button>
               : rel === 'incoming' ? <button onClick={() => act(() => api.put(`/users/@me/relationships/${user.id}`))} className="h-9 rounded-lg bg-success hover:brightness-110 px-4 text-sm font-semibold text-black flex items-center gap-1.5"><Check size={16} />{t('Accept')}</button>
               : rel !== 'blocked' ? <button onClick={() => act(async () => { const c = await openDm(); onClose(); navigate(`/channels/@me/${c.id}`) })} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-message><MessageSquare size={16} />{t('Message')}</button> : null}
-            {!isMe && rel !== 'blocked' && (rel === undefined || rel === 'incoming') && <button onClick={() => act(async () => { const c = await openDm(); onClose(); navigate(`/channels/@me/${c.id}`) })} title={t('Message')} aria-label={t('Message')} className="h-9 w-9 rounded-lg bg-black/30 hover:bg-black/45 flex items-center justify-center" data-full-message-icon><MessageSquare size={18} /></button>}
+            {!isMe && !official && rel !== 'blocked' && (rel === undefined || rel === 'incoming') && <button onClick={() => act(async () => { const c = await openDm(); onClose(); navigate(`/channels/@me/${c.id}`) })} title={t('Message')} aria-label={t('Message')} className="h-9 w-9 rounded-lg bg-black/30 hover:bg-black/45 flex items-center justify-center" data-full-message-icon><MessageSquare size={18} /></button>}
             {friendBtn && (rel === 'friend' || rel === 'outgoing') && (
               <span className="relative">
                 <button onClick={friendBtn.fn} title={friendBtn.title} aria-label={friendBtn.title} className="h-9 w-9 rounded-lg bg-black/30 hover:bg-black/45 flex items-center justify-center" data-friend-badge={rel === 'friend' ? '' : undefined}>{friendBtn.icon}</button>
@@ -329,7 +332,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             {bioClamped && <button onClick={() => fullProfile()} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>{t('View Full Bio')}</button>}
           </div>
         )}
-        {!full && <button onClick={() => fullProfile('reviews')} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
+        {!full && !official && <button onClick={() => fullProfile('reviews')} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
           <span>{t('User Reviews')}</span>
           <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? t('No reviews yet') : reviewCount === 1 ? t('{n} review', { n: reviewCount }) : t('{n} reviews', { n: reviewCount })}</span>
         </button>}
@@ -346,7 +349,12 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             </div>
           </div>
         )}
-        {(panel || full || (guild && member)) && (
+        {official ? (
+          <div data-created-on>
+            <h3 className="text-xs font-bold mb-1">{t('Created On')}</h3>
+            <p className="text-sm text-[#b5bac1]">{new Date(user.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+          </div>
+        ) : (panel || full || (guild && member)) && (
           // Like Discord: when you joined the instance, and (in a server) when you joined that server.
           <div data-member-since>
             <h3 className="text-xs font-bold mb-1">{t('Member Since')}</h3>
@@ -387,7 +395,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             {editChoices('left-0 right-0 w-auto bottom-full mb-2')}
           </div>
         )}
-        {!panel && !full && !isMe && rel !== 'blocked' && (
+        {!panel && !full && !isMe && !official && rel !== 'blocked' && (
           <div className="relative">
             <input ref={inputRef} value={quick} onChange={(e) => setQuick(e.target.value)} onKeyDown={onQuickKey} disabled={sending} maxLength={2000}
               placeholder={t('Message @{name}', { name: shownName(user, member, friendNote?.nickname) })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
@@ -452,9 +460,9 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {/* Bar room only when the card overflows (not the app's always-reserved gutter): the banner scrolls with the card
             and has to reach both edges. */}
         <div className="scroller-thin-fade relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain" style={{ scrollbarGutter: 'auto' }} data-profile-scroll>{contents}</div>
-        <div className="relative z-[7] shrink-0 p-4" data-profile-footer>
+        {!official && <div className="relative z-[7] shrink-0 p-4" data-profile-footer>
           <button onClick={() => fullProfile()} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#383a40' }} data-view-full-profile>{t('View Full Profile')}</button>
-        </div>
+        </div>}
       </div>
     </div>
     </FrameRoom>

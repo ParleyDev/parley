@@ -2,7 +2,7 @@
 title: Vrienden en privéberichten
 section: Praten
 summary: Voeg vrienden toe, chat één-op-één of in kleine groepen, en handel berichtverzoeken af.
-source: fef9acf4603e
+source: 212741dd746a
 ---
 
 Klik op **Privéberichten** bovenaan de serverlijst om je vrienden en privégesprekken te zien.
@@ -63,3 +63,9 @@ Om het ongedaan te maken, gebruik je **Deblokkeren** op het tabblad **Geblokkeer
 ## Als een bericht niet kan worden afgeleverd
 
 Kan een bericht niet worden afgeleverd (bijvoorbeeld omdat diegene alleen DM's van vrienden accepteert), dan blijft het rood in de chat staan met **Opnieuw proberen** en **Verwijderen**. De helper van Parley legt uit waarom.
+
+## Officiële meldingen
+
+Berichten van het team dat je Parley-server beheert komen van het account **Parley**, gemarkeerd met **✓ Officieel**. Ze vertellen je bijvoorbeeld wat er met een melding van jou is gebeurd. Het gesprek staat in de lijst als **Officieel Parley-bericht** en kan alleen gelezen worden: er is geen berichtvak en je kunt het account niet bellen of als vriend toevoegen.
+
+Het team van Parley vraagt je nooit om je wachtwoord, inlogcodes of accounttoken. Beweert iemand anders van Parley te zijn en vraagt hij erom, antwoord dan niet en meld hem.

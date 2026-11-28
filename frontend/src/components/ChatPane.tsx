@@ -1,4 +1,5 @@
-import { ArrowDown, CheckCheck, CornerUpLeft, Hash, RotateCw, Volume2 } from 'lucide-react'
+import { ArrowDown, CheckCheck, CornerUpLeft, Hash, RotateCw, ShieldCheck, Volume2 } from 'lucide-react'
+import { openGuide } from '../lib/guide'
 import { previewText } from '../lib/desktopNotify'
 import { usePhone } from '../lib/swipe'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -57,7 +58,8 @@ function shiftBy(el: HTMLElement, d: number) {
 export default function ChatPane({ channel, readOnly: lockedNote }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
   // A 1:1 DM with a deleted account stays readable, but nothing can be sent to them.
   const other = channel.guild_id === null && (channel as DmChannel).kind === 'dm' ? (channel as DmChannel).recipients?.[0] : undefined
-  const readOnly = lockedNote ?? (other?.deleted ? tr("You can't send messages to this user.") : other?.system ? tr("This is an official message from this Parley server. Replies aren't read.") : undefined)
+  const readOnly = lockedNote ?? (other?.deleted ? tr("You can't send messages to this user.") : undefined)
+  const official = !lockedNote && !!other?.system
   const t = useT()
   const messages = useStore((s) => s.messages[channel.id])
   // App commands here (the / menu and the Apps menus on messages and people).
@@ -559,7 +561,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       ))}
       </div>
       <div className="relative shrink-0" data-chat-bottom>
-      {readOnly ? <div className="mx-4 mb-4 rounded-lg bg-bg-3 px-4 py-3 text-sm text-text-2" data-readonly-note>{readOnly}</div> : channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} onResize={keepPinned} />}
+      {official ? <OfficialBar /> : readOnly ? <div className="mx-4 mb-4 rounded-lg bg-bg-3 px-4 py-3 text-sm text-text-2" data-readonly-note>{readOnly}</div> : channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} onResize={keepPinned} />}
       </div>
       </div>
     </>
@@ -609,8 +611,15 @@ function ChannelIntro({ channel }: { channel: Channel | DmChannel }) {
         <>
           <Avatar user={other} size={80} />
           <h1 className="mt-3 text-3xl font-extrabold">{shownName(other, null, notes[other.id]?.nickname)}</h1>
-          <p className="text-text-1">@{other.username}</p>
-          <p className="mt-2 text-text-2 text-sm">{tn('This is the beginning of your direct message history with {name}.', { name: <b>{shownName(other, null, notes[other.id]?.nickname)}</b> })}</p>
+          {other.system ? (
+            // The instance's own account: who it is and what it never asks for, in place of the handle and history line.
+            <p className="mt-2 text-text-1" data-official-intro>{t('This is an official message from the team that runs this Parley server. They will never ask you for your password or account token.')}</p>
+          ) : (
+            <>
+              <p className="text-text-1">@{other.username}</p>
+              <p className="mt-2 text-text-2 text-sm">{tn('This is the beginning of your direct message history with {name}.', { name: <b>{shownName(other, null, notes[other.id]?.nickname)}</b> })}</p>
+            </>
+          )}
         </>
       ) : isVoice ? (
         <>
@@ -625,6 +634,21 @@ function ChannelIntro({ channel }: { channel: Channel | DmChannel }) {
           <p className="text-text-2">{t('This is the start of the #{name} channel.', { name: channel.name })}{channel.topic ? ` ${channel.topic}` : ''}</p>
         </>
       )}
+    </div>
+  )
+}
+
+/** In place of the message box in the official account's DM: it only sends notices, and replies go nowhere. */
+function OfficialBar() {
+  const t = useT()
+  return (
+    <div className="mx-4 mb-4 flex items-center gap-3 rounded-lg border border-line bg-bg-3 px-3 py-2.5 phone:flex-wrap" data-readonly-note data-official-bar>
+      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg-4 text-text-1" aria-hidden><ShieldCheck size={20} /></span>
+      <div className="min-w-0 flex-1 phone:basis-[calc(100%-3rem)]">
+        <p className="text-sm font-semibold text-text-0">{t('This chat is reserved for official Parley notifications.')}</p>
+        <p className="text-xs text-text-2">{t('Parley will never ask you for your password or account token.')}</p>
+      </div>
+      <button type="button" onClick={() => openGuide('direct-messages#official-notices')} className="shrink-0 rounded-md bg-bg-4 px-3 py-1.5 text-sm font-medium text-text-0 hover:brightness-110 phone:ml-12" data-official-learn-more>{t('Learn More')}</button>
     </div>
   )
 }
